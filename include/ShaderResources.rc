@@ -1,0 +1,7 @@
+#include <windows.h>
+#include "ShaderResources.h"
+
+// clang-format off
+
+VKRT_RESOURCE_VERTEX_SHADER RCDATA "./uberShader.vert.spv"
+VKRT_RESOURCE_FRAGMENT_SHADER RCDATA "./uberShader.frag.spv"

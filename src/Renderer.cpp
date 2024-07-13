@@ -1,0 +1,163 @@
+#include "Renderer.h"
+
+#include <random>
+
+#include "DebugUtils.h"
+#include "Texture.h"
+
+namespace VKRT {
+Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
+    : mContext(context), mScene(scene) {
+    ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
+    inputManager->Subscribe(this);
+
+    const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
+    mDepthBuffer = new Texture(
+        mContext,
+        imageSize.width,
+        imageSize.height,
+        vk::Format::eD32Sfloat,
+        vk::ImageUsageFlagBits::eDepthStencilAttachment);
+    mDepthRenderTarget = new RenderTarget(mContext, mDepthBuffer);
+
+    mCommandRing = new CommandRing(mContext);
+    mRenderTarget = new RenderTarget(mContext, mContext->GetSwapchain()->GetRenderTargets());
+    mRenderPass = new RenderPass(context, {mRenderTarget, mDepthRenderTarget});
+
+    {
+        mMainPassParameters = new ShaderParameterCollection(mContext);
+        mCameraUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eUniformBuffer,
+            ShaderParameter::UpdateFrequency::PerFrame,
+            vk::ShaderStageFlagBits::eVertex,
+            sizeof(CameraProperties),
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        mMainPassParameters->AddParameter(mCameraUniform);
+
+        std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
+            {vk::ShaderStageFlagBits::eVertex, Resource::Id::VertexShader},
+            {vk::ShaderStageFlagBits::eFragment, Resource::Id::FragmentShader},
+        };
+
+        mMainPassPipeline = new Pipeline(context, mMainPassParameters, stages, mRenderPass);
+    }
+}
+
+void Renderer::UpdateCameraUniforms(Camera* camera, uint32_t imageIndex) {
+    ScopedRefPtr<VulkanBuffer> buffer = mCameraUniform->GetBuffer(imageIndex);
+    uint8_t* mappedBuffer = buffer->MapBuffer();
+    CameraProperties cameraMatrices{
+        .view = camera->GetViewTransform(),
+        .projection = camera->GetProjectionTransform()};
+    std::copy_n(
+        reinterpret_cast<uint8_t*>(&cameraMatrices),
+        sizeof(CameraProperties),
+        mappedBuffer);
+    buffer->UnmapBuffer();
+}
+
+void Renderer::Render(Camera* camera) {
+    uint32_t currentFrameIndex = mContext->GetSwapchain()->AcquireNextImage();
+    CommandRing::CommandResources command = mCommandRing->GetCommand(currentFrameIndex);
+    {
+        VKRT_ASSERT_VK(command.buffer.begin(vk::CommandBufferBeginInfo{}));
+
+        // Create and update all buffers and textures
+        {
+            UpdateCameraUniforms(camera, currentFrameIndex);
+            mMainPassParameters->CreateDescriptorSets();
+            mMainPassParameters->UpdateDescriptors(currentFrameIndex);
+        }
+
+        const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
+
+        {
+            const std::vector<vk::ClearValue> clearValues{
+                vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
+                vk::ClearDepthStencilValue(1.0f, 0),
+            };
+            const vk::RenderPassBeginInfo renderPassBeginInfo =
+                vk::RenderPassBeginInfo()
+                    .setRenderPass(mRenderPass->GetRenderPassHandle())
+                    .setFramebuffer(mRenderPass->GetFramebufferHandle(
+                        mContext->GetSwapchain()->GetCurrentIndex()))
+                    .setRenderArea({vk::Offset2D{0, 0}, imageSize})
+                    .setClearValues(clearValues);
+            command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+        }
+
+        {
+            const vk::Viewport viewport{
+                0.0f,
+                0.0f,
+                static_cast<float>(imageSize.width),
+                static_cast<float>(imageSize.height),
+                0.0f,
+                1.0f};
+            command.buffer.setViewport(0, viewport);
+
+            const vk::Rect2D scissor = vk::Rect2D().setOffset(0).setExtent(
+                vk::Extent2D{imageSize.width, imageSize.height});
+            command.buffer.setScissor(0, scissor);
+        }
+
+        command.buffer.bindPipeline(
+            vk::PipelineBindPoint::eGraphics,
+            mMainPassPipeline->GetPipelineHandle());
+
+        std::vector<vk::DescriptorSet> descriptorSets =
+            mMainPassParameters->GetDescriptorSets(currentFrameIndex);
+
+        command.buffer.bindDescriptorSets(
+            vk::PipelineBindPoint::eGraphics,
+            mMainPassPipeline->GetPipelineLayout(),
+            0,
+            descriptorSets,
+            nullptr);
+
+        mScene->Draw(command.buffer);
+
+        command.buffer.endRenderPass();
+
+        VKRT_ASSERT_VK(command.buffer.end());
+    }
+
+    const vk::Queue& queue = mContext->GetDevice()->GetQueue();
+
+    std::vector<vk::Semaphore> waitSemaphores{mContext->GetSwapchain()->GetPresentSemaphore()};
+    std::vector<vk::Semaphore> signalSemaphores{mContext->GetSwapchain()->GetRenderSemaphore()};
+    std::vector<vk::PipelineStageFlags> waitStages{vk::PipelineStageFlagBits::eAllCommands};
+    VKRT_ASSERT_VK(queue.submit(
+        vk::SubmitInfo()
+            .setCommandBuffers(command.buffer)
+            .setWaitSemaphores(waitSemaphores)
+            .setSignalSemaphores(signalSemaphores)
+            .setWaitDstStageMask(waitStages),
+        command.fence));
+
+    mContext->GetSwapchain()->Present();
+}
+
+void Renderer::OnKeyPressed(int key) {}
+
+void Renderer::OnKeyReleased(int key) {}
+
+void Renderer::OnMouseMoved(glm::vec2 newPos) {}
+
+void Renderer::OnLeftMouseButtonPressed() {}
+
+void Renderer::OnLeftMouseButtonReleased() {}
+
+void Renderer::OnRightMouseButtonPressed() {}
+
+void Renderer::OnRightMouseButtonReleased() {}
+
+Renderer::~Renderer() {
+    mCommandRing->Flush();
+    ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
+    inputManager->Unsuscribe(this);
+}
+
+}  // namespace VKRT
