@@ -15,7 +15,7 @@ public:
         vk::CommandBuffer buffer;
         vk::Fence fence;
     };
-    CommandResources& GetCommand(uint32_t frameIndex);
+    CommandResources& Cycle();
 
     void Flush();
     ~CommandRing();
@@ -23,5 +23,6 @@ public:
 private:
     ScopedRefPtr<Context> mContext;
     std::vector<CommandResources> mCommands;
+    uint32_t mCurrentIndex;
 };
 }  // namespace VKRT

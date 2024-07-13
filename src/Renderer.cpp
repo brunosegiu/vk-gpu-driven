@@ -7,7 +7,7 @@
 
 namespace VKRT {
 Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
-    : mContext(context), mScene(scene) {
+    : mContext(context), mScene(scene), mCurrentFrameIndex(0) {
     ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
     inputManager->Subscribe(this);
 
@@ -59,16 +59,17 @@ void Renderer::UpdateCameraUniforms(Camera* camera, uint32_t imageIndex) {
 }
 
 void Renderer::Render(Camera* camera) {
-    uint32_t currentFrameIndex = mContext->GetSwapchain()->AcquireNextImage();
-    CommandRing::CommandResources command = mCommandRing->GetCommand(currentFrameIndex);
+    mCurrentFrameIndex = (mCurrentFrameIndex + 1) % mContext->GetMaxInFlightFrameCount();
+    CommandRing::CommandResources command = mCommandRing->Cycle();
+    mContext->GetSwapchain()->AcquireNextImage(mCurrentFrameIndex);
     {
         VKRT_ASSERT_VK(command.buffer.begin(vk::CommandBufferBeginInfo{}));
 
         // Create and update all buffers and textures
         {
-            UpdateCameraUniforms(camera, currentFrameIndex);
+            UpdateCameraUniforms(camera, mCurrentFrameIndex);
             mMainPassParameters->CreateDescriptorSets();
-            mMainPassParameters->UpdateDescriptors(currentFrameIndex);
+            mMainPassParameters->UpdateDescriptors(mCurrentFrameIndex);
         }
 
         const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
@@ -108,7 +109,7 @@ void Renderer::Render(Camera* camera) {
             mMainPassPipeline->GetPipelineHandle());
 
         std::vector<vk::DescriptorSet> descriptorSets =
-            mMainPassParameters->GetDescriptorSets(currentFrameIndex);
+            mMainPassParameters->GetDescriptorSets(mCurrentFrameIndex);
 
         command.buffer.bindDescriptorSets(
             vk::PipelineBindPoint::eGraphics,
@@ -124,20 +125,7 @@ void Renderer::Render(Camera* camera) {
         VKRT_ASSERT_VK(command.buffer.end());
     }
 
-    const vk::Queue& queue = mContext->GetDevice()->GetQueue();
-
-    std::vector<vk::Semaphore> waitSemaphores{mContext->GetSwapchain()->GetPresentSemaphore()};
-    std::vector<vk::Semaphore> signalSemaphores{mContext->GetSwapchain()->GetRenderSemaphore()};
-    std::vector<vk::PipelineStageFlags> waitStages{vk::PipelineStageFlagBits::eAllCommands};
-    VKRT_ASSERT_VK(queue.submit(
-        vk::SubmitInfo()
-            .setCommandBuffers(command.buffer)
-            .setWaitSemaphores(waitSemaphores)
-            .setSignalSemaphores(signalSemaphores)
-            .setWaitDstStageMask(waitStages),
-        command.fence));
-
-    mContext->GetSwapchain()->Present();
+    mContext->GetSwapchain()->Present(command.buffer, command.fence, mCurrentFrameIndex);
 }
 
 void Renderer::OnKeyPressed(int key) {}

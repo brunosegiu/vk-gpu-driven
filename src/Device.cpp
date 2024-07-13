@@ -46,22 +46,13 @@ Device::Device(
     vk::PhysicalDeviceFeatures enabledFeatures =
         vk::PhysicalDeviceFeatures().setShaderInt64(true).setSamplerAnisotropy(true);
 
-    vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures =
-        vk::PhysicalDeviceRayTracingPipelineFeaturesKHR().setRayTracingPipeline(true);
-
-    vk::PhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures =
-        vk::PhysicalDeviceAccelerationStructureFeaturesKHR()
-            .setAccelerationStructure(true)
-            .setPNext(&rayTracingFeatures);
-
     vk::PhysicalDeviceVulkan12Features enabledFeatures12 =
         vk::PhysicalDeviceVulkan12Features()
             .setScalarBlockLayout(true)
             .setBufferDeviceAddress(true)
             .setDescriptorIndexing(true)
             .setRuntimeDescriptorArray(true)
-            .setDescriptorBindingVariableDescriptorCount(true)
-            .setPNext(&accelerationStructureFeatures);
+            .setDescriptorBindingVariableDescriptorCount(true);
 
     const vk::DeviceCreateInfo deviceCreateInfo =
         vk::DeviceCreateInfo()

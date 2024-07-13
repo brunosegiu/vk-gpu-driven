@@ -47,6 +47,8 @@ private:
     ScopedRefPtr<RenderTarget> mDepthRenderTarget;
     ScopedRefPtr<RenderPass> mRenderPass;
 
+    uint32_t mCurrentFrameIndex;
+
 };
 
 }  // namespace VKRT

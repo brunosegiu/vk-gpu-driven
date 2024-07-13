@@ -18,13 +18,10 @@ public:
     vk::Format GetFormat() { return mFormat; }
     vk::Extent2D GetExtent() { return mExtent; }
 
-    uint32_t AcquireNextImage();
-    void Present();
+    uint32_t AcquireNextImage(uint32_t frameIndex);
+    void Present(vk::CommandBuffer& commandBuffer, vk::Fence& signalFence, uint32_t frameIndex);
 
     uint32_t GetCurrentIndex() { return mCurrentImageIndex; }
-
-    vk::Semaphore& GetPresentSemaphore() { return mPresentSemaphore; }
-    vk::Semaphore& GetRenderSemaphore() { return mRenderSemaphore; }
 
     const std::vector<ScopedRefPtr<Texture>>& GetRenderTargets() const { return mImages; }
     const uint32_t GetImageCount() const { return static_cast<uint32_t>(mImages.size()); }
@@ -37,8 +34,8 @@ private:
     vk::Format mFormat;
     vk::Extent2D mExtent;
     std::vector<ScopedRefPtr<Texture>> mImages;
-    vk::Semaphore mPresentSemaphore;
-    vk::Semaphore mRenderSemaphore;
+    std::vector<vk::Semaphore> mPresentSemaphores;
+    std::vector<vk::Semaphore> mRenderSemaphores;
     uint32_t mCurrentImageIndex;
 };
 }  // namespace VKRT

@@ -49,10 +49,10 @@ void ShaderParameterCollection::CreateDescriptorLayout() {
                 auto it = descriptorSizes.find(binding.descriptorType);
                 if (it == descriptorSizes.end()) {
                     descriptorSizes[binding.descriptorType] =
-                        binding.descriptorCount * mContext->GetSwapchain()->GetImageCount();
+                        binding.descriptorCount * mContext->GetMaxInFlightFrameCount();
                 } else {
                     descriptorSizes[binding.descriptorType] +=
-                        binding.descriptorCount * mContext->GetSwapchain()->GetImageCount();
+                        binding.descriptorCount * mContext->GetMaxInFlightFrameCount();
                 }
             }
         }
@@ -105,7 +105,7 @@ void ShaderParameterCollection::CreateDescriptorSets() {
 
         size_t descriptorCount = 1;
         if (updateFrequency == ShaderParameter::UpdateFrequency::PerFrame) {
-            descriptorCount = mContext->GetSwapchain()->GetImageCount();
+            descriptorCount = mContext->GetMaxInFlightFrameCount();
         }
 
         std::vector<vk::DescriptorSetLayout> layouts(

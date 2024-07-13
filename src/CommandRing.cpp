@@ -3,9 +3,9 @@
 #include "DebugUtils.h"
 
 namespace VKRT {
-CommandRing::CommandRing(ScopedRefPtr<Context> context) : mContext(context) {
-    const uint32_t imageCount = mContext->GetSwapchain()->GetImageCount();
-    for (uint32_t imageIndex = 0; imageIndex < imageCount; ++imageIndex) {
+CommandRing::CommandRing(ScopedRefPtr<Context> context)
+    : mContext(context) {
+    for (uint32_t imageIndex = 0; imageIndex < mContext->GetMaxInFlightFrameCount(); ++imageIndex) {
         vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
         vk::Fence fence = mContext->GetDevice()->CreateFence(true);
         CommandResources resources = {.buffer = commandBuffer, .fence = fence};
@@ -13,8 +13,9 @@ CommandRing::CommandRing(ScopedRefPtr<Context> context) : mContext(context) {
     }
 }
 
-CommandRing::CommandResources& CommandRing::GetCommand(uint32_t frameIndex) {
-    auto command = mCommands[frameIndex];
+CommandRing::CommandResources& CommandRing::Cycle() {
+    mCurrentIndex = (mCurrentIndex + 1) % mCommands.size();
+    auto command = mCommands[mCurrentIndex];
     VKRT_ASSERT_VK(mContext->GetDevice()->GetLogicalDevice().waitForFences(
         command.fence,
         true,

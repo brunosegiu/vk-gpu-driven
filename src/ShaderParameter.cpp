@@ -31,10 +31,9 @@ ShaderParameterBuffer::ShaderParameterBuffer(
     VKRT_ASSERT(
         type == vk::DescriptorType::eUniformBuffer || type == vk::DescriptorType::eStorageBuffer);
 
-    const uint32_t imageCount = mContext->GetSwapchain()->GetImageCount();
     uint32_t bufferCount = 1;
     if (updateFrequency == ShaderParameter::UpdateFrequency::PerFrame) {
-        bufferCount = imageCount;
+        bufferCount = mContext->GetMaxInFlightFrameCount();
     }
 
     for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {

@@ -88,32 +88,51 @@ Swapchain::Swapchain(ScopedRefPtr<Context> context) : mContext(context), mCurren
         mImages.emplace_back(texture);
     }
 
-    mPresentSemaphore = VKRT_ASSERT_VK(logicalDevice.createSemaphore(vk::SemaphoreCreateInfo{}));
-    mRenderSemaphore = VKRT_ASSERT_VK(logicalDevice.createSemaphore(vk::SemaphoreCreateInfo{}));
+    for (uint32_t frameIndex = 0; frameIndex < mContext->GetMaxInFlightFrameCount(); ++frameIndex) {
+        mPresentSemaphores.emplace_back(
+            VKRT_ASSERT_VK(logicalDevice.createSemaphore(vk::SemaphoreCreateInfo{})));
+        mRenderSemaphores.emplace_back(
+            VKRT_ASSERT_VK(logicalDevice.createSemaphore(vk::SemaphoreCreateInfo{})));
+    }
 }
 
-uint32_t Swapchain::AcquireNextImage() {
+uint32_t Swapchain::AcquireNextImage(uint32_t frameIndex) {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
     mCurrentImageIndex = VKRT_ASSERT_VK(logicalDevice.acquireNextImageKHR(
         mSwapchainHandle,
         std::numeric_limits<uint64_t>::max(),
-        mPresentSemaphore));
+        mPresentSemaphores[frameIndex]));
     return mCurrentImageIndex;
 }
 
-void Swapchain::Present() {
+void Swapchain::Present(vk::CommandBuffer& commandBuffer, vk::Fence& signalFence, uint32_t frameIndex) {
+    const vk::Queue& queue = mContext->GetDevice()->GetQueue();
+
+    std::vector<vk::PipelineStageFlags> waitStages{vk::PipelineStageFlagBits::eAllCommands};
+    VKRT_ASSERT_VK(queue.submit(
+        vk::SubmitInfo()
+            .setCommandBuffers(commandBuffer)
+            .setWaitSemaphores(mPresentSemaphores[frameIndex])
+            .setSignalSemaphores(mRenderSemaphores[frameIndex])
+            .setWaitDstStageMask(waitStages),
+        signalFence));
+
     vk::PresentInfoKHR presentInfo = vk::PresentInfoKHR()
                                          .setSwapchains(mSwapchainHandle)
                                          .setImageIndices(mCurrentImageIndex)
-                                         .setWaitSemaphores(mRenderSemaphore);
-    const vk::Queue& queue = mContext->GetDevice()->GetQueue();
+                                         .setWaitSemaphores(mRenderSemaphores[frameIndex]);
+
     VKRT_ASSERT_VK(queue.presentKHR(presentInfo));
 }
 
 Swapchain::~Swapchain() {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
-    logicalDevice.destroySemaphore(mRenderSemaphore);
-    logicalDevice.destroySemaphore(mPresentSemaphore);
+    for (vk::Semaphore& semaphore : mRenderSemaphores) {
+        logicalDevice.destroySemaphore(semaphore);
+    }
+    for (vk::Semaphore& semaphore : mPresentSemaphores) {
+        logicalDevice.destroySemaphore(semaphore);
+    }
     mImages.clear();
     logicalDevice.destroySwapchainKHR(mSwapchainHandle);
 }

@@ -25,6 +25,7 @@ public:
     const vk::SurfaceKHR& GetSurface() { return mSurface; }
     ScopedRefPtr<Device> GetDevice() { return mDevice; }
     ScopedRefPtr<Swapchain> GetSwapchain() { return mSwapchain; }
+    uint32_t GetMaxInFlightFrameCount() { return 2; }
 
     void Destroy();
 
