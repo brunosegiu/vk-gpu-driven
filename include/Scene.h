@@ -33,11 +33,16 @@ public:
     };
     SceneMaterials GetMaterialProxies();
 
-    void Draw(vk::CommandBuffer& commandBuffer);
+    void Draw(
+        vk::CommandBuffer& commandBuffer,
+        std::function<void(vk::CommandBuffer, ScopedRefPtr<Object>, ScopedRefPtr<Mesh>)>
+            onDrawMesh);
 
     ~Scene();
 
 private:
+    std::vector<ScopedRefPtr<Object>> GetFlattenedObjects();
+
     ScopedRefPtr<Context> mContext;
 
     std::vector<ScopedRefPtr<Object>> mObjects;

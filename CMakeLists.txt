@@ -26,7 +26,6 @@ set(HEADERS
     include/Context.h
     include/Swapchain.h
     include/Scene.h
-    include/Model.h
     include/Object.h
     include/Renderer.h
     include/Camera.h
@@ -53,7 +52,6 @@ set(SOURCE
     src/Context.cpp
     src/Swapchain.cpp
     src/Scene.cpp
-    src/Model.cpp
     src/Object.cpp
     src/Renderer.cpp
     src/Camera.cpp

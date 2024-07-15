@@ -47,9 +47,11 @@ Pipeline::Pipeline(
         stageCreateInfos.emplace_back(stageCreateInfo);
     }
 
+    std::vector<vk::PushConstantRange> pushConstants = parameters->GetPushConstants();
+
     const std::vector<vk::DescriptorSetLayout> layouts = parameters->GetLayouts();
     vk::PipelineLayoutCreateInfo layoutCreateInfo =
-        vk::PipelineLayoutCreateInfo().setSetLayouts(layouts);
+        vk::PipelineLayoutCreateInfo().setSetLayouts(layouts).setPushConstantRanges(pushConstants);
     mLayout = VKRT_ASSERT_VK(logicalDevice.createPipelineLayout(layoutCreateInfo));
 
     // Rasterization setup

@@ -6,8 +6,7 @@
 
 namespace VKRT {
 
-Scene::Scene(ScopedRefPtr<Context> context)
-    : mContext(context), mObjects() {
+Scene::Scene(ScopedRefPtr<Context> context) : mContext(context), mObjects() {
     uint64_t dummyData = 0;
     mDummyTexture = new Texture(
         context,
@@ -30,7 +29,8 @@ Scene::SceneMaterials Scene::GetMaterialProxies() {
     textureIndices.push_back({mDummyTexture, 1});
     int32_t currentTextureIndex = 1;
     for (const ScopedRefPtr<Object>& object : mObjects) {
-        for (const ScopedRefPtr<Mesh>& mesh : object->GetModel()->GetMeshes()) {
+        std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
+        for (ScopedRefPtr<Mesh>& mesh : meshes) {
             const Material* material = mesh->GetMaterial();
             std::vector<ScopedRefPtr<Texture>> meshTextures{
                 material->GetAlbedoTexture(),
@@ -54,7 +54,8 @@ Scene::SceneMaterials Scene::GetMaterialProxies() {
     // Gather materials and generate texture indices if applicable
     std::vector<MaterialProxy> materials;
     for (const ScopedRefPtr<Object>& object : mObjects) {
-        for (const ScopedRefPtr<Mesh>& mesh : object->GetModel()->GetMeshes()) {
+        std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
+        for (ScopedRefPtr<Mesh>& mesh : meshes) {
             const ScopedRefPtr<Material> material = mesh->GetMaterial();
             MaterialProxy proxy{
                 .albedo = material->GetAlbedo(),
@@ -104,10 +105,34 @@ Scene::SceneMaterials Scene::GetMaterialProxies() {
     return sceneMaterials;
 }
 
-void Scene::Draw(vk::CommandBuffer& commandBuffer) {
-    for (const ScopedRefPtr<Object>& object : mObjects) {
-        const ScopedRefPtr<Model>& model = object->GetModel();
-        for (const ScopedRefPtr<Mesh>& mesh : model->GetMeshes()) {
+std::vector<ScopedRefPtr<Object>> Scene::GetFlattenedObjects() {
+    std::function<void(const ScopedRefPtr<Object>&, std::vector<ScopedRefPtr<Object>>&)>
+        loadSubtree;
+    loadSubtree = [&](const ScopedRefPtr<Object>& object,
+                      std::vector<ScopedRefPtr<Object>>& flattened) -> void {
+        for (const ScopedRefPtr<Object>& child : object->GetChildren()) {
+            flattened.push_back(child);
+            loadSubtree(child, flattened);
+        }
+    };
+
+    std::vector<ScopedRefPtr<Object>> flattened;
+    for (ScopedRefPtr<Object> object : mObjects) {
+        loadSubtree(object, flattened);
+    }
+    return flattened;
+}
+
+void Scene::Draw(
+    vk::CommandBuffer& commandBuffer,
+    std::function<void(vk::CommandBuffer, ScopedRefPtr<Object>, ScopedRefPtr<Mesh>)> onDrawMesh) {
+    for (ScopedRefPtr<Object> object : mObjects) {
+        object->UpdateTransforms(glm::mat4(1.0f));
+    }
+    std::vector<ScopedRefPtr<Object>> objects = GetFlattenedObjects();
+    for (const ScopedRefPtr<Object>& object : objects) {
+        std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
+        for (ScopedRefPtr<Mesh>& mesh : meshes) {
             ScopedRefPtr<VulkanBuffer> vertexBuffer = mesh->GetVertexBuffer();
             ScopedRefPtr<VulkanBuffer> indexBuffer = mesh->GetIndexBuffer();
             commandBuffer.bindVertexBuffers(0, vertexBuffer->GetBufferHandle(), {0});
@@ -115,6 +140,7 @@ void Scene::Draw(vk::CommandBuffer& commandBuffer) {
                 indexBuffer->GetBufferHandle(),
                 {0},
                 vk::IndexType::eUint32);
+            onDrawMesh(commandBuffer, object, mesh);
             commandBuffer.drawIndexed(mesh->GetIndexCount() * 3, 1, 0, 0, 0);
         }
     }

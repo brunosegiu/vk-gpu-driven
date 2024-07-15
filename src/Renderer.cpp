@@ -36,6 +36,12 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
         mMainPassParameters->AddParameter(mCameraUniform);
 
+        mPushConstant = new ShaderParameterPushConstant(
+            mContext,
+            vk::ShaderStageFlagBits::eVertex,
+            sizeof(glm::mat4));
+        mMainPassParameters->AddParameter(mPushConstant);
+
         std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
             {vk::ShaderStageFlagBits::eVertex, Resource::Id::VertexShader},
             {vk::ShaderStageFlagBits::eFragment, Resource::Id::FragmentShader},
@@ -118,7 +124,18 @@ void Renderer::Render(Camera* camera) {
             descriptorSets,
             nullptr);
 
-        mScene->Draw(command.buffer);
+        mScene->Draw(
+            command.buffer,
+            [this](
+                vk::CommandBuffer commandBuffer,
+                ScopedRefPtr<Object> object,
+                ScopedRefPtr<Mesh> mesh) {
+                commandBuffer.pushConstants<glm::mat4>(
+                    mMainPassPipeline->GetPipelineLayout(),
+                    mPushConstant->GetStageFlags(),
+                    mPushConstant->GetOffset(),
+                    object->GetAbsoluteTransform());
+            });
 
         command.buffer.endRenderPass();
 

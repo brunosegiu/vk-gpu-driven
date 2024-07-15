@@ -102,6 +102,20 @@ ShaderParameterSampler::~ShaderParameterSampler() {
     logicalDevice.destroySampler(mSampler);
 }
 
+ShaderParameterPushConstant::ShaderParameterPushConstant(
+    ScopedRefPtr<Context> context,
+    const vk::ShaderStageFlags& stageFlags,
+    const vk::DeviceSize& size)
+    : ShaderParameter(
+          context,
+          vk::DescriptorType::eUniformBuffer,
+          ShaderParameter::UpdateFrequency::PerDraw,
+          stageFlags,
+          1,
+          false),
+      mSize(size),
+      mOffset(0) {}
+
 ShaderParameter::~ShaderParameter() {}
 
 }  // namespace VKRT

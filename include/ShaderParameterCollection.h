@@ -17,6 +17,7 @@ public:
 
     std::vector<vk::DescriptorSetLayout> GetLayouts();
     std::vector<vk::DescriptorSet> GetDescriptorSets(uint32_t frameIndex);
+    std::vector<vk::PushConstantRange> GetPushConstants();
 
     ~ShaderParameterCollection();
 

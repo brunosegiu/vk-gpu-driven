@@ -22,6 +22,51 @@ struct Timer {
     std::chrono::steady_clock::time_point beginTime;
 };
 
+void LoadBasicScene(
+    VKRT::ScopedRefPtr<VKRT::Context> context,
+    VKRT::ScopedRefPtr<VKRT::Scene> scene) {
+    using namespace VKRT;
+    {
+        ScopedRefPtr<Object> boxMesh = Object::Load(context, "./assets/box.glb");
+        boxMesh->SetTranslation(glm::vec3(0.0f, 5.0f, 0.0f));
+        boxMesh->SetScale(glm::vec3(7.5f, 5.0f, 7.5f));
+        boxMesh->Rotate(glm::vec3(0.0f, 90.0f, 0.0f));
+        scene->AddObject(boxMesh);
+    }
+
+    {
+        ScopedRefPtr<Object> dragon = Object::Load(context, "./assets/DragonAttenuation.glb");
+        dragon->SetTranslation(glm::vec3(0.0f, 0.0f, 0.5f));
+        dragon->SetScale(glm::vec3(6.0f, 7.5f, 4.0f));
+        dragon->Rotate(glm::vec3(0.0f, 90.0f, 0.0f));
+        scene->AddObject(dragon);
+    }
+
+    {
+        ScopedRefPtr<Object> object = Object::Load(context, "./assets/venus.gltf");
+        object->SetTranslation(glm::vec3(3.0f, 3.5f, 0.0f));
+        object->SetScale(glm::vec3(0.6f));
+        object->Rotate(glm::vec3(90.0f, 90.0f, 0.0f));
+        scene->AddObject(object);
+    }
+
+    {
+        ScopedRefPtr<Object> object = Object::Load(context, "./assets/bunny.glb");
+        object->SetTranslation(glm::vec3(2.0f, 0.0f, 3.5f));
+        object->SetScale(glm::vec3(0.05f));
+        object->SetRotation(glm::vec3(270.0f, 90.0f, 0.0f));
+        scene->AddObject(object);
+    }
+
+    {
+        ScopedRefPtr<Object> teapot = Object::Load(context, "./assets/utahTeapot.glb");
+        teapot->SetTranslation(glm::vec3(2.5f, 2.5f, -3.5f));
+        teapot->SetScale(glm::vec3(1.025f));
+        teapot->Rotate(glm::vec3(0.0f, -90.0f, 0.0f));
+        scene->AddObject(teapot);
+    }
+}
+
 int main() {
     using namespace VKRT;
     auto [windowResult, window] = Window::Create(1280, 720);
@@ -31,19 +76,12 @@ int main() {
         VKRT_ASSERT_MSG(contextResult == Result::Success, "No compatible GPU found");
         if (contextResult == Result::Success) {
             ScopedRefPtr<Scene> scene = new Scene(context);
+
             {
-                ScopedRefPtr<Model> mesh = Model::Load(context, "./assets/utahTeapot.glb");
-                std::for_each(mesh->GetMeshes().begin(), mesh->GetMeshes().end(), [](Mesh* mesh) {
-                    mesh->GetMaterial()->SetAlbedo(glm::vec3(1.0f));
-                    mesh->GetMaterial()->SetTransmission(1.0f);
-                    mesh->GetMaterial()->SetMetallic(0.0f);
-                    mesh->GetMaterial()->SetIndexOfRefraction(2.2f);
-                });
-                ScopedRefPtr<Object> object = new Object(mesh);
-                object->SetTranslation(glm::vec3(2.5f, 2.5f, -3.5f));
-                object->SetScale(glm::vec3(1.025f));
-                object->Rotate(glm::vec3(0.0f, -90.0f, 0.0f));
-                scene->AddObject(object);
+                ScopedRefPtr<Object> bistro = Object::Load(context, "./assets/Bistro.glb");
+                bistro->SetTranslation(glm::vec3(0.0f, 0.0f, 0.0f));
+                bistro->SetScale(glm::vec3(1.0f));
+                scene->AddObject(bistro);
             }
 
             ScopedRefPtr<Camera> camera = new Camera(window);

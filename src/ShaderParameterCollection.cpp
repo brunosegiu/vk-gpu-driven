@@ -225,6 +225,25 @@ std::vector<vk::DescriptorSet> ShaderParameterCollection::GetDescriptorSets(uint
     return descriptors;
 }
 
+std::vector<vk::PushConstantRange> ShaderParameterCollection::GetPushConstants() {
+    std::vector<vk::PushConstantRange> pushConstants;
+    vk::DeviceSize currentOffset = 0;
+    for (ScopedRefPtr<ShaderParameter> perFrameParameter :
+         mParameters.at(ShaderParameter::UpdateFrequency::PerDraw)) {
+        ShaderParameterPushConstant* pushConstantParameter =
+            dynamic_cast<ShaderParameterPushConstant*>(perFrameParameter.Get());
+        vk::PushConstantRange pushConstant =
+            vk::PushConstantRange()
+                .setSize(pushConstantParameter->GetSize())
+                .setStageFlags(pushConstantParameter->GetStageFlags())
+                .setOffset(currentOffset);
+        pushConstantParameter->SetOffset(currentOffset);
+        currentOffset += pushConstantParameter->GetSize();
+        pushConstants.emplace_back(pushConstant);
+    }
+    return pushConstants;
+}
+
 ShaderParameterCollection::~ShaderParameterCollection() {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
     logicalDevice.destroyDescriptorPool(mDescriptorPool);

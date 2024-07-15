@@ -39,6 +39,7 @@ private:
     ScopedRefPtr<ShaderParameterBuffer> mCameraUniform;
     ScopedRefPtr<ShaderParameterBuffer> mMaterialsUniform;
     ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
+    ScopedRefPtr<ShaderParameterPushConstant> mPushConstant;
     ScopedRefPtr<Pipeline> mMainPassPipeline;
     ScopedRefPtr<CommandRing> mCommandRing;
 

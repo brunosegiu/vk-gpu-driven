@@ -15,28 +15,68 @@ Mesh::Mesh(
     {
         mVertexCount = vertices.size();
         const size_t vertexBufferSize = mVertexCount * sizeof(Vertex);
-        mVertexBuffer = mContext->GetDevice()->CreateBuffer(
+        ScopedRefPtr<VulkanBuffer> stagingBuffer = mContext->GetDevice()->CreateBuffer(
             vertexBufferSize,
-            vk::BufferUsageFlagBits::eVertexBuffer,
+            vk::BufferUsageFlagBits::eTransferSrc,
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        uint8_t* bufferData = mVertexBuffer->MapBuffer();
+        uint8_t* bufferData = stagingBuffer->MapBuffer();
         std::copy_n(
             reinterpret_cast<uint8_t const*>(vertices.data()),
             vertexBufferSize,
             bufferData);
-        mVertexBuffer->UnmapBuffer();
+        stagingBuffer->UnmapBuffer();
+
+        mVertexBuffer = mContext->GetDevice()->CreateBuffer(
+            vertexBufferSize,
+            vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+            vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+        vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
+        VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
+
+        vk::BufferCopy bufferCopy =
+            vk::BufferCopy().setSize(vertexBufferSize).setDstOffset(0).setSrcOffset(0);
+
+        commandBuffer.copyBuffer(
+            stagingBuffer->GetBufferHandle(),
+            mVertexBuffer->GetBufferHandle(),
+            bufferCopy);
+
+        VKRT_ASSERT_VK(commandBuffer.end());
+        mContext->GetDevice()->SubmitCommandAndFlush(commandBuffer);
+        mContext->GetDevice()->DestroyCommand(commandBuffer);
     }
 
     {
         mIndexCount = indices.size();
         const size_t indexBufferSize = mIndexCount * sizeof(glm::uvec3);
+        ScopedRefPtr<VulkanBuffer> stagingBuffer = mContext->GetDevice()->CreateBuffer(
+            indexBufferSize,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        uint8_t* bufferData = stagingBuffer->MapBuffer();
+        std::copy_n(reinterpret_cast<uint8_t const*>(indices.data()), indexBufferSize, bufferData);
+        stagingBuffer->UnmapBuffer();
+
         mIndexBuffer = mContext->GetDevice()->CreateBuffer(
             indexBufferSize,
-            vk::BufferUsageFlagBits::eIndexBuffer,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        uint8_t* bufferData = mIndexBuffer->MapBuffer();
-        std::copy_n(reinterpret_cast<uint8_t const*>(indices.data()), indexBufferSize, bufferData);
-        mIndexBuffer->UnmapBuffer();
+            vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+        vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
+        VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
+
+        vk::BufferCopy bufferCopy =
+            vk::BufferCopy().setSize(indexBufferSize).setDstOffset(0).setSrcOffset(0);
+
+        commandBuffer.copyBuffer(
+            stagingBuffer->GetBufferHandle(),
+            mIndexBuffer->GetBufferHandle(),
+            bufferCopy);
+
+        VKRT_ASSERT_VK(commandBuffer.end());
+        mContext->GetDevice()->SubmitCommandAndFlush(commandBuffer);
+        mContext->GetDevice()->DestroyCommand(commandBuffer);
     }
 }
 

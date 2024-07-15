@@ -106,4 +106,22 @@ public:
 private:
     vk::Sampler mSampler;
 };
+
+class ShaderParameterPushConstant : public ShaderParameter {
+public:
+    ShaderParameterPushConstant(
+        ScopedRefPtr<Context> context,
+        const vk::ShaderStageFlags& stageFlags,
+        const vk::DeviceSize& size);
+
+    vk::DeviceSize GetSize() { return mSize; }
+    vk::DeviceSize GetOffset() { return mOffset; }
+
+    void SetOffset(vk::DeviceSize offset) { mOffset = offset; }
+
+private:
+    vk::DeviceSize mSize;
+    vk::DeviceSize mOffset;
+};
+
 }  // namespace VKRT

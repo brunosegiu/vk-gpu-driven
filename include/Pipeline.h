@@ -1,4 +1,3 @@
-#pragma once
 
 #include <cstdint>
 #include <unordered_map>
@@ -6,11 +5,11 @@
 
 #include "Macros.h"
 #include "RefCountPtr.h"
+#include "RenderPass.h"
 #include "ResourceLoader.h"
+#include "ShaderParameterCollection.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
-#include "RenderPass.h"
-#include "ShaderParameterCollection.h"
 
 namespace VKRT {
 
