@@ -39,6 +39,7 @@ set(HEADERS
     include/ShaderParameter.h
     include/ShaderParameterCollection.h
     include/CommandRing.h
+    include/MeshSystem.h
 )
 
 set(SOURCE
@@ -65,6 +66,7 @@ set(SOURCE
     src/ShaderParameter.cpp
     src/ShaderParameterCollection.cpp
     src/CommandRing.cpp
+    src/MeshSystem.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")

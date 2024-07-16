@@ -12,33 +12,26 @@ namespace VKRT {
 
 class Mesh : public RefCountPtr {
 public:
-    struct Vertex {
-        glm::vec3 position;
-    };
-    Mesh(
-        ScopedRefPtr<Context> context,
-        const std::vector<Vertex>& vertices,
-        const std::vector<glm::uvec3>& indices,
-        ScopedRefPtr<Material> material);
+    Mesh(ScopedRefPtr<Material> material);
 
     const ScopedRefPtr<Material> GetMaterial() const { return mMaterial; }
     ScopedRefPtr<Material> GetMaterial() { return mMaterial; }
-    
-    const ScopedRefPtr<VulkanBuffer>& GetVertexBuffer() const { return mVertexBuffer; }
-    const uint32_t& GetVertexCount() const { return mVertexCount; }
 
-    const ScopedRefPtr<VulkanBuffer>& GetIndexBuffer() const { return mIndexBuffer; }
+    void SetIndexCount(uint32_t indexCount) { mIndexCount = indexCount; }
     const uint32_t& GetIndexCount() const { return mIndexCount; }
+
+    void SetFirstIndex(uint32_t firstIndex) { mFirstIndex = firstIndex; }
+    const uint32_t& GetFirstIndex() const { return mFirstIndex; }
+
+    void SetVertexOffset(uint32_t vertexOffset) { mVertexOffset = vertexOffset; }
+    const uint32_t& GetVertexOffset() const { return mVertexOffset; }
 
     ~Mesh();
 
 private:
-    ScopedRefPtr<Context> mContext;
-
-    ScopedRefPtr<VulkanBuffer> mVertexBuffer;
-    uint32_t mVertexCount;
-    ScopedRefPtr<VulkanBuffer> mIndexBuffer;
+    uint32_t mVertexOffset;
     uint32_t mIndexCount;
+    uint32_t mFirstIndex;
 
     ScopedRefPtr<Material> mMaterial;
 };

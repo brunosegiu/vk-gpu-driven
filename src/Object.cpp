@@ -9,11 +9,13 @@
 #include "tiny_gltf.h"
 
 #include "DebugUtils.h"
+#include "Scene.h"
 
 namespace VKRT {
 
 std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
     ScopedRefPtr<Context> context,
+    ScopedRefPtr<Scene> scene,
     tinygltf::Model& model,
     const tinygltf::Mesh& mesh) {
     std::vector<ScopedRefPtr<Mesh>> meshes;
@@ -71,11 +73,11 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
             }
         }
 
-        std::vector<glm::vec2> texCoords;
+        std::vector<uint32_t> texCoords;
         if (hasTexCoords) {
             const tinygltf::Accessor& texCoordAccessor =
                 model.accessors[attributes.at(texCoordName)];
-            texCoords = std::vector<glm::vec2>(texCoordAccessor.count);
+            texCoords = std::vector<uint32_t>(texCoordAccessor.count);
 
             const tinygltf::BufferView& texCoordBufferView =
                 model.bufferViews[texCoordAccessor.bufferView];
@@ -89,25 +91,25 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
             for (uint32_t texCoordIndex = 0; texCoordIndex < texCoordCount; ++texCoordIndex) {
                 const float* texCoordDataFloat =
                     reinterpret_cast<const float*>(&texCoordData[vetexStride * texCoordIndex]);
-                texCoords[texCoordIndex] = glm::vec2(texCoordDataFloat[0], texCoordDataFloat[1]);
+                const auto packUnorm2x16 = [](const glm::vec2& input) -> uint32_t {
+                    return static_cast<uint32_t>(input.x * 255.0f) << 16 |
+                           static_cast<uint32_t>(input.x * 255.0f);
+                };
+                texCoords[texCoordIndex] =
+                    packUnorm2x16(glm::vec2(texCoordDataFloat[0], texCoordDataFloat[1]));
             }
         } else {
-            texCoords = std::vector<glm::vec2>(positionAccessor.count, glm::vec2(0.0f));
+            texCoords = std::vector<uint32_t>(positionAccessor.count, 0);
         }
 
-        std::vector<Mesh::Vertex> vertices;
+        std::vector<glm::vec3> vertices;
         vertices.reserve(positions.size());
         for (size_t vertexIndex = 0; vertexIndex < positions.size(); ++vertexIndex) {
-            Mesh::Vertex vertex{
-                .position = positions[vertexIndex],
-                //.normal = normals[vertexIndex],
-                //.texCoord = texCoords[vertexIndex]
-            };
-            vertices.push_back(vertex);
+            vertices.push_back(positions[vertexIndex]);
         }
 
         const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
-        std::vector<glm::uvec3> indices;
+        std::vector<uint32_t> indices;
         {
             const uint32_t indexCount = static_cast<uint32_t>(indexAccessor.count);
             const tinygltf::BufferView& indexBufferView =
@@ -118,27 +120,19 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
                 reinterpret_cast<const uint16_t*>(&indexBuffer.data[indexOffset]);
             const uint32_t* pIndexData32Bit =
                 reinterpret_cast<const uint32_t*>(&indexBuffer.data[indexOffset]);
-            indices.reserve(indexCount / 3);
-            for (uint32_t i = 0; i < indexCount; i += 3) {
-                glm::uvec3 triangle;
+            indices.reserve(indexCount);
+            for (uint32_t i = 0; i < indexCount; ++i) {
                 if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
-                    triangle = glm::uvec3(
-                        pIndexData32Bit[i],
-                        pIndexData32Bit[i + 1],
-                        pIndexData32Bit[i + 2]);
+                    indices.push_back(static_cast<uint32_t>(pIndexData32Bit[i]));
                 } else {
-                    triangle = glm::uvec3(
-                        pIndexData16Bit[i],
-                        pIndexData16Bit[i + 1],
-                        pIndexData16Bit[i + 2]);
+                    indices.push_back(pIndexData16Bit[i]);
                 }
-                indices.emplace_back(triangle);
             }
         }
 
         const int32_t materialIndex = primitive.material;
         ScopedRefPtr<Material> material = nullptr;
-        if (false && materialIndex >= 0) {
+        if (materialIndex >= 0) {
             const tinygltf::Material& gltfMaterial = model.materials[materialIndex];
 
             const std::vector<double>& baseColor =
@@ -189,14 +183,16 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
         } else {
             material = new Material();
         }
-
-        ScopedRefPtr<Mesh> newMesh = new Mesh(context, vertices, indices, material);
+        ScopedRefPtr<Mesh> newMesh = scene->GetMeshSystem()->GetOrCreate(primitive.indices, vertices, indices, material);
         meshes.push_back(newMesh);
     }
     return meshes;
 }
 
-ScopedRefPtr<Object> Object::Load(ScopedRefPtr<Context> context, const std::string& path) {
+ScopedRefPtr<Object> Object::Load(
+    ScopedRefPtr<Context> context,
+    ScopedRefPtr<Scene> scene,
+    const std::string& path) {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err;
@@ -231,12 +227,13 @@ ScopedRefPtr<Object> Object::Load(ScopedRefPtr<Context> context, const std::stri
                     node.rotation[1],
                     node.rotation[2],
                     node.rotation[3]);
-                object->SetRotation(glm::degrees(glm::eulerAngles(rotation)));
+                glm::vec3 rotationEuler = glm::degrees(glm::eulerAngles(rotation));
+                object->SetRotation(rotationEuler);
             }
 
             if (node.mesh != InvalidIndex) {
                 std::vector<ScopedRefPtr<Mesh>> objectMeshes =
-                    LoadMeshes(context, model, model.meshes[node.mesh]);
+                    LoadMeshes(context, scene, model, model.meshes[node.mesh]);
                 for (const ScopedRefPtr<Mesh>& mesh : objectMeshes) {
                     object->AddMesh(mesh);
                 }
@@ -251,14 +248,20 @@ ScopedRefPtr<Object> Object::Load(ScopedRefPtr<Context> context, const std::stri
         };
 
         if (!model.nodes.empty()) {
-            return loadSubtree(model.nodes.front());
+            ScopedRefPtr<Object> object = loadSubtree(model.nodes.front());
+            scene->AddObject(object);
+            return object;
         }
     }
     return nullptr;
 }
 
 Object::Object()
-    : mLocalTransform(1.0f), mPosition(0.0f), mEulerRotation(0.0f), mScale(1.0f, 1.0f, 1.0f) {}
+    : mLocalTransform(1.0f),
+      mAbsoluteTranform(1.0f),
+      mPosition(0.0f),
+      mEulerRotation(0.0f),
+      mScale(1.0f, 1.0f, 1.0f) {}
 
 void Object::SetTranslation(const glm::vec3& position) {
     mPosition = position;
@@ -292,7 +295,7 @@ void Object::UpdateTransforms(const glm::mat4& parentTransform) {
         glm::radians(mEulerRotation.z));
     glm::mat4 scale = glm::scale(glm::mat4(1.0f), mScale);
     mLocalTransform = translate * rotate * scale;
-    mAbsoluteTranform = mLocalTransform * parentTransform;
+    mAbsoluteTranform = parentTransform * mLocalTransform;
     for (ScopedRefPtr<Object> child : mChildren) {
         child->UpdateTransforms(mAbsoluteTranform);
     }

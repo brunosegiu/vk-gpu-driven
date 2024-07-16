@@ -6,6 +6,7 @@
 #include "RefCountPtr.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
+#include "MeshSystem.h"
 
 namespace VKRT {
 
@@ -33,6 +34,8 @@ public:
     };
     SceneMaterials GetMaterialProxies();
 
+    ScopedRefPtr<MeshSystem> GetMeshSystem() { return mMeshSystem; }
+
     void Draw(
         vk::CommandBuffer& commandBuffer,
         std::function<void(vk::CommandBuffer, ScopedRefPtr<Object>, ScopedRefPtr<Mesh>)>
@@ -42,6 +45,8 @@ public:
 
 private:
     std::vector<ScopedRefPtr<Object>> GetFlattenedObjects();
+
+    ScopedRefPtr<MeshSystem> mMeshSystem;
 
     ScopedRefPtr<Context> mContext;
 

@@ -27,43 +27,39 @@ void LoadBasicScene(
     VKRT::ScopedRefPtr<VKRT::Scene> scene) {
     using namespace VKRT;
     {
-        ScopedRefPtr<Object> boxMesh = Object::Load(context, "./assets/box.glb");
+        ScopedRefPtr<Object> boxMesh = Object::Load(context, scene, "./assets/box.glb");
         boxMesh->SetTranslation(glm::vec3(0.0f, 5.0f, 0.0f));
         boxMesh->SetScale(glm::vec3(7.5f, 5.0f, 7.5f));
         boxMesh->Rotate(glm::vec3(0.0f, 90.0f, 0.0f));
-        scene->AddObject(boxMesh);
     }
 
     {
-        ScopedRefPtr<Object> dragon = Object::Load(context, "./assets/DragonAttenuation.glb");
+        ScopedRefPtr<Object> dragon =
+            Object::Load(context, scene, "./assets/DragonAttenuation.glb");
         dragon->SetTranslation(glm::vec3(0.0f, 0.0f, 0.5f));
         dragon->SetScale(glm::vec3(6.0f, 7.5f, 4.0f));
         dragon->Rotate(glm::vec3(0.0f, 90.0f, 0.0f));
-        scene->AddObject(dragon);
     }
 
     {
-        ScopedRefPtr<Object> object = Object::Load(context, "./assets/venus.gltf");
+        ScopedRefPtr<Object> object = Object::Load(context, scene, "./assets/venus.gltf");
         object->SetTranslation(glm::vec3(3.0f, 3.5f, 0.0f));
         object->SetScale(glm::vec3(0.6f));
         object->Rotate(glm::vec3(90.0f, 90.0f, 0.0f));
-        scene->AddObject(object);
     }
 
     {
-        ScopedRefPtr<Object> object = Object::Load(context, "./assets/bunny.glb");
+        ScopedRefPtr<Object> object = Object::Load(context, scene, "./assets/bunny.glb");
         object->SetTranslation(glm::vec3(2.0f, 0.0f, 3.5f));
         object->SetScale(glm::vec3(0.05f));
         object->SetRotation(glm::vec3(270.0f, 90.0f, 0.0f));
-        scene->AddObject(object);
     }
 
     {
-        ScopedRefPtr<Object> teapot = Object::Load(context, "./assets/utahTeapot.glb");
+        ScopedRefPtr<Object> teapot = Object::Load(context, scene, "./assets/utahTeapot.glb");
         teapot->SetTranslation(glm::vec3(2.5f, 2.5f, -3.5f));
         teapot->SetScale(glm::vec3(1.025f));
         teapot->Rotate(glm::vec3(0.0f, -90.0f, 0.0f));
-        scene->AddObject(teapot);
     }
 }
 
@@ -78,15 +74,14 @@ int main() {
             ScopedRefPtr<Scene> scene = new Scene(context);
 
             {
-                ScopedRefPtr<Object> bistro = Object::Load(context, "./assets/Bistro.glb");
+                ScopedRefPtr<Object> bistro = Object::Load(context, scene, "./assets/Bistro.glb");
                 bistro->SetTranslation(glm::vec3(0.0f, 0.0f, 0.0f));
                 bistro->SetScale(glm::vec3(1.0f));
-                scene->AddObject(bistro);
             }
 
             ScopedRefPtr<Camera> camera = new Camera(window);
-            camera->SetTranslation(glm::vec3(-8.0f, -5.0f, 0.0f));
-            camera->SetRotation(glm::vec3(0.0f, -90.0f, 0.0f));
+            camera->SetTranslation(glm::vec3(11.0f, -5.0f, 1.0f));
+            camera->SetRotation(glm::vec3(20.0f, 100.0f, 0.0f));
 
             ScopedRefPtr<Renderer> renderer = new Renderer(context, scene);
             Timer timer;
