@@ -24,12 +24,21 @@ void Scene::AddObject(ScopedRefPtr<Object> object) {
     }
 }
 
-Scene::SceneMaterials Scene::GetMaterialProxies() {
+void Scene::Lock() {
+    // Flatten object tree structure
+    FlattenedObjects();
+    // Create unified geometry buffers
+    GetMeshSystem()->Upload();
+    // Create material proxies
+    GenerateMaterialProxies();
+}
+
+void Scene::GenerateMaterialProxies() {
     // Gather textures first
     std::vector<std::pair<ScopedRefPtr<Texture>, int32_t>> textureIndices;
     textureIndices.push_back({mDummyTexture, 1});
     int32_t currentTextureIndex = 1;
-    for (const ScopedRefPtr<Object>& object : mObjects) {
+    for (const ScopedRefPtr<Object>& object : GetFlattenedObjects()) {
         std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
         for (ScopedRefPtr<Mesh>& mesh : meshes) {
             const Material* material = mesh->GetMaterial();
@@ -54,7 +63,7 @@ Scene::SceneMaterials Scene::GetMaterialProxies() {
 
     // Gather materials and generate texture indices if applicable
     std::vector<MaterialProxy> materials;
-    for (const ScopedRefPtr<Object>& object : mObjects) {
+    for (const ScopedRefPtr<Object>& object : GetFlattenedObjects()) {
         std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
         for (ScopedRefPtr<Mesh>& mesh : meshes) {
             const ScopedRefPtr<Material> material = mesh->GetMaterial();
@@ -90,6 +99,7 @@ Scene::SceneMaterials Scene::GetMaterialProxies() {
                     proxy.roughnessTextureIndex = roughnessIt->second;
                 }
             }
+            material->SetMaterialId(materials.size());
             materials.push_back(proxy);
         }
     }
@@ -99,40 +109,25 @@ Scene::SceneMaterials Scene::GetMaterialProxies() {
         textures.push_back(entry.first);
     }
 
-    Scene::SceneMaterials sceneMaterials{
+    mCachedMaterialProxies = SceneMaterials{
         .materials = materials,
         .textures = textures,
     };
-    return sceneMaterials;
-}
-
-std::vector<ScopedRefPtr<Object>> Scene::GetFlattenedObjects() {
-    std::function<void(const ScopedRefPtr<Object>&, std::vector<ScopedRefPtr<Object>>&)>
-        loadSubtree;
-    loadSubtree = [&](const ScopedRefPtr<Object>& object,
-                      std::vector<ScopedRefPtr<Object>>& flattened) -> void {
-        for (const ScopedRefPtr<Object>& child : object->GetChildren()) {
-            flattened.push_back(child);
-            loadSubtree(child, flattened);
-        }
-    };
-
-    std::vector<ScopedRefPtr<Object>> flattened;
-    for (ScopedRefPtr<Object> object : mObjects) {
-        loadSubtree(object, flattened);
-    }
-    return flattened;
 }
 
 void Scene::Draw(
     vk::CommandBuffer& commandBuffer,
     std::function<void(vk::CommandBuffer, ScopedRefPtr<Object>, ScopedRefPtr<Mesh>)> onDrawMesh) {
-    GetMeshSystem()->Upload();
     for (ScopedRefPtr<Object> object : mObjects) {
         object->UpdateTransforms(glm::mat4(1.0f));
     }
     std::vector<ScopedRefPtr<Object>> objects = GetFlattenedObjects();
     commandBuffer.bindVertexBuffers(0, GetMeshSystem()->GetVertexBuffer()->GetBufferHandle(), {0});
+    commandBuffer.bindVertexBuffers(
+        1,
+        GetMeshSystem()->GetTexCoordBuffer()->GetBufferHandle(),
+        {0});
+    commandBuffer.bindVertexBuffers(2, GetMeshSystem()->GetNormalBuffer()->GetBufferHandle(), {0});
     commandBuffer.bindIndexBuffer(
         GetMeshSystem()->GetIndexBuffer()->GetBufferHandle(),
         {0},
@@ -148,6 +143,23 @@ void Scene::Draw(
                 mesh->GetVertexOffset(),
                 0);
         }
+    }
+}
+
+void Scene::FlattenedObjects() {
+    std::function<void(const ScopedRefPtr<Object>&, std::vector<ScopedRefPtr<Object>>&)>
+        loadSubtree;
+    loadSubtree = [&](const ScopedRefPtr<Object>& object,
+                      std::vector<ScopedRefPtr<Object>>& flattened) -> void {
+        for (const ScopedRefPtr<Object>& child : object->GetChildren()) {
+            flattened.push_back(child);
+            loadSubtree(child, flattened);
+        }
+    };
+
+    mCachedFlattenedObjects.clear();
+    for (ScopedRefPtr<Object> object : mObjects) {
+        loadSubtree(object, mCachedFlattenedObjects);
     }
 }
 

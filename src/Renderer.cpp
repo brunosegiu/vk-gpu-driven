@@ -7,7 +7,7 @@
 
 namespace VKRT {
 Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
-    : mContext(context), mScene(scene), mCurrentFrameIndex(0) {
+    : mContext(context), mScene(scene), mCurrentFrameIndex(0), mMaterialsBuffer(nullptr) {
     ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
     inputManager->Subscribe(this);
 
@@ -38,16 +38,60 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
 
         mPushConstant = new ShaderParameterPushConstant(
             mContext,
-            vk::ShaderStageFlagBits::eVertex,
-            sizeof(glm::mat4));
+            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+            sizeof(PerDrawParameters));
         mMainPassParameters->AddParameter(mPushConstant);
+
+        const float anisotropy =
+            mContext->GetDevice()->GetDeviceProperties().limits.maxSamplerAnisotropy;
+        vk::SamplerCreateInfo samplerCreateInfo =
+            vk::SamplerCreateInfo()
+                .setMagFilter(vk::Filter::eLinear)
+                .setMinFilter(vk::Filter::eLinear)
+                .setMipmapMode(vk::SamplerMipmapMode::eLinear)
+                .setAddressModeU(vk::SamplerAddressMode::eRepeat)
+                .setAddressModeV(vk::SamplerAddressMode::eRepeat)
+                .setAddressModeW(vk::SamplerAddressMode::eRepeat)
+                .setMipLodBias(0.0f)
+                .setCompareOp(vk::CompareOp::eNever)
+                .setMinLod(0.0f)
+                .setMaxLod(0.0f)
+                .setAnisotropyEnable(true)
+                .setMaxAnisotropy(anisotropy);
+        mMaterialSampler = new ShaderParameterSampler(
+            mContext,
+            vk::ShaderStageFlagBits::eFragment,
+            samplerCreateInfo);
+        mMainPassParameters->AddParameter(mMaterialSampler);
+
+        mMaterialsUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eStorageBuffer,
+            ShaderParameter::UpdateFrequency::Once,
+            vk::ShaderStageFlagBits::eFragment);
+        mMainPassParameters->AddParameter(mMaterialsUniform);
+
+        mMaterialsTextures = new ShaderParameterImage(
+            mContext,
+            vk::DescriptorType::eSampledImage,
+            vk::ShaderStageFlagBits::eFragment,
+            4096,
+            true);
+        mMainPassParameters->AddParameter(mMaterialsTextures);
 
         std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
             {vk::ShaderStageFlagBits::eVertex, Resource::Id::VertexShader},
             {vk::ShaderStageFlagBits::eFragment, Resource::Id::FragmentShader},
         };
 
-        mMainPassPipeline = new Pipeline(context, mMainPassParameters, stages, mRenderPass);
+        const std::vector<GeometryLayout> geometryLayout{
+            {.format = vk::Format::eR32G32B32A32Sfloat, .stride = sizeof(glm::vec3)},
+            {.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)},
+            {.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)},
+        };
+
+        mMainPassPipeline =
+            new Pipeline(context, mMainPassParameters, stages, mRenderPass, geometryLayout);
     }
 }
 
@@ -64,9 +108,34 @@ void Renderer::UpdateCameraUniforms(Camera* camera, uint32_t imageIndex) {
     buffer->UnmapBuffer();
 }
 
+void Renderer::UpdateMaterialUniform() {
+    if (mMaterialsBuffer == nullptr) {
+        uint32_t descriptorCount = 0;
+        Scene::SceneMaterials sceneMaterials = mScene->GetMaterialProxies();
+        size_t materialBufferSize = sceneMaterials.materials.size() * sizeof(Scene::MaterialProxy);
+        VKRT_ASSERT(materialBufferSize > 0);
+        mMaterialsBuffer = mContext->GetDevice()->CreateBuffer(
+            materialBufferSize,
+            vk::BufferUsageFlagBits::eStorageBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        uint8_t* buffer = mMaterialsBuffer->MapBuffer();
+        std::copy_n(
+            reinterpret_cast<const uint8_t*>(sceneMaterials.materials.data()),
+            materialBufferSize,
+            buffer);
+        mMaterialsBuffer->UnmapBuffer();
+        descriptorCount = sceneMaterials.textures.size();
+        for (const ScopedRefPtr<Texture>& materialTexture : sceneMaterials.textures) {
+            mMaterialsTextures->Bind(materialTexture);
+        }
+        { mMaterialsUniform->BindBuffer(mMaterialsBuffer); }
+    }
+}
+
 void Renderer::Render(Camera* camera) {
     mCurrentFrameIndex = (mCurrentFrameIndex + 1) % mContext->GetMaxInFlightFrameCount();
     CommandRing::CommandResources command = mCommandRing->Cycle();
+    mScene->Lock();
     mContext->GetSwapchain()->AcquireNextImage(mCurrentFrameIndex);
     {
         VKRT_ASSERT_VK(command.buffer.begin(vk::CommandBufferBeginInfo{}));
@@ -74,6 +143,7 @@ void Renderer::Render(Camera* camera) {
         // Create and update all buffers and textures
         {
             UpdateCameraUniforms(camera, mCurrentFrameIndex);
+            UpdateMaterialUniform();
             mMainPassParameters->CreateDescriptorSets();
             mMainPassParameters->UpdateDescriptors(mCurrentFrameIndex);
         }
@@ -126,15 +196,18 @@ void Renderer::Render(Camera* camera) {
 
         mScene->Draw(
             command.buffer,
-            [this](
-                vk::CommandBuffer commandBuffer,
+            [&](vk::CommandBuffer commandBuffer,
                 ScopedRefPtr<Object> object,
                 ScopedRefPtr<Mesh> mesh) {
-                commandBuffer.pushConstants<glm::mat4>(
+                PerDrawParameters parameters{
+                    .transform = object->GetAbsoluteTransform(),
+                    .materialId = mesh->GetMaterial()->GetMaterialId(),
+                };
+                commandBuffer.pushConstants<PerDrawParameters>(
                     mMainPassPipeline->GetPipelineLayout(),
                     mPushConstant->GetStageFlags(),
                     mPushConstant->GetOffset(),
-                    object->GetAbsoluteTransform());
+                    parameters);
             });
 
         command.buffer.endRenderPass();

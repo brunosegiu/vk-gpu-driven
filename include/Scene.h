@@ -2,11 +2,11 @@
 
 #include <vector>
 
+#include "MeshSystem.h"
 #include "Object.h"
 #include "RefCountPtr.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
-#include "MeshSystem.h"
 
 namespace VKRT {
 
@@ -17,6 +17,8 @@ public:
     Scene(ScopedRefPtr<Context> context);
 
     void AddObject(ScopedRefPtr<Object> object);
+
+    void Lock();
 
     struct MaterialProxy {
         glm::vec3 albedo;
@@ -32,8 +34,10 @@ public:
         std::vector<MaterialProxy> materials;
         std::vector<ScopedRefPtr<Texture>> textures;
     };
-    SceneMaterials GetMaterialProxies();
-
+    const SceneMaterials& GetMaterialProxies() const { return mCachedMaterialProxies; }
+    std::vector<ScopedRefPtr<Object>> GetFlattenedObjects() const {
+        return mCachedFlattenedObjects;
+    }
     ScopedRefPtr<MeshSystem> GetMeshSystem() { return mMeshSystem; }
 
     void Draw(
@@ -44,7 +48,9 @@ public:
     ~Scene();
 
 private:
-    std::vector<ScopedRefPtr<Object>> GetFlattenedObjects();
+    void FlattenedObjects();
+    void GenerateMaterialProxies();
+
 
     ScopedRefPtr<MeshSystem> mMeshSystem;
 
@@ -53,5 +59,9 @@ private:
     std::vector<ScopedRefPtr<Object>> mObjects;
 
     ScopedRefPtr<Texture> mDummyTexture;
+
+    SceneMaterials mCachedMaterialProxies;
+
+    std::vector<ScopedRefPtr<Object>> mCachedFlattenedObjects;
 };
 }  // namespace VKRT

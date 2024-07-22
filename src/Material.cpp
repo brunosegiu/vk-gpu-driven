@@ -23,7 +23,8 @@ Material::Material(
       mTransmission(transmission),
       mIndexOfRefraction(indexOfRefraction),
       mAlbedoTexture(albedoTexture),
-      mRoughnessTexture(roughnessTexture) {}
+      mRoughnessTexture(roughnessTexture),
+      mMaterialId(0) {}
 
 Material::~Material() {}
 

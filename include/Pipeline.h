@@ -15,13 +15,19 @@ namespace VKRT {
 
 class Context;
 
+struct GeometryLayout {
+    vk::Format format;
+    size_t stride;
+};
+
 class Pipeline : public RefCountPtr {
 public:
     Pipeline(
         ScopedRefPtr<Context> context,
         const ScopedRefPtr<ShaderParameterCollection>& parameters,
         const std::unordered_map<vk::ShaderStageFlagBits, Resource::Id>& shaderResourcesMap,
-        ScopedRefPtr<RenderPass> renderPass);
+        ScopedRefPtr<RenderPass> renderPass,
+        const std::vector<GeometryLayout>& geometryLayout);
 
     const vk::PipelineLayout& GetPipelineLayout() const { return mLayout; }
     const vk::Pipeline& GetPipelineHandle() const { return mPipeline; }

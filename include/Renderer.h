@@ -23,6 +23,7 @@ private:
         glm::mat4 projection;
     };
     void UpdateCameraUniforms(Camera* camera, uint32_t imageIndex);
+    void UpdateMaterialUniform();
 
     void OnKeyPressed(int key) override;
     void OnKeyReleased(int key) override;
@@ -38,7 +39,13 @@ private:
     ScopedRefPtr<ShaderParameterCollection> mMainPassParameters;
     ScopedRefPtr<ShaderParameterBuffer> mCameraUniform;
     ScopedRefPtr<ShaderParameterBuffer> mMaterialsUniform;
+    ScopedRefPtr<VulkanBuffer> mMaterialsBuffer;
     ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
+    ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
+    struct PerDrawParameters {
+        glm::mat4 transform;
+        uint32_t materialId;
+    };
     ScopedRefPtr<ShaderParameterPushConstant> mPushConstant;
     ScopedRefPtr<Pipeline> mMainPassPipeline;
     ScopedRefPtr<CommandRing> mCommandRing;

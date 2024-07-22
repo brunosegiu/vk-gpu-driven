@@ -7,6 +7,7 @@
 #include "VulkanBuffer.h"
 
 namespace VKRT {
+
 class ShaderParameter : public RefCountPtr {
 public:
     enum class UpdateFrequency { Once, PerFrame, PerDraw };
@@ -27,8 +28,14 @@ public:
     const uint32_t& GetBinding() { return mBinding; }
     UpdateFrequency GetUpdateFrequency() const { return mUpdateFrequency; }
 
-    virtual vk::DescriptorBufferInfo GetBufferInfo(uint32_t frameIndex = 0) { return {}; };
-    virtual std::vector<vk::DescriptorImageInfo> GetImageInfos() { return {}; };
+    virtual const vk::DescriptorBufferInfo& GetBufferInfo(uint32_t frameIndex = 0) {
+        static vk::DescriptorBufferInfo sDummyDescriptorInfo;
+        return sDummyDescriptorInfo;
+    };
+    virtual const std::vector<vk::DescriptorImageInfo>& GetImageInfos() {
+        static std::vector<vk::DescriptorImageInfo> sDummyDescriptorInfo;
+        return sDummyDescriptorInfo;
+    };
 
     void SetBinding(uint32_t binding) { mBinding = binding; }
 
@@ -58,9 +65,16 @@ public:
         const vk::MemoryPropertyFlags& memoryFlags,
         const vk::MemoryAllocateFlags& memoryAllocateFlags = {});
 
-    ScopedRefPtr<VulkanBuffer> GetBuffer(uint32_t frameIndex = 0);
+    ShaderParameterBuffer(
+        ScopedRefPtr<Context> context,
+        const vk::DescriptorType& type,
+        const UpdateFrequency& updateFrequency,
+        const vk::ShaderStageFlags& stageFlags);
 
-    vk::DescriptorBufferInfo GetBufferInfo(uint32_t frameIndex = 0) override;
+    ScopedRefPtr<VulkanBuffer> GetBuffer(uint32_t frameIndex = 0);
+    const vk::DescriptorBufferInfo& GetBufferInfo(uint32_t frameIndex = 0) override;
+    void BindBuffer(ScopedRefPtr<VulkanBuffer> buffer);
+    void BindBuffers(const std::vector<ScopedRefPtr<VulkanBuffer>> buffers);
 
 private:
     std::vector<ScopedRefPtr<VulkanBuffer>> mBuffers;
@@ -72,7 +86,6 @@ public:
         ScopedRefPtr<Context> context,
         const vk::DescriptorType& type,
         const vk::ShaderStageFlags& stageFlags,
-        const vk::DeviceSize& size,
         uint32_t count = 1,
         bool variableCount = false);
 
@@ -85,26 +98,27 @@ public:
         return 0;
     }
 
-    std::vector<vk::DescriptorImageInfo> GetImageInfos() override;
+    const std::vector<vk::DescriptorImageInfo>& GetImageInfos() override;
 
 private:
     std::vector<ScopedRefPtr<Texture>> mTextures;
+    std::vector<vk::DescriptorImageInfo> mImageInfos;
 };
 
 class ShaderParameterSampler : public ShaderParameter {
 public:
     ShaderParameterSampler(
         ScopedRefPtr<Context> context,
-        const vk::DescriptorType& type,
         const vk::ShaderStageFlags& stageFlags,
         vk::SamplerCreateInfo createInfo);
 
-    std::vector<vk::DescriptorImageInfo> GetImageInfos() override;
+    const std::vector<vk::DescriptorImageInfo>& GetImageInfos() override;
 
     virtual ~ShaderParameterSampler();
 
 private:
     vk::Sampler mSampler;
+    std::vector<vk::DescriptorImageInfo> mSamplerInfo;
 };
 
 class ShaderParameterPushConstant : public ShaderParameter {

@@ -7,7 +7,7 @@
 namespace VKRT {
 
 ShaderParameterCollection::ShaderParameterCollection(ScopedRefPtr<Context> context)
-    : mContext(context) {}
+    : mContext(context), mUpdatedOnce(false) {}
 
 constexpr std::array<ShaderParameter::UpdateFrequency, 2> sUpdateFrequencies{
     ShaderParameter::UpdateFrequency::PerFrame,
@@ -148,6 +148,9 @@ void ShaderParameterCollection::UpdateDescriptors(uint32_t frameIndex) {
         if (shaderParemeters.empty()) {
             continue;
         }
+        if (updateFrequency == ShaderParameter::UpdateFrequency::Once && mUpdatedOnce) {
+            continue;
+        }
         const uint32_t effectiveFrameIndex =
             updateFrequency == ShaderParameter::UpdateFrequency::PerFrame ? frameIndex : 0;
 
@@ -164,28 +167,24 @@ void ShaderParameterCollection::UpdateDescriptors(uint32_t frameIndex) {
 
             switch (parameter->GetDescriptorType()) {
                 case vk::DescriptorType::eSampler: {
-                    const std::vector<vk::DescriptorImageInfo> imageInfos =
-                        parameter->GetImageInfos();
-                    descriptorUpdate.setImageInfo(imageInfos);
+                    descriptorUpdate.setImageInfo(parameter->GetImageInfos());
                 } break;
                 case vk::DescriptorType::eUniformBuffer:
                 case vk::DescriptorType::eStorageBuffer: {
-                    const vk::DescriptorBufferInfo bufferInfo =
+                    const vk::DescriptorBufferInfo& bufferInfo =
                         parameter->GetBufferInfo(effectiveFrameIndex);
                     descriptorUpdate.setBufferInfo(bufferInfo);
                 } break;
                 case vk::DescriptorType::eSampledImage: {
-                    const std::vector<vk::DescriptorImageInfo> imageInfos =
-                        parameter->GetImageInfos();
-                    descriptorUpdate.setImageInfo(imageInfos);
+                    descriptorUpdate.setImageInfo(parameter->GetImageInfos());
                 } break;
             }
 
             writeDescriptorSets.emplace_back(descriptorUpdate);
         }
     }
-
     logicalDevice.updateDescriptorSets(writeDescriptorSets, {});
+    mUpdatedOnce = true;
 }
 
 void ShaderParameterCollection::AddParameter(ScopedRefPtr<ShaderParameter> parameter) {

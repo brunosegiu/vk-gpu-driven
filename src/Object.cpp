@@ -29,8 +29,8 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
                                            attributes.find(normalName) != attributes.end();
         const bool hasTexCoords = attributes.find(texCoordName) != attributes.end();
 
-        if (!hasPositionAndNormals) {
-            return {};
+        if (!hasPositionAndNormals || !hasTexCoords) {
+            continue;
         }
 
         const tinygltf::Accessor& positionAccessor = model.accessors[attributes.at(positionName)];
@@ -54,7 +54,7 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
         }
 
         const tinygltf::Accessor& normalAccessor = model.accessors[attributes.at(normalName)];
-        std::vector<glm::vec3> normals(normalAccessor.count);
+        std::vector<uint32_t> normals(normalAccessor.count);
         {
             const tinygltf::BufferView& normalBufferView =
                 model.bufferViews[normalAccessor.bufferView];
@@ -65,20 +65,19 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
             const unsigned char* normalData = &normalBuffer.data[normalBufferOffset];
 
             const uint32_t normalCount = static_cast<uint32_t>(normalAccessor.count);
+            VKRT_ASSERT(normalAccessor.type == TINYGLTF_TYPE_VEC3);
             for (uint32_t normalIndex = 0; normalIndex < normalCount; ++normalIndex) {
                 const float* normalDataFloat =
                     reinterpret_cast<const float*>(&normalData[vetexStride * normalIndex]);
-                normals[normalIndex] =
+                glm::vec3 normal =
                     glm::vec3(normalDataFloat[0], normalDataFloat[1], normalDataFloat[2]);
+                normals[normalIndex] = glm::packSnorm4x8(glm::vec4(normal, 0.0f));
             }
         }
 
-        std::vector<uint32_t> texCoords;
-        if (hasTexCoords) {
-            const tinygltf::Accessor& texCoordAccessor =
-                model.accessors[attributes.at(texCoordName)];
-            texCoords = std::vector<uint32_t>(texCoordAccessor.count);
-
+        const tinygltf::Accessor& texCoordAccessor = model.accessors[attributes.at(texCoordName)];
+        std::vector<uint32_t> texCoords(texCoordAccessor.count);
+        {
             const tinygltf::BufferView& texCoordBufferView =
                 model.bufferViews[texCoordAccessor.bufferView];
             const tinygltf::Buffer& texCoordBuffer = model.buffers[texCoordBufferView.buffer];
@@ -86,26 +85,15 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
                 texCoordBufferView.byteOffset + texCoordAccessor.byteOffset;
             size_t vetexStride = texCoordAccessor.ByteStride(texCoordBufferView);
             const unsigned char* texCoordData = &texCoordBuffer.data[texCoordBufferOffset];
-
+            VKRT_ASSERT(texCoordAccessor.type == TINYGLTF_TYPE_VEC2);
             const uint32_t texCoordCount = static_cast<uint32_t>(texCoordAccessor.count);
             for (uint32_t texCoordIndex = 0; texCoordIndex < texCoordCount; ++texCoordIndex) {
                 const float* texCoordDataFloat =
                     reinterpret_cast<const float*>(&texCoordData[vetexStride * texCoordIndex]);
-                const auto packUnorm2x16 = [](const glm::vec2& input) -> uint32_t {
-                    return static_cast<uint32_t>(input.x * 255.0f) << 16 |
-                           static_cast<uint32_t>(input.x * 255.0f);
-                };
-                texCoords[texCoordIndex] =
-                    packUnorm2x16(glm::vec2(texCoordDataFloat[0], texCoordDataFloat[1]));
+                const glm::vec2 texCoord =
+                    glm::vec2((texCoordDataFloat[0]), (texCoordDataFloat[1]));
+                texCoords[texCoordIndex] = glm::packHalf2x16(texCoord);
             }
-        } else {
-            texCoords = std::vector<uint32_t>(positionAccessor.count, 0);
-        }
-
-        std::vector<glm::vec3> vertices;
-        vertices.reserve(positions.size());
-        for (size_t vertexIndex = 0; vertexIndex < positions.size(); ++vertexIndex) {
-            vertices.push_back(positions[vertexIndex]);
         }
 
         const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
@@ -183,7 +171,9 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
         } else {
             material = new Material();
         }
-        ScopedRefPtr<Mesh> newMesh = scene->GetMeshSystem()->GetOrCreate(primitive.indices, vertices, indices, material);
+        ScopedRefPtr<Mesh> newMesh =
+            scene->GetMeshSystem()
+                ->GetOrCreate(primitive.indices, positions, indices, texCoords, normals, material);
         meshes.push_back(newMesh);
     }
     return meshes;

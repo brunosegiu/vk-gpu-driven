@@ -10,22 +10,29 @@ Pipeline::Pipeline(
     ScopedRefPtr<Context> context,
     const ScopedRefPtr<ShaderParameterCollection>& parameters,
     const std::unordered_map<vk::ShaderStageFlagBits, Resource::Id>& shaderResourcesMap,
-    ScopedRefPtr<RenderPass> renderPass)
+    ScopedRefPtr<RenderPass> renderPass,
+    const std::vector<GeometryLayout>& geometryLayout)
     : mContext(context) {
-    const vk::VertexInputBindingDescription vertexInputBinding =
-        vk::VertexInputBindingDescription()
-            .setBinding(0)
-            .setStride(sizeof(glm::vec3))
-            .setInputRate(vk::VertexInputRate::eVertex);
+    std::vector<vk::VertexInputBindingDescription> vertexInputDescriptions;
+    std::vector<vk::VertexInputAttributeDescription> vertexInputAttributeDescriptions;
+    uint32_t binding = 0;
+    for (const GeometryLayout& geometryLayoutEntry : geometryLayout) {
+        vertexInputDescriptions.push_back(vk::VertexInputBindingDescription()
+                                              .setBinding(binding)
+                                              .setStride(geometryLayoutEntry.stride)
+                                              .setInputRate(vk::VertexInputRate::eVertex));
 
-    const vk::VertexInputAttributeDescription attributeDescription =
-        vk::VertexInputAttributeDescription().setBinding(0).setLocation(0).setFormat(
-            vk::Format::eR32G32B32Sfloat);
+        vertexInputAttributeDescriptions.push_back(vk::VertexInputAttributeDescription()
+                                                       .setBinding(binding)
+                                                       .setLocation(binding)
+                                                       .setFormat(geometryLayoutEntry.format));
+        ++binding;
+    }
 
     vk::PipelineVertexInputStateCreateInfo vertexInputCreateInfo =
         vk::PipelineVertexInputStateCreateInfo()
-            .setVertexBindingDescriptions(vertexInputBinding)
-            .setVertexAttributeDescriptions(attributeDescription);
+            .setVertexBindingDescriptions(vertexInputDescriptions)
+            .setVertexAttributeDescriptions(vertexInputAttributeDescriptions);
 
     vk::PipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo =
         vk::PipelineInputAssemblyStateCreateInfo()

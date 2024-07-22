@@ -44,6 +44,9 @@ public:
     void SetTransmission(float transmission) { mTransmission = transmission; }
     void SetIndexOfRefraction(float indexOfRefraction) { mIndexOfRefraction = indexOfRefraction; }
 
+    void SetMaterialId(uint32_t materialId) { mMaterialId = materialId; }
+    const uint32_t& GetMaterialId() const { return mMaterialId; }
+
     ~Material();
 
 private:
@@ -53,6 +56,8 @@ private:
     float mMetallic;
     float mTransmission;
     float mIndexOfRefraction;
+
+    uint32_t mMaterialId;
 
     ScopedRefPtr<Texture> mAlbedoTexture;
     ScopedRefPtr<Texture> mRoughnessTexture;

@@ -43,20 +43,38 @@ ShaderParameterBuffer::ShaderParameterBuffer(
     }
 }
 
+ShaderParameterBuffer::ShaderParameterBuffer(
+    ScopedRefPtr<Context> context,
+    const vk::DescriptorType& type,
+    const UpdateFrequency& updateFrequency,
+    const vk::ShaderStageFlags& stageFlags)
+    : ShaderParameter(context, type, updateFrequency, stageFlags, 1, false) {}
+
 ScopedRefPtr<VulkanBuffer> ShaderParameterBuffer::GetBuffer(uint32_t frameIndex) {
     return mBuffers[frameIndex];
 }
 
-vk::DescriptorBufferInfo ShaderParameterBuffer::GetBufferInfo(uint32_t frameIndex) {
+const vk::DescriptorBufferInfo& ShaderParameterBuffer::GetBufferInfo(uint32_t frameIndex) {
     ScopedRefPtr<VulkanBuffer> buffer = mBuffers[frameIndex];
     return buffer->GetDescriptorInfo();
+}
+
+void ShaderParameterBuffer::BindBuffer(ScopedRefPtr<VulkanBuffer> buffer) {
+    if (mBuffers.empty()) {
+        mBuffers.push_back(buffer);
+    }
+}
+
+void ShaderParameterBuffer::BindBuffers(const std::vector<ScopedRefPtr<VulkanBuffer>> buffers) {
+    if (mBuffers.empty()) {
+        mBuffers.insert(mBuffers.end(), buffers.begin(), buffers.end());
+    }
 }
 
 ShaderParameterImage::ShaderParameterImage(
     ScopedRefPtr<Context> context,
     const vk::DescriptorType& type,
     const vk::ShaderStageFlags& stageFlags,
-    const vk::DeviceSize& size,
     uint32_t count,
     bool variableCount)
     : ShaderParameter(
@@ -71,30 +89,38 @@ void ShaderParameterImage::Bind(const ScopedRefPtr<Texture>& texture) {
     mTextures.emplace_back(texture);
 }
 
-std::vector<vk::DescriptorImageInfo> ShaderParameterImage::GetImageInfos() {
-    std::vector<vk::DescriptorImageInfo> imageInfos;
-    for (const ScopedRefPtr<Texture>& texture : mTextures) {
-        imageInfos.push_back(vk::DescriptorImageInfo()
-                                 .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                                 .setImageView(texture->GetImageView())
-                                 .setSampler(nullptr));
+const std::vector<vk::DescriptorImageInfo>& ShaderParameterImage::GetImageInfos() {
+    if (mImageInfos.empty()) {
+        for (const ScopedRefPtr<Texture>& texture : mTextures) {
+            mImageInfos.push_back(vk::DescriptorImageInfo()
+                                      .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                                      .setImageView(texture->GetImageView())
+                                      .setSampler(nullptr));
+        }
     }
-    return imageInfos;
+    return mImageInfos;
 }
 
 ShaderParameterSampler::ShaderParameterSampler(
     ScopedRefPtr<Context> context,
-    const vk::DescriptorType& type,
     const vk::ShaderStageFlags& stageFlags,
     vk::SamplerCreateInfo createInfo)
-    : ShaderParameter(context, type, ShaderParameter::UpdateFrequency::Once, stageFlags, 1, false) {
+    : ShaderParameter(
+          context,
+          vk::DescriptorType::eSampler,
+          ShaderParameter::UpdateFrequency::Once,
+          stageFlags,
+          1,
+          false) {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
     mSampler = VKRT_ASSERT_VK(logicalDevice.createSampler(createInfo));
 }
 
-std::vector<vk::DescriptorImageInfo> ShaderParameterSampler::GetImageInfos() {
-    vk::DescriptorImageInfo samplerInfo = vk::DescriptorImageInfo().setSampler(mSampler);
-    return std::vector<vk::DescriptorImageInfo>{samplerInfo};
+const std::vector<vk::DescriptorImageInfo>& ShaderParameterSampler::GetImageInfos() {
+    if (mSamplerInfo.empty()) {
+        mSamplerInfo = {vk::DescriptorImageInfo().setSampler(mSampler)};
+    }
+    return mSamplerInfo;
 }
 
 ShaderParameterSampler::~ShaderParameterSampler() {

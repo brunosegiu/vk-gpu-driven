@@ -35,5 +35,6 @@ private:
     std::unordered_map<ShaderParameter::UpdateFrequency, vk::DescriptorSetLayout>
         mDescriptorSetLayouts;
     std::vector<vk::DescriptorPoolSize> mDescriptorSizes;
+    bool mUpdatedOnce;
 };
 }  // namespace VKRT
