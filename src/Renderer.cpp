@@ -99,8 +99,8 @@ void Renderer::UpdateCameraUniforms(Camera* camera, uint32_t imageIndex) {
     ScopedRefPtr<VulkanBuffer> buffer = mCameraUniform->GetBuffer(imageIndex);
     uint8_t* mappedBuffer = buffer->MapBuffer();
     CameraProperties cameraMatrices{
-        .view = camera->GetViewTransform(),
-        .projection = camera->GetProjectionTransform()};
+        .viewProjection = camera->GetProjectionTransform() * camera->GetViewTransform(),
+    };
     std::copy_n(
         reinterpret_cast<uint8_t*>(&cameraMatrices),
         sizeof(CameraProperties),
@@ -196,6 +196,7 @@ void Renderer::Render(Camera* camera) {
 
         mScene->Draw(
             command.buffer,
+            camera,
             [&](vk::CommandBuffer commandBuffer,
                 ScopedRefPtr<Object> object,
                 ScopedRefPtr<Mesh> mesh) {

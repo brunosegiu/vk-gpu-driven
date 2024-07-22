@@ -7,6 +7,7 @@
 #include "RefCountPtr.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
+#include "Camera.h"
 
 namespace VKRT {
 
@@ -42,6 +43,7 @@ public:
 
     void Draw(
         vk::CommandBuffer& commandBuffer,
+        ScopedRefPtr<Camera> camera,
         std::function<void(vk::CommandBuffer, ScopedRefPtr<Object>, ScopedRefPtr<Mesh>)>
             onDrawMesh);
 

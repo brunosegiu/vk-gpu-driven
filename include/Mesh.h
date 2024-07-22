@@ -7,6 +7,7 @@
 #include "RefCountPtr.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
+#include "AABB.h"
 
 namespace VKRT {
 
@@ -26,6 +27,9 @@ public:
     void SetVertexOffset(uint32_t vertexOffset) { mVertexOffset = vertexOffset; }
     const uint32_t& GetVertexOffset() const { return mVertexOffset; }
 
+    void SetAABB(AABB aabb) { mAABB = aabb; }
+    const AABB& GetAABB() const { return mAABB; }
+
     ~Mesh();
 
 private:
@@ -34,6 +38,8 @@ private:
     uint32_t mFirstIndex;
 
     ScopedRefPtr<Material> mMaterial;
+
+    AABB mAABB;
 };
 
 }  // namespace VKRT

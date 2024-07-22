@@ -40,6 +40,8 @@ set(HEADERS
     include/ShaderParameterCollection.h
     include/CommandRing.h
     include/MeshSystem.h
+    include/AABB.h
+    include/ViewFrustum.h
 )
 
 set(SOURCE
@@ -67,6 +69,8 @@ set(SOURCE
     src/ShaderParameterCollection.cpp
     src/CommandRing.cpp
     src/MeshSystem.cpp
+    src/AABB.cpp
+    src/ViewFrustum.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")

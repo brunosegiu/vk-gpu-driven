@@ -3,6 +3,7 @@
 #include "InputManager.h"
 #include "RefCountPtr.h"
 #include "Window.h"
+#include "ViewFrustum.h"
 
 namespace VKRT {
 class Camera : public RefCountPtr, public InputEventListener {
@@ -21,6 +22,8 @@ public:
     const glm::mat4& GetViewTransform() { return mViewTransform; }
     const glm::mat4& GetProjectionTransform() { return mProjectionTransform; }
     const uint32_t GetFramesSinceMoved() const { return mFramesSinceMoved; }
+    
+    const ViewFrustum& GetViewFrustum() const { return mViewFrustum; }
 
     ~Camera();
 
@@ -56,6 +59,8 @@ private:
     bool mActive;
     bool mSpeedModifierActive;
     uint32_t mFramesSinceMoved;
+
+    ViewFrustum mViewFrustum;
 };
 
 }  // namespace VKRT

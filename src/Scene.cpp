@@ -117,6 +117,7 @@ void Scene::GenerateMaterialProxies() {
 
 void Scene::Draw(
     vk::CommandBuffer& commandBuffer,
+    ScopedRefPtr<Camera> camera,
     std::function<void(vk::CommandBuffer, ScopedRefPtr<Object>, ScopedRefPtr<Mesh>)> onDrawMesh) {
     for (ScopedRefPtr<Object> object : mObjects) {
         object->UpdateTransforms(glm::mat4(1.0f));
@@ -135,13 +136,17 @@ void Scene::Draw(
     for (const ScopedRefPtr<Object>& object : objects) {
         std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
         for (ScopedRefPtr<Mesh>& mesh : meshes) {
-            onDrawMesh(commandBuffer, object, mesh);
-            commandBuffer.drawIndexed(
-                mesh->GetIndexCount(),
-                1,
-                mesh->GetFirstIndex(),
-                mesh->GetVertexOffset(),
-                0);
+            const AABB& aabb = mesh->GetAABB();
+            const ViewFrustum& viewFrustum = camera->GetViewFrustum();
+            if (viewFrustum.Test(object->GetAbsoluteTransform(), aabb)) {
+                onDrawMesh(commandBuffer, object, mesh);
+                commandBuffer.drawIndexed(
+                    mesh->GetIndexCount(),
+                    1,
+                    mesh->GetFirstIndex(),
+                    mesh->GetVertexOffset(),
+                    0);
+            }
         }
     }
 }

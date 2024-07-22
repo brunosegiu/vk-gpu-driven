@@ -6,8 +6,7 @@
 #define UPDATE_ONCE 1
 
 layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCameraParameters {
-    mat4 view;
-    mat4 projection;
+    mat4 viewProjection;
 } CameraParameters;
 
 layout( push_constant ) uniform TPushConstants {
@@ -24,7 +23,7 @@ layout(location = 1) out vec2 outTexCoord;
 layout(location = 2) out vec3 outNormal;
 
 void main() {
-    gl_Position = CameraParameters.projection * CameraParameters.view * PerDrawParameters.modelMatrix * vec4(inPosition, 1.0);
+    gl_Position = CameraParameters.viewProjection * PerDrawParameters.modelMatrix * vec4(inPosition, 1.0);
 
     outTexCoord = unpackHalf2x16(inPackedTexCoord);
 

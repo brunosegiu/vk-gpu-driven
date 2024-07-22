@@ -23,6 +23,7 @@ ScopedRefPtr<Mesh> MeshSystem::GetOrCreate(
             meshId,
             MeshData{.vertices = vertices, .indices = indices, .texCoord = texCoord, .normals = normals});
         ScopedRefPtr<Mesh> newMesh = new Mesh(material);
+        newMesh->SetAABB(AABB(vertices));
         mMeshes.emplace(meshId, newMesh);
         return newMesh;
     }

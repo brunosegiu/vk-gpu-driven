@@ -9,13 +9,14 @@ Camera::Camera(ScopedRefPtr<Window> window)
     : mWindow(window),
       mMovementSpeed(2.0f),
       mRotationSpeed(100.0f),
+      mViewTransform(1.0f),
       mActive(false),
       mSpeedModifierActive(false),
       mCurrentMousePos(0.0, 0.0),
-      mFramesSinceMoved(0) {
+      mFramesSinceMoved(0),
+      mViewFrustum(glm::mat4(1.0f)) {
     ScopedRefPtr<InputManager> inputManager = mWindow->GetInputManager();
     inputManager->Subscribe(this);
-
     mEulerRotation = glm::vec3(0.0);
     mPosition = glm::vec3(0.0);
     auto windowSize = mWindow->GetSize();
@@ -39,6 +40,8 @@ void Camera::UpdateViewTransform() {
     glm::mat4 translationTransform = glm::translate(glm::mat4(1.0f), mPosition);
 
     mViewTransform = rotationTransform * translationTransform;
+
+    mViewFrustum.Update(mProjectionTransform * mViewTransform);
 }
 
 glm::vec3 Camera::GetForwardDir() {

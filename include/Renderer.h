@@ -19,8 +19,7 @@ public:
 
 private:
     struct CameraProperties {
-        glm::mat4 view;
-        glm::mat4 projection;
+        glm::mat4 viewProjection;
     };
     void UpdateCameraUniforms(Camera* camera, uint32_t imageIndex);
     void UpdateMaterialUniform();
