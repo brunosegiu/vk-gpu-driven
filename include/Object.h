@@ -3,6 +3,7 @@
 #include <string>
 
 #include "glm/glm.hpp"
+#include "glm/gtx/quaternion.hpp"
 
 #include "Mesh.h"
 
@@ -29,7 +30,7 @@ public:
     void Translate(const glm::vec3& delta);
 
     void Rotate(const glm::vec3& delta);
-    void SetRotation(const glm::vec3& rotation);
+    void SetRotation(const glm::quat& rotation);
 
     void Scale(const glm::vec3& delta);
     void SetScale(const glm::vec3& scale);
@@ -46,7 +47,7 @@ private:
     glm::mat4 mAbsoluteTranform;
 
     std::vector<ScopedRefPtr<Mesh>> mMeshes;
-    glm::vec3 mEulerRotation;
+    glm::quat mRotation;
     glm::vec3 mScale;
     glm::vec3 mPosition;
 };

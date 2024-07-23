@@ -13,12 +13,15 @@
 
 namespace VKRT {
 
+static uint32_t sMeshIdOffset = 0;
+
 std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
     ScopedRefPtr<Context> context,
     ScopedRefPtr<Scene> scene,
     tinygltf::Model& model,
     const tinygltf::Mesh& mesh) {
     std::vector<ScopedRefPtr<Mesh>> meshes;
+    uint32_t maxIndexId = 0;
     for (const tinygltf::Primitive& primitive : mesh.primitives) {
         const std::string positionName = "POSITION";
         const std::string normalName = "NORMAL";
@@ -171,9 +174,13 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
         } else {
             material = new Material();
         }
-        ScopedRefPtr<Mesh> newMesh =
-            scene->GetMeshSystem()
-                ->GetOrCreate(primitive.indices, positions, indices, texCoords, normals, material);
+        ScopedRefPtr<Mesh> newMesh = scene->GetMeshSystem()->GetOrCreate(
+            sMeshIdOffset + primitive.indices,
+            positions,
+            indices,
+            texCoords,
+            normals,
+            material);
         meshes.push_back(newMesh);
     }
     return meshes;
@@ -194,6 +201,7 @@ ScopedRefPtr<Object> Object::Load(
         isProperlyLoaded = loader.LoadBinaryFromFile(&model, &err, &warn, path);
     }
     constexpr int32_t InvalidIndex = -1;
+    uint32_t meshIdOffset = 0;
     if (isProperlyLoaded) {
         std::function<ScopedRefPtr<Object>(tinygltf::Node&)> loadSubtree;
         loadSubtree = [&](tinygltf::Node& node) -> ScopedRefPtr<Object> {
@@ -217,13 +225,13 @@ ScopedRefPtr<Object> Object::Load(
                     node.rotation[1],
                     node.rotation[2],
                     node.rotation[3]);
-                glm::vec3 rotationEuler = glm::degrees(glm::eulerAngles(rotation));
-                object->SetRotation(rotationEuler);
+                object->SetRotation(rotation);
             }
 
             if (node.mesh != InvalidIndex) {
                 std::vector<ScopedRefPtr<Mesh>> objectMeshes =
                     LoadMeshes(context, scene, model, model.meshes[node.mesh]);
+                meshIdOffset += objectMeshes.size();
                 for (const ScopedRefPtr<Mesh>& mesh : objectMeshes) {
                     object->AddMesh(mesh);
                 }
@@ -238,9 +246,18 @@ ScopedRefPtr<Object> Object::Load(
         };
 
         if (!model.nodes.empty()) {
-            ScopedRefPtr<Object> object = loadSubtree(model.nodes.front());
-            scene->AddObject(object);
-            return object;
+            ScopedRefPtr<Object> root = new Object();
+            scene->AddObject(root);
+            tinygltf::Scene& gltfScene =
+                model.scenes[model.defaultScene >= 0 ? model.defaultScene : 0];
+            for (const int& nodeIndex : gltfScene.nodes) {
+                if (nodeIndex >= 0) {
+                    ScopedRefPtr<Object> object = loadSubtree(model.nodes[nodeIndex]);
+                    root->AddChild(object);
+                }
+            }
+            sMeshIdOffset += meshIdOffset;
+            return root;
         }
     }
     return nullptr;
@@ -250,7 +267,7 @@ Object::Object()
     : mLocalTransform(1.0f),
       mAbsoluteTranform(1.0f),
       mPosition(0.0f),
-      mEulerRotation(0.0f),
+      mRotation(glm::vec3(0.0f)),
       mScale(1.0f, 1.0f, 1.0f) {}
 
 void Object::SetTranslation(const glm::vec3& position) {
@@ -262,11 +279,11 @@ void Object::Translate(const glm::vec3& delta) {
 }
 
 void Object::Rotate(const glm::vec3& delta) {
-    mEulerRotation += delta;
+    mRotation *= glm::quat(glm::radians(delta));
 }
 
-void Object::SetRotation(const glm::vec3& rotation) {
-    mEulerRotation = rotation;
+void Object::SetRotation(const glm::quat& rotation) {
+    mRotation = rotation;
 }
 
 void Object::Scale(const glm::vec3& delta) {
@@ -279,10 +296,7 @@ void Object::SetScale(const glm::vec3& scale) {
 
 void Object::UpdateTransforms(const glm::mat4& parentTransform) {
     glm::mat4 translate = glm::translate(glm::mat4(1.0f), mPosition);
-    glm::mat4 rotate = glm::eulerAngleYXZ(
-        glm::radians(mEulerRotation.y),
-        glm::radians(mEulerRotation.x),
-        glm::radians(mEulerRotation.z));
+    glm::mat4 rotate = glm::toMat4(mRotation);
     glm::mat4 scale = glm::scale(glm::mat4(1.0f), mScale);
     mLocalTransform = translate * rotate * scale;
     mAbsoluteTranform = parentTransform * mLocalTransform;
