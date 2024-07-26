@@ -33,7 +33,8 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::ShaderStageFlagBits::eVertex,
             sizeof(CameraProperties),
             vk::BufferUsageFlagBits::eUniformBuffer,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
         mMainPassParameters->AddParameter(mCameraUniform);
 
         mPushConstant = new ShaderParameterPushConstant(
@@ -117,7 +118,8 @@ void Renderer::UpdateMaterialUniform() {
         mMaterialsBuffer = mContext->GetDevice()->CreateBuffer(
             materialBufferSize,
             vk::BufferUsageFlagBits::eStorageBuffer,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
         uint8_t* buffer = mMaterialsBuffer->MapBuffer();
         std::copy_n(
             reinterpret_cast<const uint8_t*>(sceneMaterials.materials.data()),

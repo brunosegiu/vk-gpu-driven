@@ -23,6 +23,8 @@ public:
 
     ~Instance();
 
+    static constexpr uint32_t sVulkanVersion = VK_API_VERSION_1_2;
+
 private:
     vk::Instance mInstanceHandle;
     vk::DispatchLoaderDynamic mDynamicDispatcher;

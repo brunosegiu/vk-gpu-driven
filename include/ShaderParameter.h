@@ -62,7 +62,7 @@ public:
         const vk::ShaderStageFlags& stageFlags,
         const vk::DeviceSize& size,
         const vk::BufferUsageFlags& usageFlags,
-        const vk::MemoryPropertyFlags& memoryFlags,
+        const VmaAllocationCreateFlags& memoryFlags,
         const vk::MemoryAllocateFlags& memoryAllocateFlags = {});
 
     ShaderParameterBuffer(

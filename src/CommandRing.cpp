@@ -15,7 +15,7 @@ CommandRing::CommandRing(ScopedRefPtr<Context> context)
 
 CommandRing::CommandResources& CommandRing::Cycle() {
     mCurrentIndex = (mCurrentIndex + 1) % mCommands.size();
-    auto command = mCommands[mCurrentIndex];
+    CommandResources& command = mCommands[mCurrentIndex];
     VKRT_ASSERT_VK(mContext->GetDevice()->GetLogicalDevice().waitForFences(
         command.fence,
         true,

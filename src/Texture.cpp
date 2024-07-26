@@ -16,16 +16,16 @@ Texture::Texture(
     vk::Image image)
     : mContext(context),
       mImage(image),
-      ownsImage(true),
+      mOwnsImage(true),
       mWidth(width),
       mHeight(height),
       mLayers(layers),
       mFormat(format) {
-    ownsImage = !image;
+    mOwnsImage = !image;
 
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
 
-    if (ownsImage) {
+    if (mOwnsImage) {
         vk::ImageCreateInfo imageCreateInfo = vk::ImageCreateInfo()
                                                   .setImageType(vk::ImageType::e2D)
                                                   .setFormat(format)
@@ -36,14 +36,20 @@ Texture::Texture(
                                                   .setTiling(vk::ImageTiling::eOptimal)
                                                   .setUsage(usageFlags)
                                                   .setInitialLayout(vk::ImageLayout::eUndefined);
+        VmaAllocator allocator = context->GetDevice()->GetAllocator();
 
-        mImage = VKRT_ASSERT_VK(logicalDevice.createImage(imageCreateInfo));
+        VmaAllocationCreateInfo allocationInfo{};
+        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        VmaAllocationInfo allocInfo{};
 
-        vk::MemoryRequirements imageMemReq = logicalDevice.getImageMemoryRequirements(mImage);
-        mMemory = mContext->GetDevice()->AllocateMemory(
-            vk::MemoryPropertyFlagBits::eDeviceLocal,
-            imageMemReq);
-        VKRT_ASSERT_VK(logicalDevice.bindImageMemory(mImage, mMemory, 0));
+        vmaCreateImage(
+            allocator,
+            (VkImageCreateInfo*)&imageCreateInfo,
+            &allocationInfo,
+            (VkImage*)&mImage,
+            &mAllocation,
+            &allocInfo);
     }
 
     mImageAspect = bool(usageFlags & vk::ImageUsageFlagBits::eDepthStencilAttachment)
@@ -87,11 +93,10 @@ Texture::Texture(
           height,
           format,
           vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled) {
-    ScopedRefPtr<VulkanBuffer> stagingBuffer = VulkanBuffer::Create(
-        mContext,
+    ScopedRefPtr<VulkanBuffer> stagingBuffer = mContext->GetDevice()->CreateBuffer(
         bufferSize,
         vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
     uint8_t* stagingData = stagingBuffer->MapBuffer();
     std::copy_n(buffer, bufferSize, stagingData);
     stagingBuffer->UnmapBuffer();
@@ -184,9 +189,9 @@ void Texture::SetImageLayout(
 Texture::~Texture() {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
     logicalDevice.destroyImageView(mImageView);
-    if (ownsImage) {
-        logicalDevice.destroyImage(mImage);
-        logicalDevice.freeMemory(mMemory);
+    if (mOwnsImage) {
+        VmaAllocator allocator = mContext->GetDevice()->GetAllocator();
+        vmaDestroyImage(allocator, mImage, mAllocation);
     }
 }
 

@@ -13,7 +13,7 @@ public:
         ScopedRefPtr<Context> context,
         const vk::DeviceSize& size,
         const vk::BufferUsageFlags& usageFlags,
-        const vk::MemoryPropertyFlags& memoryFlags,
+        const VmaAllocationCreateFlags& memoryFlags,
         const vk::MemoryAllocateFlags& memoryAllocateFlags = {});
 
     const vk::DeviceSize& GetBufferSize() const { return mSize; }
@@ -30,7 +30,7 @@ private:
         ScopedRefPtr<Context> context,
         vk::DeviceSize size,
         vk::Buffer bufferHandle,
-        vk::DeviceMemory memoryHandle,
+        VmaAllocation allocation,
         vk::DescriptorBufferInfo descriptorInfo);
 
     ~VulkanBuffer() override;
@@ -38,7 +38,7 @@ private:
     ScopedRefPtr<Context> mContext;
     vk::DeviceSize mSize;
     vk::Buffer mBufferHandle;
-    vk::DeviceMemory mMemoryHandle;
+    VmaAllocation mAllocation;
     vk::DescriptorBufferInfo mDescriptorInfo;
 };
 }  // namespace VKRT

@@ -34,7 +34,7 @@ ResultValue<ScopedRefPtr<Instance>> Instance::Create(ScopedRefPtr<Window> window
                                             .setApplicationVersion(VK_MAKE_VERSION(0, 0, 1))
                                             .setPEngineName("VKRT")
                                             .setEngineVersion(VK_MAKE_VERSION(0, 0, 1))
-                                            .setApiVersion(VK_API_VERSION_1_2);
+                                            .setApiVersion(sVulkanVersion);
 
     std::vector<const char*> layersToEnable {
 #if defined(VKRT_ENABLE_VALIDATION)

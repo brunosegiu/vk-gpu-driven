@@ -25,7 +25,7 @@ ShaderParameterBuffer::ShaderParameterBuffer(
     const vk::ShaderStageFlags& stageFlags,
     const vk::DeviceSize& size,
     const vk::BufferUsageFlags& usageFlags,
-    const vk::MemoryPropertyFlags& memoryFlags,
+    const VmaAllocationCreateFlags& memoryFlags,
     const vk::MemoryAllocateFlags& memoryAllocateFlags)
     : ShaderParameter(context, type, updateFrequency, stageFlags, 1, false) {
     VKRT_ASSERT(

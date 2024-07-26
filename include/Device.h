@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include "vk_mem_alloc.h"
+
 #include "RefCountPtr.h"
 #include "Result.h"
 #include "VulkanBase.h"
@@ -25,16 +27,10 @@ public:
 
     void SetContext(ScopedRefPtr<Context> context);
 
-    // Memory handling
-    vk::DeviceMemory AllocateMemory(
-        const vk::MemoryPropertyFlags& memoryFlags,
-        const vk::MemoryRequirements memoryRequirements,
-        const vk::MemoryAllocateFlags& memoryAllocateFlags = {});
-
     ScopedRefPtr<VulkanBuffer> CreateBuffer(
         const vk::DeviceSize& size,
         const vk::BufferUsageFlags& usageFlags,
-        const vk::MemoryPropertyFlags& memoryFlags,
+        const VmaAllocationCreateFlags& memoryFlags,
         const vk::MemoryAllocateFlags& memoryAllocateFlags = {});
 
     vk::CommandBuffer CreateCommandBuffer();
@@ -60,6 +56,8 @@ public:
     vk::PhysicalDeviceProperties GetDeviceProperties();
     vk::PhysicalDeviceRayTracingPipelinePropertiesKHR GetRayTracingProperties();
 
+    VmaAllocator& GetAllocator() { return mAllocator; }
+
     ~Device();
 
 private:
@@ -69,6 +67,7 @@ private:
     vk::Queue mGraphicsQueue;
     vk::CommandPool mCommandPool;
     vk::DispatchLoaderDynamic mDispatcher;
+    VmaAllocator mAllocator;
 };
 
 }  // namespace VKRT

@@ -9,48 +9,57 @@ ScopedRefPtr<VulkanBuffer> VulkanBuffer::Create(
     ScopedRefPtr<Context> context,
     const vk::DeviceSize& size,
     const vk::BufferUsageFlags& usageFlags,
-    const vk::MemoryPropertyFlags& memoryFlags,
+    const VmaAllocationCreateFlags& memoryFlags,
     const vk::MemoryAllocateFlags& memoryAllocateFlags) {
-    const vk::Device& logicalDevice = context->GetDevice()->GetLogicalDevice();
     const vk::BufferCreateInfo bufferCreateInfo = vk::BufferCreateInfo()
                                                       .setSize(size)
                                                       .setUsage(usageFlags)
                                                       .setSharingMode(vk::SharingMode::eExclusive);
-    const vk::Buffer bufferHandle = VKRT_ASSERT_VK(logicalDevice.createBuffer(bufferCreateInfo));
+    VmaAllocator allocator = context->GetDevice()->GetAllocator();
 
-    const vk::MemoryRequirements memoryRequirements =
-        logicalDevice.getBufferMemoryRequirements(bufferHandle);
-    const vk::DeviceMemory memoryHandle =
-        context->GetDevice()->AllocateMemory(memoryFlags, memoryRequirements, memoryAllocateFlags);
+    VmaAllocationCreateInfo allocationInfo{};
+    allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    allocationInfo.flags = memoryFlags;
+    VmaAllocationInfo allocInfo{};
 
-    VKRT_ASSERT_VK(logicalDevice.bindBufferMemory(bufferHandle, memoryHandle, 0));
+    vk::Buffer bufferHandle;
+    VmaAllocation allocation;
+    VkResult result = vmaCreateBuffer(
+        allocator,
+        (VkBufferCreateInfo*)&bufferCreateInfo,
+        &allocationInfo,
+        (VkBuffer*)&bufferHandle,
+        &allocation,
+        &allocInfo);
 
     const vk::DescriptorBufferInfo bufferInfo =
         vk::DescriptorBufferInfo().setBuffer(bufferHandle).setOffset(0).setRange(size);
 
-    return new VulkanBuffer(context, size, bufferHandle, memoryHandle, bufferInfo);
+    return new VulkanBuffer(context, size, bufferHandle, allocation, bufferInfo);
 }
 
 VulkanBuffer::VulkanBuffer(
     ScopedRefPtr<Context> context,
     vk::DeviceSize size,
     vk::Buffer bufferHandle,
-    vk::DeviceMemory memoryHandle,
+    VmaAllocation allocation,
     vk::DescriptorBufferInfo descriptorInfo)
     : mContext(context),
       mSize(size),
       mBufferHandle(bufferHandle),
-      mMemoryHandle(memoryHandle),
+      mAllocation(allocation),
       mDescriptorInfo(descriptorInfo) {}
 
 uint8_t* VulkanBuffer::MapBuffer() {
-    const vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
-    return static_cast<uint8_t*>(VKRT_ASSERT_VK(logicalDevice.mapMemory(mMemoryHandle, 0, mSize)));
+    VmaAllocator allocator = mContext->GetDevice()->GetAllocator();
+    uint8_t* mappedResult = nullptr;
+    vmaMapMemory(allocator, mAllocation, (void**)&mappedResult);
+    return mappedResult;
 }
 
 void VulkanBuffer::UnmapBuffer() {
-    const vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
-    logicalDevice.unmapMemory(mMemoryHandle);
+    VmaAllocator allocator = mContext->GetDevice()->GetAllocator();
+    vmaUnmapMemory(allocator, mAllocation);
 }
 
 vk::DeviceAddress VulkanBuffer::GetDeviceAddress() {
@@ -61,9 +70,8 @@ vk::DeviceAddress VulkanBuffer::GetDeviceAddress() {
 }
 
 VulkanBuffer::~VulkanBuffer() {
-    vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
-    logicalDevice.destroyBuffer(mBufferHandle);
-    logicalDevice.freeMemory(mMemoryHandle);
+    VmaAllocator allocator = mContext->GetDevice()->GetAllocator();
+    vmaDestroyBuffer(allocator, mBufferHandle, mAllocation);
 }
 
 }  // namespace VKRT

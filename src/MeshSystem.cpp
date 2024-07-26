@@ -72,7 +72,7 @@ void MeshSystem::FlattenBuffer(
     ScopedRefPtr<VulkanBuffer> stagingBuffer = context->GetDevice()->CreateBuffer(
         bufferSize,
         vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
     uint8_t* bufferData = stagingBuffer->MapBuffer();
     size_t globalBufferOffset = 0;
     for (const auto& entry : meshData) {
@@ -122,7 +122,7 @@ void MeshSystem::FlattenBuffer(
         target = context->GetDevice()->CreateBuffer(
             bufferSize,
             usageFlags,
-            vk::MemoryPropertyFlagBits::eDeviceLocal);
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
 
         vk::CommandBuffer commandBuffer = context->GetDevice()->CreateCommandBuffer();
         VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));

@@ -3,6 +3,9 @@
 #include <array>
 #include <limits>
 
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
+
 #include "DebugUtils.h"
 #include "Instance.h"
 #include "ResourceLoader.h"
@@ -75,44 +78,28 @@ Device::Device(
         vkGetInstanceProcAddr,
         mLogicalDevice,
         vkGetDeviceProcAddr);
+
+    VmaVulkanFunctions vulkanFunctions = {};
+    vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+    vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+
+    VmaAllocatorCreateInfo allocatorInfo{};
+    allocatorInfo.vulkanApiVersion = Instance::sVulkanVersion;
+    allocatorInfo.physicalDevice = mPhysicalDevice;
+    allocatorInfo.device = mLogicalDevice;
+    allocatorInfo.instance = instance->GetHandle();
+    allocatorInfo.pVulkanFunctions = &vulkanFunctions;
+    vmaCreateAllocator(&allocatorInfo, &mAllocator);
 }
 
 void Device::SetContext(ScopedRefPtr<Context> context) {
     mContext = context;
 }
 
-vk::DeviceMemory Device::AllocateMemory(
-    const vk::MemoryPropertyFlags& memoryFlags,
-    const vk::MemoryRequirements memoryRequirements,
-    const vk::MemoryAllocateFlags& memoryAllocateFlags) {
-    // Find suitable memory to allocate the buffer in
-    const vk::PhysicalDeviceMemoryProperties memoryProperties =
-        mPhysicalDevice.getMemoryProperties();
-    uint32_t selectedMemoryIndex = 0;
-    for (uint32_t memoryIndex = 0; memoryIndex < memoryProperties.memoryTypeCount; ++memoryIndex) {
-        if (memoryRequirements.memoryTypeBits & (1 << memoryIndex) &&
-            (memoryProperties.memoryTypes[memoryIndex].propertyFlags & memoryFlags)) {
-            selectedMemoryIndex = memoryIndex;
-            break;
-        }
-    }
-
-    // Allocate memory for the buffer
-    vk::MemoryAllocateFlagsInfo memoryAllocateFlagsInfo =
-        vk::MemoryAllocateFlagsInfo().setFlags(memoryAllocateFlags);
-    vk::MemoryAllocateInfo allocateInfo = vk::MemoryAllocateInfo()
-                                              .setAllocationSize(memoryRequirements.size)
-                                              .setMemoryTypeIndex(selectedMemoryIndex);
-    if (memoryAllocateFlags != vk::MemoryAllocateFlags()) {
-        allocateInfo.setPNext(&memoryAllocateFlagsInfo);
-    }
-    return VKRT_ASSERT_VK(mLogicalDevice.allocateMemory(allocateInfo));
-}
-
 ScopedRefPtr<VulkanBuffer> Device::CreateBuffer(
     const vk::DeviceSize& size,
     const vk::BufferUsageFlags& usageFlags,
-    const vk::MemoryPropertyFlags& memoryFlags,
+    const VmaAllocationCreateFlags& memoryFlags,
     const vk::MemoryAllocateFlags& memoryAllocateFlags) {
     VKRT_ASSERT(mContext != nullptr);
     return VulkanBuffer::Create(mContext, size, usageFlags, memoryFlags, memoryAllocateFlags);
@@ -180,6 +167,7 @@ vk::PhysicalDeviceRayTracingPipelinePropertiesKHR Device::GetRayTracingPropertie
 }
 
 Device::~Device() {
+    vmaDestroyAllocator(mAllocator);
     mLogicalDevice.destroyCommandPool(mCommandPool);
     mLogicalDevice.destroy();
 }

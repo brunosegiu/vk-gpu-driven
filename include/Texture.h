@@ -54,9 +54,9 @@ private:
     ScopedRefPtr<Context> mContext;
 
     vk::Image mImage;
-    vk::DeviceMemory mMemory;
+    VmaAllocation mAllocation;
     vk::ImageView mImageView;
-    bool ownsImage;
+    bool mOwnsImage;
     uint32_t mWidth, mHeight, mLayers;
     vk::Format mFormat;
     vk::ImageAspectFlagBits mImageAspect;

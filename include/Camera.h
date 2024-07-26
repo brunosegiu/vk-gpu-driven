@@ -22,7 +22,8 @@ public:
     const glm::mat4& GetViewTransform() { return mViewTransform; }
     const glm::mat4& GetProjectionTransform() { return mProjectionTransform; }
     const uint32_t GetFramesSinceMoved() const { return mFramesSinceMoved; }
-    
+    const glm::vec3& GetPosition() const { return mPosition; }
+
     const ViewFrustum& GetViewFrustum() const { return mViewFrustum; }
 
     ~Camera();
@@ -60,6 +61,7 @@ private:
     bool mSpeedModifierActive;
     uint32_t mFramesSinceMoved;
 
+    bool mFreezeFrustumUpdates;
     ViewFrustum mViewFrustum;
 };
 

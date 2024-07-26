@@ -14,6 +14,7 @@ Camera::Camera(ScopedRefPtr<Window> window)
       mSpeedModifierActive(false),
       mCurrentMousePos(0.0, 0.0),
       mFramesSinceMoved(0),
+      mFreezeFrustumUpdates(false),
       mViewFrustum(glm::mat4(1.0f)) {
     ScopedRefPtr<InputManager> inputManager = mWindow->GetInputManager();
     inputManager->Subscribe(this);
@@ -41,7 +42,9 @@ void Camera::UpdateViewTransform() {
 
     mViewTransform = rotationTransform * translationTransform;
 
-    mViewFrustum.Update(mProjectionTransform * mViewTransform);
+    if (!mFreezeFrustumUpdates) {
+        mViewFrustum.Update(mProjectionTransform * mViewTransform);
+    }
 }
 
 glm::vec3 Camera::GetForwardDir() {
@@ -120,6 +123,8 @@ void Camera::OnKeyReleased(int key) {
             mMovementSpeed /= 10.0f;
             mSpeedModifierActive = false;
         }
+    } else if (key == GLFW_KEY_P) {
+        mFreezeFrustumUpdates = !mFreezeFrustumUpdates;
     }
 }
 

@@ -133,21 +133,48 @@ void Scene::Draw(
         GetMeshSystem()->GetIndexBuffer()->GetBufferHandle(),
         {0},
         vk::IndexType::eUint32);
+
+    struct DrawCallParameters {
+        ScopedRefPtr<Object> object;
+        ScopedRefPtr<Mesh> mesh;
+        float distanceToCamera;
+    };
+    std::vector<DrawCallParameters> drawBatches;
+    drawBatches.reserve(objects.size());
     for (const ScopedRefPtr<Object>& object : objects) {
         std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
         for (ScopedRefPtr<Mesh>& mesh : meshes) {
             const AABB& aabb = mesh->GetAABB();
             const ViewFrustum& viewFrustum = camera->GetViewFrustum();
             if (viewFrustum.Test(object->GetAbsoluteTransform(), aabb)) {
-                onDrawMesh(commandBuffer, object, mesh);
-                commandBuffer.drawIndexed(
-                    mesh->GetIndexCount(),
-                    1,
-                    mesh->GetFirstIndex(),
-                    mesh->GetVertexOffset(),
-                    0);
+                const glm::vec3 aabbCenter = (aabb.GetMax() - aabb.GetMin()) / 2.0f;
+                const glm::vec4 worldSpaceCenter =
+                    object->GetAbsoluteTransform() * glm::vec4(aabbCenter, 1.0f);
+                const float distanceToCamera =
+                    glm::distance(camera->GetPosition(), glm::vec3(worldSpaceCenter));
+                drawBatches.push_back(DrawCallParameters{
+                    .object = object,
+                    .mesh = mesh,
+                    .distanceToCamera = distanceToCamera});
             }
         }
+    }
+
+    std::sort(
+        drawBatches.begin(),
+        drawBatches.end(),
+        [](const DrawCallParameters& a, const DrawCallParameters& b) {
+            return a.distanceToCamera < b.distanceToCamera;
+        });
+
+    for (const DrawCallParameters& drawBatchParameters : drawBatches) {
+        onDrawMesh(commandBuffer, drawBatchParameters.object, drawBatchParameters.mesh);
+        commandBuffer.drawIndexed(
+            drawBatchParameters.mesh->GetIndexCount(),
+            1,
+            drawBatchParameters.mesh->GetFirstIndex(),
+            drawBatchParameters.mesh->GetVertexOffset(),
+            0);
     }
 }
 
