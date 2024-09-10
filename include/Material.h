@@ -12,37 +12,28 @@ class Device;
 
 class Material : public RefCountPtr {
 public:
-    static constexpr uint32_t OpaqueMask = 0xF0;
-    static constexpr uint32_t RefractiveMask = 0x0F;
-    static constexpr uint32_t AllMask = OpaqueMask | RefractiveMask;
-
     Material();
 
     Material(
         const glm::vec3& albedo,
-        const glm::vec3& emissive,
         float roughness,
         float metallic,
-        float transmission,
-        float indexOfRefraction,
         ScopedRefPtr<Texture> albedoTexture = nullptr,
-        ScopedRefPtr<Texture> roughnessTexture = nullptr);
+        ScopedRefPtr<Texture> metallicRoughnessTexture = nullptr,
+        ScopedRefPtr<Texture> normalTexture = nullptr);
 
     const glm::vec3 GetAlbedo() const { return mAlbedo; }
-    const glm::vec3 GetEmissive() const { return mEmissive; }
     const float GetRoughness() const { return mRoughness; }
     const float GetMetallic() const { return mMetallic; }
-    const float GetTransmission() const { return mTransmission; }
-    const float GetIndexOfRefraction() const { return mIndexOfRefraction; }
     const ScopedRefPtr<Texture> GetAlbedoTexture() const { return mAlbedoTexture; }
-    const ScopedRefPtr<Texture> GetRoughnessTexture() const { return mRoughnessTexture; }
+    const ScopedRefPtr<Texture> GetMetallicRoughnessTexture() const {
+        return mMetallicRoughnessTexture;
+    }
+    const ScopedRefPtr<Texture> GetNormalTexture() const { return mNormalTexture; }
 
     void SetAlbedo(const glm::vec3& albedo) { mAlbedo = albedo; }
-    void SetEmissive(const glm::vec3& emissive) { mEmissive = emissive; }
     void SetRoughness(float roughness) { mRoughness = roughness; }
     void SetMetallic(float metallic) { mMetallic = metallic; }
-    void SetTransmission(float transmission) { mTransmission = transmission; }
-    void SetIndexOfRefraction(float indexOfRefraction) { mIndexOfRefraction = indexOfRefraction; }
 
     void SetMaterialId(uint32_t materialId) { mMaterialId = materialId; }
     const uint32_t& GetMaterialId() const { return mMaterialId; }
@@ -51,15 +42,13 @@ public:
 
 private:
     glm::vec3 mAlbedo;
-    glm::vec3 mEmissive;
     float mRoughness;
     float mMetallic;
-    float mTransmission;
-    float mIndexOfRefraction;
 
     uint32_t mMaterialId;
 
     ScopedRefPtr<Texture> mAlbedoTexture;
-    ScopedRefPtr<Texture> mRoughnessTexture;
+    ScopedRefPtr<Texture> mMetallicRoughnessTexture;
+    ScopedRefPtr<Texture> mNormalTexture;
 };
 }  // namespace VKRT

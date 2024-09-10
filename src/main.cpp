@@ -63,6 +63,13 @@ void LoadBasicScene(
     }
 }
 
+void LoadBistro(VKRT::ScopedRefPtr<VKRT::Context> context, VKRT::ScopedRefPtr<VKRT::Scene> scene) {
+    using namespace VKRT;
+    ScopedRefPtr<Object> bistro = Object::Load(context, scene, "./assets/Bistro.glb");
+    bistro->SetTranslation(glm::vec3(0.0f, 0.0f, 0.0f));
+    bistro->SetScale(glm::vec3(1.0f));
+}
+
 int main() {
     using namespace VKRT;
     auto [windowResult, window] = Window::Create(1280, 720);
@@ -73,15 +80,11 @@ int main() {
         if (contextResult == Result::Success) {
             ScopedRefPtr<Scene> scene = new Scene(context);
 
-            {
-                ScopedRefPtr<Object> bistro = Object::Load(context, scene, "./assets/Bistro.glb");
-                bistro->SetTranslation(glm::vec3(0.0f, 0.0f, 0.0f));
-                bistro->SetScale(glm::vec3(1.0f));
-            }
+            LoadBistro(context, scene);
 
             ScopedRefPtr<Camera> camera = new Camera(window);
-            camera->SetTranslation(glm::vec3(11.0f, -5.0f, 1.0f));
-            camera->SetRotation(glm::vec3(20.0f, 100.0f, 0.0f));
+            camera->SetTranslation(glm::vec3(-14.0f, 5.0f, -1.0f));
+            camera->SetForwardDir(glm::normalize(glm::vec3(0.9f, -0.2f, 0.1f)));
 
             ScopedRefPtr<Renderer> renderer = new Renderer(context, scene);
             Timer timer;

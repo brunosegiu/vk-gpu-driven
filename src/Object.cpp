@@ -129,7 +129,8 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
             const std::vector<double>& baseColor =
                 gltfMaterial.pbrMetallicRoughness.baseColorFactor;
             glm::vec3 albedo = glm::vec3(baseColor[0], baseColor[1], baseColor[2]);
-            float roughness = gltfMaterial.pbrMetallicRoughness.roughnessFactor;
+            const float roughness = gltfMaterial.pbrMetallicRoughness.roughnessFactor;
+            const float metallic = gltfMaterial.pbrMetallicRoughness.metallicFactor;
 
             const int32_t albedoTextureIndex =
                 gltfMaterial.pbrMetallicRoughness.baseColorTexture.index;
@@ -162,13 +163,24 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
                     image.image.size());
             }
 
+            /* const int32_t normalMapIndex = gltfMaterial.normalTexture.index;
+            ScopedRefPtr<Texture> normalTexture = nullptr;
+            if (normalMapIndex >= 0) {
+                const tinygltf::Texture& texture = model.textures[normalMapIndex];
+                const tinygltf::Image& image = model.images[texture.source];
+                normalTexture = new Texture(
+                    context,
+                    image.width,
+                    image.height,
+                    vk::Format::eR8G8B8A8Unorm,
+                    image.image.data(),
+                    image.image.size());
+            }*/
+
             material = new Material(
                 albedo,
-                glm::vec3(0.0f),
                 roughness,
-                0.0f,
-                0.0f,
-                1.0f,
+                metallic,
                 albedoTexture,
                 roughnessTexture);
         } else {

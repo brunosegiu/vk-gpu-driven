@@ -20,8 +20,18 @@ public:
 private:
     struct CameraProperties {
         glm::mat4 viewProjection;
+        glm::vec4 cameraForwardDir;
     };
     void UpdateCameraUniforms(Camera* camera, uint32_t imageIndex);
+    struct SceneData {
+        glm::mat4 transform;
+        uint32_t materialId;
+        glm::mat3 normalTransform;
+    };
+    struct PerDrawParameters {
+        uint32_t drawId;
+    };
+    void UpdatePerDrawBuffer(uint32_t imageIndex);
     void UpdateMaterialUniform();
 
     void OnKeyPressed(int key) override;
@@ -41,10 +51,8 @@ private:
     ScopedRefPtr<VulkanBuffer> mMaterialsBuffer;
     ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
     ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
-    struct PerDrawParameters {
-        glm::mat4 transform;
-        uint32_t materialId;
-    };
+    ScopedRefPtr<ShaderParameterBuffer> mPerDrawParameters;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffer;
     ScopedRefPtr<ShaderParameterPushConstant> mPushConstant;
     ScopedRefPtr<Pipeline> mMainPassPipeline;
     ScopedRefPtr<CommandRing> mCommandRing;

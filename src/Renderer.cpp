@@ -7,7 +7,11 @@
 
 namespace VKRT {
 Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
-    : mContext(context), mScene(scene), mCurrentFrameIndex(0), mMaterialsBuffer(nullptr) {
+    : mContext(context),
+      mScene(scene),
+      mCurrentFrameIndex(0),
+      mMaterialsBuffer(nullptr),
+      mPerDrawBuffer() {
     ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
     inputManager->Subscribe(this);
 
@@ -30,12 +34,19 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             mContext,
             vk::DescriptorType::eUniformBuffer,
             ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eVertex,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex,
             sizeof(CameraProperties),
             vk::BufferUsageFlagBits::eUniformBuffer,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                 VMA_ALLOCATION_CREATE_MAPPED_BIT);
         mMainPassParameters->AddParameter(mCameraUniform);
+
+        mPerDrawParameters = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eStorageBuffer,
+            ShaderParameter::UpdateFrequency::PerFrame,
+            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
+        mMainPassParameters->AddParameter(mPerDrawParameters);
 
         mPushConstant = new ShaderParameterPushConstant(
             mContext,
@@ -101,12 +112,66 @@ void Renderer::UpdateCameraUniforms(Camera* camera, uint32_t imageIndex) {
     uint8_t* mappedBuffer = buffer->MapBuffer();
     CameraProperties cameraMatrices{
         .viewProjection = camera->GetProjectionTransform() * camera->GetViewTransform(),
-    };
+        .cameraForwardDir = glm::vec4(camera->GetForwardDir(), 0.0f)};
     std::copy_n(
         reinterpret_cast<uint8_t*>(&cameraMatrices),
         sizeof(CameraProperties),
         mappedBuffer);
     buffer->UnmapBuffer();
+}
+
+void Renderer::UpdatePerDrawBuffer(uint32_t imageIndex) {
+    mScene->Update();
+    if (mPerDrawBuffer.empty()) {
+        uint32_t descriptorCount = 0;
+        const std::vector<ScopedRefPtr<Object>>& objects = mScene->GetFlattenedObjects();
+        size_t perDrawBufferSize = 0;
+        for (const ScopedRefPtr<Object>& object : objects) {
+            std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
+            for (ScopedRefPtr<Mesh>& mesh : meshes) {
+                perDrawBufferSize += sizeof(SceneData);
+            }
+        }
+        const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
+        VKRT_ASSERT(perDrawBufferSize > 0);
+        for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
+            ScopedRefPtr<VulkanBuffer> perDrawBuffer = mContext->GetDevice()->CreateBuffer(
+                perDrawBufferSize,
+                vk::BufferUsageFlagBits::eStorageBuffer,
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                    VMA_ALLOCATION_CREATE_MAPPED_BIT);
+            mPerDrawBuffer.push_back(perDrawBuffer);
+        }
+
+        mPerDrawParameters->BindBuffers(mPerDrawBuffer);
+    }
+
+    const std::vector<ScopedRefPtr<Object>>& objects = mScene->GetFlattenedObjects();
+    ScopedRefPtr<VulkanBuffer> currentBuffer = mPerDrawBuffer[imageIndex];
+    size_t drawCallCount = 0;
+    for (const ScopedRefPtr<Object>& object : objects) {
+        const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
+        drawCallCount += meshes.size();
+    }
+    std::vector<SceneData> parameters;
+    parameters.reserve(drawCallCount);
+    for (const ScopedRefPtr<Object>& object : objects) {
+        const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
+        for (const ScopedRefPtr<Mesh>& mesh : meshes) {
+            SceneData meshParameters{
+                .transform = object->GetAbsoluteTransform(),
+                .materialId = mesh->GetMaterial()->GetMaterialId(),
+                .normalTransform = glm::mat4(
+                    glm::transpose(glm::inverse(glm::mat3(object->GetAbsoluteTransform()))))};
+            parameters.push_back(meshParameters);
+        }
+    }
+    uint8_t* buffer = currentBuffer->MapBuffer();
+    std::copy_n(
+        reinterpret_cast<const uint8_t*>(parameters.data()),
+        parameters.size() * sizeof(SceneData),
+        buffer);
+    currentBuffer->UnmapBuffer();
 }
 
 void Renderer::UpdateMaterialUniform() {
@@ -145,6 +210,7 @@ void Renderer::Render(Camera* camera) {
         // Create and update all buffers and textures
         {
             UpdateCameraUniforms(camera, mCurrentFrameIndex);
+            UpdatePerDrawBuffer(mCurrentFrameIndex);
             UpdateMaterialUniform();
             mMainPassParameters->CreateDescriptorSets();
             mMainPassParameters->UpdateDescriptors(mCurrentFrameIndex);
@@ -196,22 +262,15 @@ void Renderer::Render(Camera* camera) {
             descriptorSets,
             nullptr);
 
-        mScene->Draw(
-            command.buffer,
-            camera,
-            [&](vk::CommandBuffer commandBuffer,
-                ScopedRefPtr<Object> object,
-                ScopedRefPtr<Mesh> mesh) {
-                PerDrawParameters parameters{
-                    .transform = object->GetAbsoluteTransform(),
-                    .materialId = mesh->GetMaterial()->GetMaterialId(),
-                };
-                commandBuffer.pushConstants<PerDrawParameters>(
-                    mMainPassPipeline->GetPipelineLayout(),
-                    mPushConstant->GetStageFlags(),
-                    mPushConstant->GetOffset(),
-                    parameters);
-            });
+        mScene->Draw(command.buffer, camera, [&](uint32_t drawId, ScopedRefPtr<Mesh> mesh) {
+            PerDrawParameters perDrawParameters{
+                .drawId = drawId};
+            command.buffer.pushConstants<PerDrawParameters>(
+                mMainPassPipeline->GetPipelineLayout(),
+                mPushConstant->GetStageFlags(),
+                mPushConstant->GetOffset(),
+                perDrawParameters);
+        });
 
         command.buffer.endRenderPass();
 

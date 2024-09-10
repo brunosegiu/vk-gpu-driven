@@ -44,7 +44,8 @@ void Scene::GenerateMaterialProxies() {
             const Material* material = mesh->GetMaterial();
             std::vector<ScopedRefPtr<Texture>> meshTextures{
                 material->GetAlbedoTexture(),
-                material->GetRoughnessTexture()};
+                material->GetMetallicRoughnessTexture(),
+                material->GetNormalTexture()};
             for (const ScopedRefPtr<Texture>& texture : meshTextures) {
                 if (texture != nullptr) {
                     auto it = std::find_if(
@@ -69,13 +70,11 @@ void Scene::GenerateMaterialProxies() {
             const ScopedRefPtr<Material> material = mesh->GetMaterial();
             MaterialProxy proxy{
                 .albedo = material->GetAlbedo(),
-                .emissive = material->GetEmissive(),
                 .roughness = material->GetRoughness(),
                 .metallic = material->GetMetallic(),
-                .transmission = material->GetTransmission(),
-                .indexOfRefraction = material->GetIndexOfRefraction(),
                 .albedoTextureIndex = -1,
-                .roughnessTextureIndex = -1,
+                .metallicRoughnessTextureIndex = -1,
+                .normalTextureIndex = -1,
             };
             {
                 const ScopedRefPtr<Texture> albedoTexture = material->GetAlbedoTexture();
@@ -88,7 +87,8 @@ void Scene::GenerateMaterialProxies() {
                 }
             }
             {
-                const ScopedRefPtr<Texture> roughnessTexture = material->GetRoughnessTexture();
+                const ScopedRefPtr<Texture> roughnessTexture =
+                    material->GetMetallicRoughnessTexture();
                 auto roughnessIt = std::find_if(
                     textureIndices.begin(),
                     textureIndices.end(),
@@ -96,7 +96,17 @@ void Scene::GenerateMaterialProxies() {
                         return entry.first == roughnessTexture;
                     });
                 if (roughnessIt != textureIndices.end()) {
-                    proxy.roughnessTextureIndex = roughnessIt->second;
+                    proxy.metallicRoughnessTextureIndex = roughnessIt->second;
+                }
+            }
+            {
+                const ScopedRefPtr<Texture> normalTexture = material->GetNormalTexture();
+                auto normalIt = std::find_if(
+                    textureIndices.begin(),
+                    textureIndices.end(),
+                    [&normalTexture](const auto& entry) { return entry.first == normalTexture; });
+                if (normalIt != textureIndices.end()) {
+                    proxy.normalTextureIndex = normalIt->second;
                 }
             }
             material->SetMaterialId(materials.size());
@@ -115,13 +125,16 @@ void Scene::GenerateMaterialProxies() {
     };
 }
 
-void Scene::Draw(
-    vk::CommandBuffer& commandBuffer,
-    ScopedRefPtr<Camera> camera,
-    std::function<void(vk::CommandBuffer, ScopedRefPtr<Object>, ScopedRefPtr<Mesh>)> onDrawMesh) {
+void Scene::Update() {
     for (ScopedRefPtr<Object> object : mObjects) {
         object->UpdateTransforms(glm::mat4(1.0f));
     }
+}
+
+void Scene::Draw(
+    vk::CommandBuffer& commandBuffer,
+    ScopedRefPtr<Camera> camera,
+    std::function<void(uint32_t drawId, ScopedRefPtr<Mesh> mesh)> onDrawMesh) {
     std::vector<ScopedRefPtr<Object>> objects = GetFlattenedObjects();
     commandBuffer.bindVertexBuffers(0, GetMeshSystem()->GetVertexBuffer()->GetBufferHandle(), {0});
     commandBuffer.bindVertexBuffers(
@@ -138,9 +151,11 @@ void Scene::Draw(
         ScopedRefPtr<Object> object;
         ScopedRefPtr<Mesh> mesh;
         float distanceToCamera;
+        uint32_t drawId;
     };
     std::vector<DrawCallParameters> drawBatches;
     drawBatches.reserve(objects.size());
+    uint32_t drawId = 0;
     for (const ScopedRefPtr<Object>& object : objects) {
         std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
         for (ScopedRefPtr<Mesh>& mesh : meshes) {
@@ -155,8 +170,10 @@ void Scene::Draw(
                 drawBatches.push_back(DrawCallParameters{
                     .object = object,
                     .mesh = mesh,
-                    .distanceToCamera = distanceToCamera});
+                    .distanceToCamera = distanceToCamera,
+                    .drawId = drawId});
             }
+            ++drawId;
         }
     }
 
@@ -168,7 +185,7 @@ void Scene::Draw(
         });
 
     for (const DrawCallParameters& drawBatchParameters : drawBatches) {
-        onDrawMesh(commandBuffer, drawBatchParameters.object, drawBatchParameters.mesh);
+        onDrawMesh(drawBatchParameters.drawId, drawBatchParameters.mesh);
         commandBuffer.drawIndexed(
             drawBatchParameters.mesh->GetIndexCount(),
             1,

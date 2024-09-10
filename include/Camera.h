@@ -15,10 +15,9 @@ public:
     void SetTranslation(const glm::vec3& position);
     void Translate(const glm::vec3& delta);
 
-    void SetRotation(const glm::vec3& rotation);
-    void Rotate(const glm::vec3& delta);
+    const glm::vec3& GetForwardDir() { return mForwardDir; }
+    void SetForwardDir(const glm::vec3& forwardDir) { mForwardDir = forwardDir; }
 
-    glm::vec3 GetForwardDir();
     const glm::mat4& GetViewTransform() { return mViewTransform; }
     const glm::mat4& GetProjectionTransform() { return mProjectionTransform; }
     const uint32_t GetFramesSinceMoved() const { return mFramesSinceMoved; }
@@ -46,8 +45,9 @@ private:
     glm::mat4 mViewTransform;
     glm::mat4 mProjectionTransform;
 
-    glm::vec3 mEulerRotation;
+    glm::vec3 mForwardDir;
     glm::vec3 mPosition;
+    float mPitch, mYaw;
 
     struct KeyStates {
         bool forwardPressed = false;

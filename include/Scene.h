@@ -2,12 +2,12 @@
 
 #include <vector>
 
+#include "Camera.h"
 #include "MeshSystem.h"
 #include "Object.h"
 #include "RefCountPtr.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
-#include "Camera.h"
 
 namespace VKRT {
 
@@ -23,36 +23,32 @@ public:
 
     struct MaterialProxy {
         glm::vec3 albedo;
-        glm::vec3 emissive;
         float roughness;
         float metallic;
-        float transmission;
-        float indexOfRefraction;
         int32_t albedoTextureIndex;
-        int32_t roughnessTextureIndex;
+        int32_t metallicRoughnessTextureIndex;
+        int32_t normalTextureIndex;
     };
     struct SceneMaterials {
         std::vector<MaterialProxy> materials;
         std::vector<ScopedRefPtr<Texture>> textures;
     };
     const SceneMaterials& GetMaterialProxies() const { return mCachedMaterialProxies; }
-    std::vector<ScopedRefPtr<Object>> GetFlattenedObjects() const {
+    const std::vector<ScopedRefPtr<Object>>& GetFlattenedObjects() const {
         return mCachedFlattenedObjects;
     }
     ScopedRefPtr<MeshSystem> GetMeshSystem() { return mMeshSystem; }
-
+    void Update();
     void Draw(
         vk::CommandBuffer& commandBuffer,
         ScopedRefPtr<Camera> camera,
-        std::function<void(vk::CommandBuffer, ScopedRefPtr<Object>, ScopedRefPtr<Mesh>)>
-            onDrawMesh);
+        std::function<void(uint32_t drawId, ScopedRefPtr<Mesh> mesh)> onDrawMesh);
 
     ~Scene();
 
 private:
     void FlattenedObjects();
     void GenerateMaterialProxies();
-
 
     ScopedRefPtr<MeshSystem> mMeshSystem;
 

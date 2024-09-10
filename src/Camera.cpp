@@ -8,8 +8,12 @@ namespace VKRT {
 Camera::Camera(ScopedRefPtr<Window> window)
     : mWindow(window),
       mMovementSpeed(2.0f),
-      mRotationSpeed(100.0f),
+      mRotationSpeed(1.0f),
       mViewTransform(1.0f),
+      mForwardDir(0.0f, 1.0f, 0.0f),
+      mPosition(0.0f),
+      mPitch(0.0f),
+      mYaw(0.0f),
       mActive(false),
       mSpeedModifierActive(false),
       mCurrentMousePos(0.0, 0.0),
@@ -18,8 +22,6 @@ Camera::Camera(ScopedRefPtr<Window> window)
       mViewFrustum(glm::mat4(1.0f)) {
     ScopedRefPtr<InputManager> inputManager = mWindow->GetInputManager();
     inputManager->Subscribe(this);
-    mEulerRotation = glm::vec3(0.0);
-    mPosition = glm::vec3(0.0);
     auto windowSize = mWindow->GetSize();
     mProjectionTransform = glm::perspective(
         glm::radians(60.0),
@@ -30,41 +32,29 @@ Camera::Camera(ScopedRefPtr<Window> window)
 }
 
 void Camera::UpdateViewTransform() {
-    glm::mat4 rotationTransform = glm::mat4(1.0f);
-    rotationTransform =
-        glm::rotate(rotationTransform, glm::radians(mEulerRotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-    rotationTransform =
-        glm::rotate(rotationTransform, glm::radians(mEulerRotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-    rotationTransform =
-        glm::rotate(rotationTransform, glm::radians(mEulerRotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-    glm::mat4 translationTransform = glm::translate(glm::mat4(1.0f), mPosition);
-
-    mViewTransform = rotationTransform * translationTransform;
-
+    mViewTransform = glm::lookAt(mPosition, mPosition + mForwardDir, glm::vec3(0.0f, 1.0f, 0.0f));
     if (!mFreezeFrustumUpdates) {
         mViewFrustum.Update(mProjectionTransform * mViewTransform);
     }
 }
 
-glm::vec3 Camera::GetForwardDir() {
-    const glm::mat4 invertedView = glm::inverse(mViewTransform);
-    return glm::normalize(glm::vec3(invertedView[2]));
-}
-
 void Camera::Update(float deltaTime) {
-    const glm::vec3 forwardDir = GetForwardDir();
+    mForwardDir = glm::normalize(glm::vec3(
+        glm::cos(mYaw) * glm::cos(mPitch),
+        glm::sin(mPitch),
+        glm::sin(mYaw) * glm::cos(mPitch)));
+
     const float moveDelta = deltaTime * mMovementSpeed;
     mFramesSinceMoved = mActive ? 0 : mFramesSinceMoved + 1;
     if (mKeyStates.forwardPressed) {
-        mPosition += forwardDir * moveDelta;
+        mPosition += mForwardDir * moveDelta;
         mFramesSinceMoved = 0;
     }
     if (mKeyStates.backwardsPressed) {
-        mPosition += -forwardDir * moveDelta;
+        mPosition += -mForwardDir * moveDelta;
         mFramesSinceMoved = 0;
     }
-    const glm::vec3 rightDir = glm::normalize(glm::cross(forwardDir, glm::vec3(0.0f, 1.0f, 0.0f)));
+    const glm::vec3 rightDir = glm::normalize(glm::cross(mForwardDir, glm::vec3(0.0f, 1.0f, 0.0f)));
     if (mKeyStates.rightPressed) {
         mPosition += rightDir * moveDelta;
         mFramesSinceMoved = 0;
@@ -82,14 +72,6 @@ void Camera::SetTranslation(const glm::vec3& position) {
 
 void Camera::Translate(const glm::vec3& delta) {
     mPosition += delta;
-}
-
-void Camera::SetRotation(const glm::vec3& rotation) {
-    mEulerRotation = rotation;
-}
-
-void Camera::Rotate(const glm::vec3& delta) {
-    mEulerRotation += delta;
 }
 
 void Camera::OnKeyPressed(int key) {
@@ -131,7 +113,8 @@ void Camera::OnKeyReleased(int key) {
 void Camera::OnMouseMoved(glm::vec2 newPos) {
     if (mActive) {
         glm::vec2 delta = newPos - mCurrentMousePos;
-        Rotate(glm::vec3(delta.y * mRotationSpeed, delta.x * mRotationSpeed, 0.0f));
+        mPitch -= delta.y * mRotationSpeed;
+        mYaw += delta.x * mRotationSpeed;
     }
     mCurrentMousePos = newPos;
 }
