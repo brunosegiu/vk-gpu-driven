@@ -28,9 +28,6 @@ private:
         uint32_t materialId;
         glm::mat3 normalTransform;
     };
-    struct PerDrawParameters {
-        uint32_t drawId;
-    };
     void UpdatePerDrawBuffer(uint32_t imageIndex);
     void UpdateMaterialUniform();
 
@@ -53,7 +50,6 @@ private:
     ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
     ScopedRefPtr<ShaderParameterBuffer> mPerDrawParameters;
     std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffer;
-    ScopedRefPtr<ShaderParameterPushConstant> mPushConstant;
     ScopedRefPtr<Pipeline> mMainPassPipeline;
     ScopedRefPtr<CommandRing> mCommandRing;
 

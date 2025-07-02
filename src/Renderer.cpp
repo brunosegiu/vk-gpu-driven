@@ -48,12 +48,6 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
         mMainPassParameters->AddParameter(mPerDrawParameters);
 
-        mPushConstant = new ShaderParameterPushConstant(
-            mContext,
-            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-            sizeof(PerDrawParameters));
-        mMainPassParameters->AddParameter(mPushConstant);
-
         const float anisotropy =
             mContext->GetDevice()->GetDeviceProperties().limits.maxSamplerAnisotropy;
         vk::SamplerCreateInfo samplerCreateInfo =
@@ -262,15 +256,7 @@ void Renderer::Render(Camera* camera) {
             descriptorSets,
             nullptr);
 
-        mScene->Draw(command.buffer, camera, [&](uint32_t drawId, ScopedRefPtr<Mesh> mesh) {
-            PerDrawParameters perDrawParameters{
-                .drawId = drawId};
-            command.buffer.pushConstants<PerDrawParameters>(
-                mMainPassPipeline->GetPipelineLayout(),
-                mPushConstant->GetStageFlags(),
-                mPushConstant->GetOffset(),
-                perDrawParameters);
-        });
+        mScene->Draw(command.buffer, camera);
 
         command.buffer.endRenderPass();
 

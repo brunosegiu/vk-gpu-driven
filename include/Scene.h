@@ -41,8 +41,7 @@ public:
     void Update();
     void Draw(
         vk::CommandBuffer& commandBuffer,
-        ScopedRefPtr<Camera> camera,
-        std::function<void(uint32_t drawId, ScopedRefPtr<Mesh> mesh)> onDrawMesh);
+        ScopedRefPtr<Camera> camera);
 
     ~Scene();
 
@@ -61,5 +60,7 @@ private:
     SceneMaterials mCachedMaterialProxies;
 
     std::vector<ScopedRefPtr<Object>> mCachedFlattenedObjects;
+
+    ScopedRefPtr<VulkanBuffer> mTempIndirectBuffer;
 };
 }  // namespace VKRT

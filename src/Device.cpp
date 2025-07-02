@@ -46,8 +46,13 @@ Device::Device(
                                                     .setQueueFamilyIndex(queueFamilyIndex)
                                                     .setQueuePriorities(queuePriorities);
 
-    vk::PhysicalDeviceFeatures enabledFeatures =
-        vk::PhysicalDeviceFeatures().setShaderInt64(true).setSamplerAnisotropy(true);
+    vk::PhysicalDeviceFeatures enabledFeatures = vk::PhysicalDeviceFeatures()
+                                                     .setShaderInt64(true)
+                                                     .setSamplerAnisotropy(true)
+                                                     .setMultiDrawIndirect(true);
+
+    vk::PhysicalDeviceVulkan11Features enabledFeatures11 =
+        vk::PhysicalDeviceVulkan11Features().setShaderDrawParameters(true);
 
     vk::PhysicalDeviceVulkan12Features enabledFeatures12 =
         vk::PhysicalDeviceVulkan12Features()
@@ -56,13 +61,14 @@ Device::Device(
             .setDescriptorIndexing(true)
             .setRuntimeDescriptorArray(true)
             .setDescriptorBindingVariableDescriptorCount(true);
+    enabledFeatures11.setPNext(&enabledFeatures12);
 
     const vk::DeviceCreateInfo deviceCreateInfo =
         vk::DeviceCreateInfo()
             .setQueueCreateInfos(queueCreateInfo)
             .setPEnabledExtensionNames(Instance::sRequiredDeviceExtensions)
             .setPEnabledFeatures(&enabledFeatures)
-            .setPNext(&enabledFeatures12);
+            .setPNext(&enabledFeatures11);
     mLogicalDevice = VKRT_ASSERT_VK(mPhysicalDevice.createDevice(deviceCreateInfo));
 
     mGraphicsQueue = mLogicalDevice.getQueue(queueFamilyIndex, 0);
@@ -73,7 +79,7 @@ Device::Device(
             .setFlags(vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
     mCommandPool = VKRT_ASSERT_VK(mLogicalDevice.createCommandPool(commandPoolCreateInfo));
 
-    mDispatcher = vk::DispatchLoaderDynamic(
+    mDispatcher = vk::detail::DispatchLoaderDynamic(
         instance->GetHandle(),
         vkGetInstanceProcAddr,
         mLogicalDevice,

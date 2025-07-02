@@ -95,7 +95,7 @@ ResultValue<ScopedRefPtr<Instance>> Instance::Create(ScopedRefPtr<Window> window
 }
 
 Instance::Instance(const vk::Instance& instance) : mInstanceHandle(instance) {
-    mDynamicDispatcher = vk::DispatchLoaderDynamic(mInstanceHandle, vkGetInstanceProcAddr);
+    mDynamicDispatcher = vk::detail::DispatchLoaderDynamic(mInstanceHandle, vkGetInstanceProcAddr);
     mDynamicDispatcher.init(mInstanceHandle, vkGetInstanceProcAddr);
 
 #if defined(VKRT_ENABLE_VALIDATION)

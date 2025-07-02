@@ -1,4 +1,4 @@
-#version 450
+#version 460
 
 #extension GL_EXT_scalar_block_layout : enable
 #extension GL_EXT_nonuniform_qualifier : enable
@@ -9,6 +9,7 @@
 layout(location = 0) in vec3 inWorldSpacePos;
 layout(location = 1) in vec2 inTexCoord;
 layout(location = 2) in vec3 inNormal;
+layout(location = 3) in flat uint inDrawID;
 
 layout(location = 0) out vec4 outColor;
 
@@ -23,7 +24,7 @@ struct DrawData {
     mat3 normalTransform;
 };
 
-layout(binding = 1, set = UPDATE_PER_FRAME, scalar) buffer TSceneData {
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
 } SceneData;
 
@@ -37,14 +38,10 @@ struct Material {
 };
 
 layout(binding = 0, set = UPDATE_ONCE) uniform sampler textureSampler;
-layout(binding = 1, set = UPDATE_ONCE, scalar) buffer TMaterial {
+layout(binding = 1, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
     Material values[];
 } Materials;
 layout(binding = 2, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
-
-layout( push_constant ) uniform TPushConstants {
-    uint drawId;
-} PerDrawParameters;
 
 const float PI = 3.14159265359;
 
@@ -89,7 +86,7 @@ void main() {
     const vec3 LightDir = normalize(vec3(0, -1, 1));
     const float LightRadiance = 1.0f;
 
-    DrawData perDrawData = SceneData.perDrawData[PerDrawParameters.drawId];
+    DrawData perDrawData = SceneData.perDrawData[inDrawID];
 
     uint materialId = perDrawData.materialId;
     Material material = Materials.values[materialId];

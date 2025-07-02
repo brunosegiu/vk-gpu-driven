@@ -43,7 +43,7 @@ public:
     void DestroyFence(vk::Fence& fence);
 
     vk::Device& GetLogicalDevice() { return mLogicalDevice; }
-    vk::DispatchLoaderDynamic& GetDispatcher() { return mDispatcher; }
+    vk::detail::DispatchLoaderDynamic& GetDispatcher() { return mDispatcher; }
     const vk::Queue& GetQueue() { return mGraphicsQueue; }
 
     struct SwapchainCapabilities {
@@ -66,7 +66,7 @@ private:
     vk::Device mLogicalDevice;
     vk::Queue mGraphicsQueue;
     vk::CommandPool mCommandPool;
-    vk::DispatchLoaderDynamic mDispatcher;
+    vk::detail::DispatchLoaderDynamic mDispatcher;
     VmaAllocator mAllocator;
 };
 

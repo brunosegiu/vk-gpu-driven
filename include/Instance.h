@@ -27,7 +27,7 @@ public:
 
 private:
     vk::Instance mInstanceHandle;
-    vk::DispatchLoaderDynamic mDynamicDispatcher;
+    vk::detail::DispatchLoaderDynamic mDynamicDispatcher;
 #if defined(VKRT_ENABLE_VALIDATION)
     vk::DebugUtilsMessengerEXT mDebugMessenger;
 #endif
