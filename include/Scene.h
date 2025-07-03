@@ -39,9 +39,6 @@ public:
     }
     ScopedRefPtr<MeshSystem> GetMeshSystem() { return mMeshSystem; }
     void Update();
-    void Draw(
-        vk::CommandBuffer& commandBuffer,
-        ScopedRefPtr<Camera> camera);
 
     ~Scene();
 
@@ -60,7 +57,5 @@ private:
     SceneMaterials mCachedMaterialProxies;
 
     std::vector<ScopedRefPtr<Object>> mCachedFlattenedObjects;
-
-    ScopedRefPtr<VulkanBuffer> mTempIndirectBuffer;
 };
 }  // namespace VKRT

@@ -11,7 +11,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
       mScene(scene),
       mCurrentFrameIndex(0),
       mMaterialsBuffer(nullptr),
-      mPerDrawBuffer() {
+      mPerDrawBuffers() {
     ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
     inputManager->Subscribe(this);
 
@@ -116,7 +116,7 @@ void Renderer::UpdateCameraUniforms(Camera* camera, uint32_t imageIndex) {
 
 void Renderer::UpdatePerDrawBuffer(uint32_t imageIndex) {
     mScene->Update();
-    if (mPerDrawBuffer.empty()) {
+    if (mPerDrawBuffers.empty()) {
         uint32_t descriptorCount = 0;
         const std::vector<ScopedRefPtr<Object>>& objects = mScene->GetFlattenedObjects();
         size_t perDrawBufferSize = 0;
@@ -134,14 +134,14 @@ void Renderer::UpdatePerDrawBuffer(uint32_t imageIndex) {
                 vk::BufferUsageFlagBits::eStorageBuffer,
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                     VMA_ALLOCATION_CREATE_MAPPED_BIT);
-            mPerDrawBuffer.push_back(perDrawBuffer);
+            mPerDrawBuffers.push_back(perDrawBuffer);
         }
 
-        mPerDrawParameters->BindBuffers(mPerDrawBuffer);
+        mPerDrawParameters->BindBuffers(mPerDrawBuffers);
     }
 
     const std::vector<ScopedRefPtr<Object>>& objects = mScene->GetFlattenedObjects();
-    ScopedRefPtr<VulkanBuffer> currentBuffer = mPerDrawBuffer[imageIndex];
+    ScopedRefPtr<VulkanBuffer> currentBuffer = mPerDrawBuffers[imageIndex];
     size_t drawCallCount = 0;
     for (const ScopedRefPtr<Object>& object : objects) {
         const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
@@ -166,6 +166,21 @@ void Renderer::UpdatePerDrawBuffer(uint32_t imageIndex) {
         parameters.size() * sizeof(SceneData),
         buffer);
     currentBuffer->UnmapBuffer();
+
+    // Create indirect draw buffer
+    {
+        if (mIndirectDrawBuffers.empty()) {
+            const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
+            for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
+                ScopedRefPtr<VulkanBuffer> indirectBuffer = mContext->GetDevice()->CreateBuffer(
+                    drawCallCount * sizeof(vk::DrawIndexedIndirectCommand),
+                    vk::BufferUsageFlagBits::eIndirectBuffer,
+                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                        VMA_ALLOCATION_CREATE_MAPPED_BIT);
+                mIndirectDrawBuffers.push_back(indirectBuffer);
+            }
+        }
+    }
 }
 
 void Renderer::UpdateMaterialUniform() {
@@ -189,7 +204,7 @@ void Renderer::UpdateMaterialUniform() {
         for (const ScopedRefPtr<Texture>& materialTexture : sceneMaterials.textures) {
             mMaterialsTextures->Bind(materialTexture);
         }
-        { mMaterialsUniform->BindBuffer(mMaterialsBuffer); }
+        mMaterialsUniform->BindBuffer(mMaterialsBuffer);
     }
 }
 
@@ -256,7 +271,57 @@ void Renderer::Render(Camera* camera) {
             descriptorSets,
             nullptr);
 
-        mScene->Draw(command.buffer, camera);
+        {
+            std::vector<ScopedRefPtr<Object>> objects = mScene->GetFlattenedObjects();
+            command.buffer.bindVertexBuffers(
+                0,
+                mScene->GetMeshSystem()->GetVertexBuffer()->GetBufferHandle(),
+                {0});
+            command.buffer.bindVertexBuffers(
+                1,
+                mScene->GetMeshSystem()->GetTexCoordBuffer()->GetBufferHandle(),
+                {0});
+            command.buffer.bindVertexBuffers(
+                2,
+                mScene->GetMeshSystem()->GetNormalBuffer()->GetBufferHandle(),
+                {0});
+            command.buffer.bindIndexBuffer(
+                mScene->GetMeshSystem()->GetIndexBuffer()->GetBufferHandle(),
+                {0},
+                vk::IndexType::eUint32);
+
+            std::vector<vk::DrawIndexedIndirectCommand> indirectCommands;
+            indirectCommands.reserve(objects.size());
+            for (const ScopedRefPtr<Object>& object : objects) {
+                std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
+                for (ScopedRefPtr<Mesh>& mesh : meshes) {
+                    indirectCommands.push_back(vk::DrawIndexedIndirectCommand{
+                        mesh->GetIndexCount(),
+                        1,
+                        mesh->GetFirstIndex(),
+                        static_cast<int32_t>(mesh->GetVertexOffset()),
+                        0});
+                }
+            }
+
+            ScopedRefPtr<VulkanBuffer> indirectBuffer = mIndirectDrawBuffers[mCurrentFrameIndex];
+
+            std::copy_n(
+                reinterpret_cast<uint8_t const*>(indirectCommands.data()),
+                indirectBuffer->GetBufferSize(),
+                indirectBuffer->MapBuffer());
+            indirectBuffer->UnmapBuffer();
+
+            VKRT_ASSERT(
+                indirectBuffer->GetBufferSize() ==
+                indirectCommands.size() * sizeof(VkDrawIndexedIndirectCommand));
+
+            command.buffer.drawIndexedIndirect(
+                indirectBuffer->GetBufferHandle(),
+                0,
+                indirectCommands.size(),
+                sizeof(VkDrawIndexedIndirectCommand));
+        }
 
         command.buffer.endRenderPass();
 

@@ -31,19 +31,6 @@ void Scene::Lock() {
     GetMeshSystem()->Upload();
     // Create material proxies
     GenerateMaterialProxies();
-
-    if (mTempIndirectBuffer == nullptr) {
-        uint32_t drawCount = 0;
-        for (const ScopedRefPtr<Object>& object : GetFlattenedObjects()) {
-            const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
-            drawCount += meshes.size();
-        }
-        mTempIndirectBuffer = mContext->GetDevice()->CreateBuffer(
-            drawCount * sizeof(vk::DrawIndexedIndirectCommand),
-            vk::BufferUsageFlagBits::eIndirectBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-    }
 }
 
 void Scene::GenerateMaterialProxies() {
@@ -142,77 +129,6 @@ void Scene::Update() {
     for (ScopedRefPtr<Object> object : mObjects) {
         object->UpdateTransforms(glm::mat4(1.0f));
     }
-}
-
-void Scene::Draw(vk::CommandBuffer& commandBuffer, ScopedRefPtr<Camera> camera) {
-    std::vector<ScopedRefPtr<Object>> objects = GetFlattenedObjects();
-    commandBuffer.bindVertexBuffers(0, GetMeshSystem()->GetVertexBuffer()->GetBufferHandle(), {0});
-    commandBuffer.bindVertexBuffers(
-        1,
-        GetMeshSystem()->GetTexCoordBuffer()->GetBufferHandle(),
-        {0});
-    commandBuffer.bindVertexBuffers(2, GetMeshSystem()->GetNormalBuffer()->GetBufferHandle(), {0});
-    commandBuffer.bindIndexBuffer(
-        GetMeshSystem()->GetIndexBuffer()->GetBufferHandle(),
-        {0},
-        vk::IndexType::eUint32);
-
-    struct DrawCallParameters {
-        ScopedRefPtr<Object> object;
-        ScopedRefPtr<Mesh> mesh;
-        float distanceToCamera;
-        uint32_t drawId;
-    };
-    std::vector<DrawCallParameters> drawBatches;
-    drawBatches.reserve(objects.size());
-    uint32_t drawId = 0;
-    for (const ScopedRefPtr<Object>& object : objects) {
-        std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
-        for (ScopedRefPtr<Mesh>& mesh : meshes) {
-            const AABB& aabb = mesh->GetAABB();
-            const glm::vec3 aabbCenter = (aabb.GetMax() - aabb.GetMin()) / 2.0f;
-            const glm::vec4 worldSpaceCenter =
-                object->GetAbsoluteTransform() * glm::vec4(aabbCenter, 1.0f);
-            const float distanceToCamera =
-                glm::distance(camera->GetPosition(), glm::vec3(worldSpaceCenter));
-            drawBatches.push_back(DrawCallParameters{
-                .object = object,
-                .mesh = mesh,
-                .distanceToCamera = distanceToCamera,
-                .drawId = drawId});
-            ++drawId;
-        }
-    }
-
-    /* std::sort(
-        drawBatches.begin(),
-        drawBatches.end(),
-        [](const DrawCallParameters& a, const DrawCallParameters& b) {
-            return a.distanceToCamera < b.distanceToCamera;
-        });*/
-
-    std::vector<vk::DrawIndexedIndirectCommand> indirectCommands;
-    indirectCommands.reserve(drawBatches.size());
-    for (const DrawCallParameters& drawBatchParameters : drawBatches) {
-        indirectCommands.push_back(vk::DrawIndexedIndirectCommand{
-            drawBatchParameters.mesh->GetIndexCount(),
-            1,
-            drawBatchParameters.mesh->GetFirstIndex(),
-            static_cast<int32_t>(drawBatchParameters.mesh->GetVertexOffset()),
-            0});
-    }
-
-    std::copy_n(
-        reinterpret_cast<uint8_t const*>(indirectCommands.data()),
-        mTempIndirectBuffer->GetBufferSize(),
-        mTempIndirectBuffer->MapBuffer());
-    mTempIndirectBuffer->UnmapBuffer();
-
-    commandBuffer.drawIndexedIndirect(
-        mTempIndirectBuffer->GetBufferHandle(),
-        0,
-        drawBatches.size(),
-        sizeof(VkDrawIndexedIndirectCommand));
 }
 
 void Scene::FlattenedObjects() {

@@ -49,7 +49,8 @@ private:
     ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
     ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
     ScopedRefPtr<ShaderParameterBuffer> mPerDrawParameters;
-    std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffer;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffers;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mIndirectDrawBuffers;
     ScopedRefPtr<Pipeline> mMainPassPipeline;
     ScopedRefPtr<CommandRing> mCommandRing;
 
