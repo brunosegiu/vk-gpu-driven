@@ -11,6 +11,11 @@ struct VkDrawIndexedIndirectCommand {
 	uint firstInstance;
 };
 
+struct AABB {
+	vec3 minBounds;
+	vec3 maxBounds;
+};
+
 struct DrawData {
 	uint indexCount;
 	uint firstIndex;
@@ -18,6 +23,7 @@ struct DrawData {
 	mat4 modelMatrix;
     uint materialId;
     mat3 normalTransform;
+	AABB aabb;
 };
 
 struct Material {

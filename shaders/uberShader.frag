@@ -15,6 +15,7 @@ layout(location = 0) out vec4 outColor;
 layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCameraParameters {
     mat4 viewProjection;
     vec4 cameraForwardDir;
+    vec4 frustumPlanes[6];
     uint maxDrawCount;
 } CameraParameters;
 

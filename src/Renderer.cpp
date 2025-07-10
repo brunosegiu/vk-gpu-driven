@@ -138,9 +138,11 @@ void Renderer::UpdateCameraUniforms(Camera* camera, uint32_t imageIndex) {
         const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
         drawCallCount += meshes.size();
     }
+
     CameraProperties cameraMatrices{
         .viewProjection = camera->GetProjectionTransform() * camera->GetViewTransform(),
         .cameraForwardDir = glm::vec4(camera->GetForwardDir(), 0.0f),
+        .frustumPlanes = camera->GetViewFrustum().GetPlanes(),
         .maxDrawCount = static_cast<uint32_t>(drawCallCount)};
     std::copy_n(
         reinterpret_cast<uint8_t*>(&cameraMatrices),
@@ -158,7 +160,7 @@ void Renderer::UpdatePerDrawBuffer(uint32_t imageIndex) {
         for (const ScopedRefPtr<Object>& object : objects) {
             std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
             for (ScopedRefPtr<Mesh>& mesh : meshes) {
-                perDrawBufferSize += sizeof(SceneData);
+                perDrawBufferSize += sizeof(DrawData);
             }
         }
         const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
@@ -182,26 +184,29 @@ void Renderer::UpdatePerDrawBuffer(uint32_t imageIndex) {
         const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
         drawCallCount += meshes.size();
     }
-    std::vector<SceneData> parameters;
+    std::vector<DrawData> parameters;
     parameters.reserve(drawCallCount);
     for (const ScopedRefPtr<Object>& object : objects) {
         const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
         for (const ScopedRefPtr<Mesh>& mesh : meshes) {
-            SceneData meshParameters{
+            DrawData meshParameters{
                 .indexCount = mesh->GetIndexCount(),
                 .firstIndex = mesh->GetFirstIndex(),
                 .vertexOffset = static_cast<int32_t>(mesh->GetVertexOffset()),
                 .transform = object->GetAbsoluteTransform(),
                 .materialId = mesh->GetMaterial()->GetMaterialId(),
                 .normalTransform = glm::mat4(
-                    glm::transpose(glm::inverse(glm::mat3(object->GetAbsoluteTransform()))))};
+                    glm::transpose(glm::inverse(glm::mat3(object->GetAbsoluteTransform())))),
+                .aabb = {
+                    .minBounds = mesh->GetAABB().GetMin(),
+                    .maxBounds = mesh->GetAABB().GetMax()}};
             parameters.push_back(meshParameters);
         }
     }
     uint8_t* buffer = currentBuffer->MapBuffer();
     std::copy_n(
         reinterpret_cast<const uint8_t*>(parameters.data()),
-        parameters.size() * sizeof(SceneData),
+        parameters.size() * sizeof(DrawData),
         buffer);
     currentBuffer->UnmapBuffer();
 

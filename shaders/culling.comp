@@ -7,6 +7,7 @@
 layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCameraParameters {
     mat4 viewProjection;
     vec4 cameraForwardDir;
+    vec4 frustumPlanes[6];
     uint maxDrawCount;
 } CameraParameters;
 
@@ -20,13 +21,44 @@ layout(binding = 2, set = UPDATE_PER_FRAME) buffer writeonly CommandBuffer {
 
 layout(local_size_x = 64) in;
 
+bool Test(const vec3 min, const vec3 max, const mat4 objectTransform) {
+    vec3 boxPoints[8] = vec3[](
+        vec3(min.x, min.y, min.z),
+        vec3(max.x, min.y, min.z),
+        vec3(max.x, max.y, min.z),
+        vec3(min.x, max.y, min.z),
+        vec3(min.x, min.y, max.z),
+        vec3(max.x, min.y, max.z),
+        vec3(max.x, max.y, max.z),
+        vec3(min.x, max.y, max.z)
+    );
+
+    for (uint cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
+        boxPoints[cornerIndex] = vec3(objectTransform * vec4(boxPoints[cornerIndex], 1.0f));
+    }
+
+    for (uint planeIndex = 0; planeIndex < 6; ++planeIndex) {
+        bool intersects = false;
+        vec4 plane = CameraParameters.frustumPlanes[planeIndex];
+        for (uint cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
+            if (dot(vec4(boxPoints[cornerIndex], 1.0f), plane) > 0) {
+                intersects = true;
+                break;
+            }
+        }
+        if (!intersects) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void main() {
     uint drawID = gl_GlobalInvocationID.x;
     if (drawID < CameraParameters.maxDrawCount) {
         DrawData perDrawData = SceneData.perDrawData[drawID];
 
-        // TODO: Culling here
-        bool isVisible = true;
+        bool isVisible = Test(perDrawData.aabb.minBounds, perDrawData.aabb.maxBounds, perDrawData.modelMatrix);
 
         VkDrawIndexedIndirectCommand command;
         command.indexCount = perDrawData.indexCount;

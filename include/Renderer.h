@@ -22,16 +22,21 @@ private:
     struct CameraProperties {
         glm::mat4 viewProjection;
         glm::vec4 cameraForwardDir;
+        std::array<glm::vec4, 6> frustumPlanes;
         uint32_t maxDrawCount;
     };
     void UpdateCameraUniforms(Camera* camera, uint32_t imageIndex);
-    struct SceneData {
+    struct DrawData {
         uint32_t indexCount;
         uint32_t firstIndex;
         int32_t vertexOffset;
         glm::mat4 transform;
         uint32_t materialId;
         glm::mat3 normalTransform;
+        struct {
+            glm::vec3 minBounds;
+            glm::vec3 maxBounds;
+        } aabb;
     };
     void UpdatePerDrawBuffer(uint32_t imageIndex);
     void UpdateMaterialUniform();
