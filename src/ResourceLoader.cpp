@@ -31,6 +31,9 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
         case Resource::Id::FragmentShader:
             actualId = VKRT_RESOURCE_FRAGMENT_SHADER;
             break;
+        case Resource::Id::CullingShader:
+            actualId = VKRT_RESOURCE_CULLING_SHADER;
+            break;
         default:
             return {nullptr, 0};
     }

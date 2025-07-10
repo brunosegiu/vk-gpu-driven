@@ -14,6 +14,7 @@ struct Resource {
     enum class Id {
         VertexShader,
         FragmentShader,
+        CullingShader,
     };
 };
 

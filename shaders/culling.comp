@@ -1,0 +1,41 @@
+#version 460
+
+#extension GL_EXT_scalar_block_layout : enable
+
+#include "definitions.glsl"
+
+layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCameraParameters {
+    mat4 viewProjection;
+    vec4 cameraForwardDir;
+    uint maxDrawCount;
+} CameraParameters;
+
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
+    DrawData perDrawData[];
+} SceneData;
+
+layout(binding = 2, set = UPDATE_PER_FRAME) buffer writeonly CommandBuffer {
+	VkDrawIndexedIndirectCommand commands[];
+} IndirectCommands;
+
+layout(local_size_x = 64) in;
+
+void main() {
+    uint drawID = gl_GlobalInvocationID.x;
+    if (drawID < CameraParameters.maxDrawCount) {
+        DrawData perDrawData = SceneData.perDrawData[drawID];
+
+        // TODO: Culling here
+        bool isVisible = true;
+
+        VkDrawIndexedIndirectCommand command;
+        command.indexCount = perDrawData.indexCount;
+        command.instanceCount = isVisible ? 1 : 0;
+        command.firstIndex = perDrawData.firstIndex;
+        command.vertexOffset = perDrawData.vertexOffset;
+        command.firstInstance = 0;
+
+        IndirectCommands.commands[drawID] = command;
+    }
+
+}

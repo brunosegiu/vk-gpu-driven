@@ -72,7 +72,6 @@ Device::Device(
     mLogicalDevice = VKRT_ASSERT_VK(mPhysicalDevice.createDevice(deviceCreateInfo));
 
     mGraphicsQueue = mLogicalDevice.getQueue(queueFamilyIndex, 0);
-
     const vk::CommandPoolCreateInfo commandPoolCreateInfo =
         vk::CommandPoolCreateInfo()
             .setQueueFamilyIndex(queueFamilyIndex)

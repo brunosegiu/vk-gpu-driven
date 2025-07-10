@@ -3,8 +3,7 @@
 #extension GL_EXT_scalar_block_layout : enable
 #extension GL_EXT_nonuniform_qualifier : enable
 
-#define UPDATE_PER_FRAME 0
-#define UPDATE_ONCE 1
+#include "definitions.glsl"
 
 layout(location = 0) in vec3 inWorldSpacePos;
 layout(location = 1) in vec2 inTexCoord;
@@ -16,26 +15,12 @@ layout(location = 0) out vec4 outColor;
 layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCameraParameters {
     mat4 viewProjection;
     vec4 cameraForwardDir;
+    uint maxDrawCount;
 } CameraParameters;
-
-struct DrawData {
-	mat4 modelMatrix;
-    uint materialId;
-    mat3 normalTransform;
-};
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
 } SceneData;
-
-struct Material {
-    vec3 albedo;
-    float roughness;
-    float metallic;
-    int albedoTextureIndex;
-    int metallicRoughnessTextureIndex;
-    int normalTextureIndex;
-};
 
 layout(binding = 0, set = UPDATE_ONCE) uniform sampler textureSampler;
 layout(binding = 1, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {

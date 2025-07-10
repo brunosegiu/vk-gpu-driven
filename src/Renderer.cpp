@@ -28,24 +28,51 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
     mRenderTarget = new RenderTarget(mContext, mContext->GetSwapchain()->GetRenderTargets());
     mRenderPass = new RenderPass(context, {mRenderTarget, mDepthRenderTarget});
 
+    // Shared parameters
     {
-        mMainPassParameters = new ShaderParameterCollection(mContext);
-        mCameraUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eUniformBuffer,
-            ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex,
-            sizeof(CameraProperties),
-            vk::BufferUsageFlagBits::eUniformBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-        mMainPassParameters->AddParameter(mCameraUniform);
-
         mPerDrawParameters = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
+            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment |
+                vk::ShaderStageFlagBits::eCompute);
+
+        mCameraUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eUniformBuffer,
+            ShaderParameter::UpdateFrequency::PerFrame,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex |
+                vk::ShaderStageFlagBits::eCompute,
+            sizeof(CameraProperties),
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
+    }
+
+    // Culling resources
+    {
+        mCullingParameters = new ShaderParameterCollection(mContext);
+        mCullingParameters->AddParameter(mCameraUniform);
+        mCullingParameters->AddParameter(mPerDrawParameters);
+
+        mIndirectDrawBufferParameter = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eStorageBuffer,
+            ShaderParameter::UpdateFrequency::PerFrame,
+            vk::ShaderStageFlagBits::eCompute);
+        mCullingParameters->AddParameter(mIndirectDrawBufferParameter);
+
+        mCullingPipeline = new ComputePipeline(
+            context,
+            mCullingParameters,
+            {vk::ShaderStageFlagBits::eCompute, Resource::Id::CullingShader});
+    }
+
+    // Main pass resources
+    {
+        mMainPassParameters = new ShaderParameterCollection(mContext);
+
+        mMainPassParameters->AddParameter(mCameraUniform);
         mMainPassParameters->AddParameter(mPerDrawParameters);
 
         const float anisotropy =
@@ -97,16 +124,24 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         };
 
         mMainPassPipeline =
-            new Pipeline(context, mMainPassParameters, stages, mRenderPass, geometryLayout);
+            new GraphicsPipeline(context, mMainPassParameters, stages, mRenderPass, geometryLayout);
     }
 }
 
 void Renderer::UpdateCameraUniforms(Camera* camera, uint32_t imageIndex) {
     ScopedRefPtr<VulkanBuffer> buffer = mCameraUniform->GetBuffer(imageIndex);
     uint8_t* mappedBuffer = buffer->MapBuffer();
+
+    const std::vector<ScopedRefPtr<Object>>& objects = mScene->GetFlattenedObjects();
+    size_t drawCallCount = 0;
+    for (const ScopedRefPtr<Object>& object : objects) {
+        const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
+        drawCallCount += meshes.size();
+    }
     CameraProperties cameraMatrices{
         .viewProjection = camera->GetProjectionTransform() * camera->GetViewTransform(),
-        .cameraForwardDir = glm::vec4(camera->GetForwardDir(), 0.0f)};
+        .cameraForwardDir = glm::vec4(camera->GetForwardDir(), 0.0f),
+        .maxDrawCount = static_cast<uint32_t>(drawCallCount)};
     std::copy_n(
         reinterpret_cast<uint8_t*>(&cameraMatrices),
         sizeof(CameraProperties),
@@ -153,6 +188,9 @@ void Renderer::UpdatePerDrawBuffer(uint32_t imageIndex) {
         const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
         for (const ScopedRefPtr<Mesh>& mesh : meshes) {
             SceneData meshParameters{
+                .indexCount = mesh->GetIndexCount(),
+                .firstIndex = mesh->GetFirstIndex(),
+                .vertexOffset = static_cast<int32_t>(mesh->GetVertexOffset()),
                 .transform = object->GetAbsoluteTransform(),
                 .materialId = mesh->GetMaterial()->GetMaterialId(),
                 .normalTransform = glm::mat4(
@@ -174,11 +212,14 @@ void Renderer::UpdatePerDrawBuffer(uint32_t imageIndex) {
             for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
                 ScopedRefPtr<VulkanBuffer> indirectBuffer = mContext->GetDevice()->CreateBuffer(
                     drawCallCount * sizeof(vk::DrawIndexedIndirectCommand),
-                    vk::BufferUsageFlagBits::eIndirectBuffer,
+                    vk::BufferUsageFlagBits::eIndirectBuffer |
+                        vk::BufferUsageFlagBits::eStorageBuffer,
                     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                         VMA_ALLOCATION_CREATE_MAPPED_BIT);
                 mIndirectDrawBuffers.push_back(indirectBuffer);
             }
+
+            mIndirectDrawBufferParameter->BindBuffers(mIndirectDrawBuffers);
         }
     }
 }
@@ -221,13 +262,81 @@ void Renderer::Render(Camera* camera) {
             UpdateCameraUniforms(camera, mCurrentFrameIndex);
             UpdatePerDrawBuffer(mCurrentFrameIndex);
             UpdateMaterialUniform();
+            // TODO: Move to getter
             mMainPassParameters->CreateDescriptorSets();
             mMainPassParameters->UpdateDescriptors(mCurrentFrameIndex);
+
+            mCullingParameters->CreateDescriptorSets();
+            mCullingParameters->UpdateDescriptors(mCurrentFrameIndex);
         }
 
         const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
+        const std::vector<ScopedRefPtr<Object>>& objects = mScene->GetFlattenedObjects();
+        size_t drawCallCount = 0;
+        for (const ScopedRefPtr<Object>& object : objects) {
+            const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
+            drawCallCount += meshes.size();
+        }
 
         {
+            {
+                ScopedRefPtr<VulkanBuffer> indirectBuffer =
+                    mIndirectDrawBuffers[mCurrentFrameIndex];
+
+                vk::BufferMemoryBarrier bufferBarrier =
+                    vk::BufferMemoryBarrier()
+                        .setBuffer(indirectBuffer->GetBufferHandle())
+                        .setSize(indirectBuffer->GetBufferSize())
+                        .setSrcAccessMask(vk::AccessFlagBits::eIndirectCommandRead)
+                        .setDstAccessMask(vk::AccessFlagBits::eShaderWrite);
+
+                command.buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eDrawIndirect,
+                    vk::PipelineStageFlagBits::eComputeShader,
+                    vk::DependencyFlags{},
+                    {},
+                    bufferBarrier,
+                    {});
+            }
+
+            command.buffer.bindPipeline(
+                vk::PipelineBindPoint::eCompute,
+                mCullingPipeline->GetPipelineHandle());
+
+            std::vector<vk::DescriptorSet> descriptorSets =
+                mCullingParameters->GetDescriptorSets(mCurrentFrameIndex);
+
+            command.buffer.bindDescriptorSets(
+                vk::PipelineBindPoint::eCompute,
+                mCullingPipeline->GetPipelineLayout(),
+                0,
+                descriptorSets,
+                nullptr);
+
+            command.buffer.dispatch((drawCallCount / 64) + 1, 1, 1);
+        }
+
+        {
+            {
+                ScopedRefPtr<VulkanBuffer> indirectBuffer =
+                    mIndirectDrawBuffers[mCurrentFrameIndex];
+
+                vk::BufferMemoryBarrier bufferBarrier =
+                    vk::BufferMemoryBarrier()
+                        .setBuffer(indirectBuffer->GetBufferHandle())
+                        .setSize(indirectBuffer->GetBufferSize())
+                        .setSrcAccessMask(vk::AccessFlagBits::eShaderWrite)
+                        .setDstAccessMask(vk::AccessFlagBits::eIndirectCommandRead);
+
+                command.buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eComputeShader,
+                    vk::PipelineStageFlagBits::eDrawIndirect,
+                    vk::DependencyFlags{},
+                    {},
+                    bufferBarrier,
+                    {});
+            }
+
             const std::vector<vk::ClearValue> clearValues{
                 vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
                 vk::ClearDepthStencilValue(1.0f, 0),
@@ -272,7 +381,6 @@ void Renderer::Render(Camera* camera) {
             nullptr);
 
         {
-            std::vector<ScopedRefPtr<Object>> objects = mScene->GetFlattenedObjects();
             command.buffer.bindVertexBuffers(
                 0,
                 mScene->GetMeshSystem()->GetVertexBuffer()->GetBufferHandle(),
@@ -290,36 +398,20 @@ void Renderer::Render(Camera* camera) {
                 {0},
                 vk::IndexType::eUint32);
 
-            std::vector<vk::DrawIndexedIndirectCommand> indirectCommands;
-            indirectCommands.reserve(objects.size());
-            for (const ScopedRefPtr<Object>& object : objects) {
-                std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
-                for (ScopedRefPtr<Mesh>& mesh : meshes) {
-                    indirectCommands.push_back(vk::DrawIndexedIndirectCommand{
-                        mesh->GetIndexCount(),
-                        1,
-                        mesh->GetFirstIndex(),
-                        static_cast<int32_t>(mesh->GetVertexOffset()),
-                        0});
-                }
-            }
-
             ScopedRefPtr<VulkanBuffer> indirectBuffer = mIndirectDrawBuffers[mCurrentFrameIndex];
-
-            std::copy_n(
-                reinterpret_cast<uint8_t const*>(indirectCommands.data()),
-                indirectBuffer->GetBufferSize(),
-                indirectBuffer->MapBuffer());
-            indirectBuffer->UnmapBuffer();
 
             VKRT_ASSERT(
                 indirectBuffer->GetBufferSize() ==
-                indirectCommands.size() * sizeof(VkDrawIndexedIndirectCommand));
+                drawCallCount * sizeof(VkDrawIndexedIndirectCommand));
+
+            uint32_t maxDrawIndirectCount =
+                mContext->GetDevice()->GetDeviceProperties().limits.maxDrawIndirectCount;
+            VKRT_ASSERT(maxDrawIndirectCount >= drawCallCount);
 
             command.buffer.drawIndexedIndirect(
                 indirectBuffer->GetBufferHandle(),
                 0,
-                indirectCommands.size(),
+                drawCallCount,
                 sizeof(VkDrawIndexedIndirectCommand));
         }
 

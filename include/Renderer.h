@@ -1,12 +1,13 @@
 #pragma once
 
 #include "Camera.h"
-#include "Context.h"
-#include "Pipeline.h"
-#include "RefCountPtr.h"
-#include "Scene.h"
-#include "RenderPass.h"
 #include "CommandRing.h"
+#include "ComputePipeline.h"
+#include "Context.h"
+#include "GraphicsPipeline.h"
+#include "RefCountPtr.h"
+#include "RenderPass.h"
+#include "Scene.h"
 
 namespace VKRT {
 class Renderer : public RefCountPtr, public InputEventListener {
@@ -21,9 +22,13 @@ private:
     struct CameraProperties {
         glm::mat4 viewProjection;
         glm::vec4 cameraForwardDir;
+        uint32_t maxDrawCount;
     };
     void UpdateCameraUniforms(Camera* camera, uint32_t imageIndex);
     struct SceneData {
+        uint32_t indexCount;
+        uint32_t firstIndex;
+        int32_t vertexOffset;
         glm::mat4 transform;
         uint32_t materialId;
         glm::mat3 normalTransform;
@@ -50,9 +55,13 @@ private:
     ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
     ScopedRefPtr<ShaderParameterBuffer> mPerDrawParameters;
     std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffers;
-    std::vector<ScopedRefPtr<VulkanBuffer>> mIndirectDrawBuffers;
-    ScopedRefPtr<Pipeline> mMainPassPipeline;
+    ScopedRefPtr<GraphicsPipeline> mMainPassPipeline;
     ScopedRefPtr<CommandRing> mCommandRing;
+
+    ScopedRefPtr<ShaderParameterCollection> mCullingParameters;
+    ScopedRefPtr<ShaderParameterBuffer> mIndirectDrawBufferParameter;
+    ScopedRefPtr<ComputePipeline> mCullingPipeline;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mIndirectDrawBuffers;
 
     ScopedRefPtr<RenderTarget> mRenderTarget;
     ScopedRefPtr<Texture> mDepthBuffer;
@@ -60,7 +69,6 @@ private:
     ScopedRefPtr<RenderPass> mRenderPass;
 
     uint32_t mCurrentFrameIndex;
-
 };
 
 }  // namespace VKRT

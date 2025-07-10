@@ -2,19 +2,13 @@
 
 #extension GL_EXT_scalar_block_layout : enable
 
-#define UPDATE_PER_FRAME 0
-#define UPDATE_ONCE 1
+#include "definitions.glsl"
 
 layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCameraParameters {
     mat4 viewProjection;
     vec4 cameraForwardDir;
+    uint maxDrawCount;
 } CameraParameters;
-
-struct DrawData {
-	mat4 modelMatrix;
-    uint materialId;
-    mat3 normalTransform;
-};
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];

@@ -42,6 +42,8 @@ set(HEADERS
     include/MeshSystem.h
     include/AABB.h
     include/ViewFrustum.h
+    include/GraphicsPipeline.h
+    include/ComputePipeline.h
 )
 
 set(SOURCE
@@ -71,6 +73,8 @@ set(SOURCE
     src/MeshSystem.cpp
     src/AABB.cpp
     src/ViewFrustum.cpp
+    src/GraphicsPipeline.cpp
+    src/ComputePipeline.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
@@ -82,6 +86,7 @@ set(SHADER_HEADERS
 set(SHADERS
     uberShader.vert
     uberShader.frag
+    culling.comp
 )
 
 if(WIN32)
