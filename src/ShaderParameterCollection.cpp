@@ -212,6 +212,9 @@ std::vector<vk::DescriptorSetLayout> ShaderParameterCollection::GetLayouts() {
 }
 
 std::vector<vk::DescriptorSet> ShaderParameterCollection::GetDescriptorSets(uint32_t frameIndex) {
+    CreateDescriptorSets();
+    UpdateDescriptors(frameIndex);
+
     std::vector<vk::DescriptorSet> descriptors;
     auto itPerFrame = mDescriptorSets.find(ShaderParameter::UpdateFrequency::PerFrame);
     if (itPerFrame != mDescriptorSets.end()) {

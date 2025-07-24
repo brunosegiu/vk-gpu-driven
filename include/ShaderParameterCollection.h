@@ -11,10 +11,6 @@ public:
 
     void AddParameter(ScopedRefPtr<ShaderParameter> parameter);
 
-    void CreateDescriptorSets();
-
-    void UpdateDescriptors(uint32_t frameIndex);
-
     std::vector<vk::DescriptorSetLayout> GetLayouts();
     std::vector<vk::DescriptorSet> GetDescriptorSets(uint32_t frameIndex);
     std::vector<vk::PushConstantRange> GetPushConstants();
@@ -22,6 +18,8 @@ public:
     ~ShaderParameterCollection();
 
 private:
+    void CreateDescriptorSets();
+    void UpdateDescriptors(uint32_t frameIndex);
     void CreateDescriptorLayout();
     void CreateDescriptorPool();
 

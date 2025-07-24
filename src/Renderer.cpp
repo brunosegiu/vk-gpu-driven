@@ -267,12 +267,6 @@ void Renderer::Render(Camera* camera) {
             UpdateCameraUniforms(camera, mCurrentFrameIndex);
             UpdatePerDrawBuffer(mCurrentFrameIndex);
             UpdateMaterialUniform();
-            // TODO: Move to getter
-            mMainPassParameters->CreateDescriptorSets();
-            mMainPassParameters->UpdateDescriptors(mCurrentFrameIndex);
-
-            mCullingParameters->CreateDescriptorSets();
-            mCullingParameters->UpdateDescriptors(mCurrentFrameIndex);
         }
 
         const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();

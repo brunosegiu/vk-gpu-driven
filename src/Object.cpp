@@ -233,10 +233,10 @@ ScopedRefPtr<Object> Object::Load(
 
             if (!node.rotation.empty()) {
                 glm::quat rotation(
+                    node.rotation[3],
                     node.rotation[0],
                     node.rotation[1],
-                    node.rotation[2],
-                    node.rotation[3]);
+                    node.rotation[2]);
                 object->SetRotation(rotation);
             }
 
