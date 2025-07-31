@@ -11,7 +11,8 @@ GraphicsPipeline::GraphicsPipeline(
     const ScopedRefPtr<ShaderParameterCollection>& parameters,
     const std::unordered_map<vk::ShaderStageFlagBits, Resource::Id>& shaderResourcesMap,
     ScopedRefPtr<RenderPass> renderPass,
-    const std::vector<GeometryLayout>& geometryLayout)
+    const std::vector<GeometryLayout>& geometryLayout,
+    GraphicsPipelineOptionals optionals)
     : Pipeline(context) {
     std::vector<vk::VertexInputBindingDescription> vertexInputDescriptions;
     std::vector<vk::VertexInputAttributeDescription> vertexInputAttributeDescriptions;
@@ -70,9 +71,9 @@ GraphicsPipeline::GraphicsPipeline(
             .setLineWidth(1.0f)
             .setCullMode(vk::CullModeFlagBits::eBack)
             .setFrontFace(vk::FrontFace::eCounterClockwise)
-            .setDepthBiasEnable(false)
-            .setDepthBiasConstantFactor(0.0f)
-            .setDepthBiasSlopeFactor(1.0f);
+            .setDepthBiasEnable(optionals.enableDepthBias)
+            .setDepthBiasConstantFactor(optionals.depthBias)
+            .setDepthBiasSlopeFactor(optionals.depthSlope);
 
     // Depth testing
     vk::PipelineDepthStencilStateCreateInfo depthStencilState =

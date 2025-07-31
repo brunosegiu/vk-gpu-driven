@@ -13,6 +13,7 @@ Texture::Texture(
     uint32_t layers,
     vk::Format format,
     vk::ImageUsageFlags usageFlags,
+    vk::ImageLayout initialLayout,
     vk::Image image)
     : mContext(context),
       mImage(image),
@@ -69,6 +70,25 @@ Texture::Texture(
             .setImage(mImage);
 
     mImageView = VKRT_ASSERT_VK(logicalDevice.createImageView(imageViewCreateInfo));
+
+    if (initialLayout != vk::ImageLayout::eUndefined) {
+        vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
+        VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
+
+        const vk::ImageSubresourceRange subresourceRange =
+            vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
+
+        SetImageLayout(
+            commandBuffer,
+            vk::ImageLayout::eUndefined,
+            initialLayout,
+            vk::PipelineStageFlagBits::eAllCommands,
+            vk::PipelineStageFlagBits::eAllCommands);
+
+        VKRT_ASSERT_VK(commandBuffer.end());
+        mContext->GetDevice()->SubmitCommandAndFlush(commandBuffer);
+        mContext->GetDevice()->DestroyCommand(commandBuffer);
+    }
 }
 
 Texture::Texture(
@@ -77,8 +97,9 @@ Texture::Texture(
     uint32_t height,
     vk::Format format,
     vk::ImageUsageFlags usageFlags,
+    vk::ImageLayout initialLayout,
     vk::Image image)
-    : Texture(context, width, height, 1, format, usageFlags, image) {}
+    : Texture(context, width, height, 1, format, usageFlags, initialLayout, image) {}
 
 Texture::Texture(
     ScopedRefPtr<Context> context,
@@ -146,7 +167,7 @@ void Texture::SetImageLayout(
     vk::PipelineStageFlags srcStageMask,
     vk::PipelineStageFlags dstStageMask) {
     const vk::ImageSubresourceRange subresourceRange =
-        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, mLayers);
+        vk::ImageSubresourceRange(mImageAspect, 0, 1, 0, mLayers);
     vk::ImageMemoryBarrier imageBarrier = vk::ImageMemoryBarrier()
                                               .setOldLayout(oldLayout)
                                               .setNewLayout(newLayout)
@@ -180,6 +201,9 @@ void Texture::SetImageLayout(
             break;
         case vk::ImageLayout::eColorAttachmentOptimal:
             imageBarrier.setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite);
+            break;
+        case vk::ImageLayout::eShaderReadOnlyOptimal:
+            imageBarrier.setDstAccessMask(vk::AccessFlagBits::eUniformRead);
             break;
     }
 

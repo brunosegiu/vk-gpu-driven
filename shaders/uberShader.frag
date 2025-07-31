@@ -9,17 +9,24 @@ layout(location = 0) in vec3 inWorldSpacePos;
 layout(location = 1) in vec2 inTexCoord;
 layout(location = 2) in vec3 inNormal;
 layout(location = 3) in flat uint inDrawID;
+layout(location = 4) in vec4 inShadowCoord;
 
 layout(location = 0) out vec4 outColor;
 
-layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCameraParameters {
+layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
     mat4 viewProjection;
     vec4 cameraForwardDir;
     vec4 frustumPlanes[6];
     uint maxDrawCount;
 } CameraParameters;
 
-layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
+    vec3 radiance;
+    vec3 direction;
+    ShadowParameters shadowParameters;
+} LightParameters;
+
+layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
 } SceneData;
 
@@ -27,7 +34,8 @@ layout(binding = 0, set = UPDATE_ONCE) uniform sampler textureSampler;
 layout(binding = 1, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
     Material values[];
 } Materials;
-layout(binding = 2, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
+layout(binding = 2, set = UPDATE_ONCE) uniform texture2D shadowMap;
+layout(binding = 3, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
 
 const float PI = 3.14159265359;
 
@@ -66,12 +74,41 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 vec3 FresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-}  
+}
+
+// From Sascha Willem's examples
+float textureProj(vec4 shadowCoord, vec2 off) {
+	float shadow = 1.0;
+	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
+        float dist = texture( sampler2D(shadowMap, textureSampler), shadowCoord.st + off ).r;
+		if ( shadowCoord.w > 0.0 && dist < shadowCoord.z) {
+			shadow = 0.0f;
+		}
+	}
+	return shadow;
+}
+
+float filterPCF(vec4 sc) {
+	ivec2 texDim = textureSize(sampler2D(shadowMap, textureSampler), 0);
+	float scale = 1.5;
+	float dx = scale / float(texDim.x);
+	float dy = scale / float(texDim.y);
+
+	float shadowFactor = 0.0;
+	int count = 0;
+	int range = 2;
+	
+	for (int x = -range; x <= range; x++) {
+		for (int y = -range; y <= range; y++) {
+			shadowFactor += textureProj(sc, vec2(dx*x, dy*y));
+			count++;
+		}
+	
+	}
+	return shadowFactor / count;
+}
 
 void main() {
-    const vec3 LightDir = normalize(vec3(0, -1, 1));
-    const float LightRadiance = 1.0f;
-
     DrawData perDrawData = SceneData.perDrawData[inDrawID];
 
     uint materialId = perDrawData.materialId;
@@ -100,10 +137,16 @@ void main() {
 
     vec3 N = normalize(inNormal);
     vec3 V = -CameraParameters.cameraForwardDir.xyz;
-    vec3 L = -LightDir;
-    float radiance = LightRadiance;
+    vec3 L = -LightParameters.direction;
+    vec3 radiance = LightParameters.radiance;
     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo, metallic);
+
+    float shadowTerm = 0.0f;
+    {
+		shadowTerm = filterPCF(inShadowCoord / inShadowCoord.w);
+	    shadowTerm = clamp(shadowTerm, 0.0f, 1.0f);
+    }
 
     vec3 Lo = vec3(0.0);
     {
@@ -123,10 +166,10 @@ void main() {
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+        Lo = (kD * albedo / PI + specular) * radiance * NdotL * shadowTerm;
     }
 
-    vec3 ambient = vec3(0.03) * albedo;
+    vec3 ambient = radiance * vec3(0.1) * albedo;
     vec3 color = ambient + Lo;
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));

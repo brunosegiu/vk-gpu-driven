@@ -146,6 +146,12 @@ void Scene::FlattenedObjects() {
     for (ScopedRefPtr<Object> object : mObjects) {
         loadSubtree(object, mCachedFlattenedObjects);
     }
+
+    mCachedDrawCallCount = 0;
+    for (const ScopedRefPtr<Object>& object : mCachedFlattenedObjects) {
+        const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
+        mCachedDrawCallCount += meshes.size();
+    }
 }
 
 Scene::~Scene() {

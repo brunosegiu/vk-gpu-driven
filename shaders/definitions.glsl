@@ -35,3 +35,9 @@ struct Material {
     int normalTextureIndex;
 };
 
+struct ShadowParameters {
+    mat4 viewProjection;
+    vec4 frustumPlanes[6];
+    uint maxDrawCount;
+};
+

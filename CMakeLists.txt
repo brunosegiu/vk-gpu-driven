@@ -44,6 +44,7 @@ set(HEADERS
     include/ViewFrustum.h
     include/GraphicsPipeline.h
     include/ComputePipeline.h
+    include/DirectionalLight.h
 )
 
 set(SOURCE
@@ -75,6 +76,7 @@ set(SOURCE
     src/ViewFrustum.cpp
     src/GraphicsPipeline.cpp
     src/ComputePipeline.cpp
+    src/DirectionalLight.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
@@ -87,6 +89,9 @@ set(SHADERS
     uberShader.vert
     uberShader.frag
     culling.comp
+    depthOnlyShader.vert
+    depthOnlyShader.frag
+    shadowCulling.comp
 )
 
 if(WIN32)

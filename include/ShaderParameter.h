@@ -25,7 +25,6 @@ public:
     const vk::ShaderStageFlags& GetStageFlags() const { return mStageFlags; }
     const bool& GetHasVariableCount() const { return mHasVariableCount; }
     virtual const uint32_t GetVariableCount() { return 0; }
-    const uint32_t& GetBinding() { return mBinding; }
     UpdateFrequency GetUpdateFrequency() const { return mUpdateFrequency; }
 
     virtual const vk::DescriptorBufferInfo& GetBufferInfo(uint32_t frameIndex = 0) {
@@ -36,8 +35,6 @@ public:
         static std::vector<vk::DescriptorImageInfo> sDummyDescriptorInfo;
         return sDummyDescriptorInfo;
     };
-
-    void SetBinding(uint32_t binding) { mBinding = binding; }
 
     ~ShaderParameter();
 

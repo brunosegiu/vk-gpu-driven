@@ -19,27 +19,7 @@ public:
     ~Renderer();
 
 private:
-    struct CameraProperties {
-        glm::mat4 viewProjection;
-        glm::vec4 cameraForwardDir;
-        std::array<glm::vec4, 6> frustumPlanes;
-        uint32_t maxDrawCount;
-    };
-    void UpdateCameraUniforms(Camera* camera, uint32_t imageIndex);
-    struct DrawData {
-        uint32_t indexCount;
-        uint32_t firstIndex;
-        int32_t vertexOffset;
-        glm::mat4 transform;
-        uint32_t materialId;
-        glm::mat3 normalTransform;
-        struct {
-            glm::vec3 minBounds;
-            glm::vec3 maxBounds;
-        } aabb;
-    };
-    void UpdatePerDrawBuffer(uint32_t imageIndex);
-    void UpdateMaterialUniform();
+    void UpdateUniforms(Camera* camera, uint32_t imageIndex);
 
     void OnKeyPressed(int key) override;
     void OnKeyReleased(int key) override;
@@ -49,31 +29,47 @@ private:
     void OnRightMouseButtonPressed() override;
     void OnRightMouseButtonReleased() override;
 
+    // Shared resources
     ScopedRefPtr<Context> mContext;
     ScopedRefPtr<Scene> mScene;
-
-    ScopedRefPtr<ShaderParameterCollection> mMainPassParameters;
-    ScopedRefPtr<ShaderParameterBuffer> mCameraUniform;
-    ScopedRefPtr<ShaderParameterBuffer> mMaterialsUniform;
-    ScopedRefPtr<VulkanBuffer> mMaterialsBuffer;
-    ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
-    ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
-    ScopedRefPtr<ShaderParameterBuffer> mPerDrawParameters;
-    std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffers;
-    ScopedRefPtr<GraphicsPipeline> mMainPassPipeline;
+    uint32_t mCurrentFrameIndex;
     ScopedRefPtr<CommandRing> mCommandRing;
 
-    ScopedRefPtr<ShaderParameterCollection> mCullingParameters;
+    // Base pass resources
+    ScopedRefPtr<ShaderParameterCollection> mBasePassParameters;
+    ScopedRefPtr<GraphicsPipeline> mBasePassPipeline;
+    ScopedRefPtr<VulkanBuffer> mMaterialsBuffer;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffers;
+    ScopedRefPtr<ShaderParameterBuffer> mCameraUniform;
+    ScopedRefPtr<ShaderParameterBuffer> mMaterialsUniform;
+    ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
+    ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
+    ScopedRefPtr<ShaderParameterImage> mShadowMapUniform;
+    ScopedRefPtr<ShaderParameterBuffer> mPerDrawParameters;
+    ScopedRefPtr<RenderTarget> mRenderTarget;
+    ScopedRefPtr<Texture> mDepthBuffer;
+    ScopedRefPtr<RenderTarget> mDepthRenderTarget;
+    ScopedRefPtr<RenderPass> mBasePass;
+
+    // Base pass culling
+    ScopedRefPtr<ShaderParameterCollection> mBasePassCullingParameters;
     ScopedRefPtr<ShaderParameterBuffer> mIndirectDrawBufferParameter;
     ScopedRefPtr<ComputePipeline> mCullingPipeline;
     std::vector<ScopedRefPtr<VulkanBuffer>> mIndirectDrawBuffers;
 
-    ScopedRefPtr<RenderTarget> mRenderTarget;
-    ScopedRefPtr<Texture> mDepthBuffer;
-    ScopedRefPtr<RenderTarget> mDepthRenderTarget;
-    ScopedRefPtr<RenderPass> mRenderPass;
+    // Shadow pass resources
+    ScopedRefPtr<RenderPass> mDepthOnlyPass;
+    ScopedRefPtr<RenderTarget> mDepthOnlyPassRenderTarget;
+    ScopedRefPtr<Texture> mShadowMap;
+    ScopedRefPtr<ShaderParameterCollection> mDepthOnlyParameters;
+    ScopedRefPtr<GraphicsPipeline> mDepthOnlyPipeline;
+    ScopedRefPtr<ShaderParameterBuffer> mShadowCameraUniform;
 
-    uint32_t mCurrentFrameIndex;
+    // Shadow pass culling
+    ScopedRefPtr<ShaderParameterCollection> mShadowPassCullingParameters;
+    ScopedRefPtr<ShaderParameterBuffer> mShadowIndirectDrawBufferParameter;
+    ScopedRefPtr<ComputePipeline> mShadowCullingPipeline;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mShadowIndirectDrawBuffers;
 };
 
 }  // namespace VKRT

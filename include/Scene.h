@@ -8,6 +8,7 @@
 #include "RefCountPtr.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
+#include "DirectionalLight.h"
 
 namespace VKRT {
 
@@ -37,7 +38,9 @@ public:
     const std::vector<ScopedRefPtr<Object>>& GetFlattenedObjects() const {
         return mCachedFlattenedObjects;
     }
+    const uint32_t GetDrawCallCount() { return mCachedDrawCallCount; }
     ScopedRefPtr<MeshSystem> GetMeshSystem() { return mMeshSystem; }
+    DirectionalLight& GetLight() { return mLight; }
     void Update();
 
     ~Scene();
@@ -51,11 +54,13 @@ private:
     ScopedRefPtr<Context> mContext;
 
     std::vector<ScopedRefPtr<Object>> mObjects;
+    DirectionalLight mLight;
 
     ScopedRefPtr<Texture> mDummyTexture;
 
     SceneMaterials mCachedMaterialProxies;
 
     std::vector<ScopedRefPtr<Object>> mCachedFlattenedObjects;
+    uint32_t mCachedDrawCallCount;
 };
 }  // namespace VKRT

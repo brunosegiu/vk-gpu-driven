@@ -29,7 +29,6 @@ void ShaderParameterCollection::CreateDescriptorLayout() {
         std::vector<vk::DescriptorBindingFlags> bindingFlags;
         uint32_t descriptorBinding = 0;
         for (const ScopedRefPtr<ShaderParameter>& parameter : shaderParemeters) {
-            parameter->SetBinding(descriptorBinding);
             descriptorBindings.emplace_back(vk::DescriptorSetLayoutBinding()
                                                 .setBinding(descriptorBinding)
                                                 .setDescriptorType(parameter->GetDescriptorType())
@@ -156,12 +155,12 @@ void ShaderParameterCollection::UpdateDescriptors(uint32_t frameIndex) {
 
         const vk::DescriptorSet& descriptorSet =
             mDescriptorSets[updateFrequency][effectiveFrameIndex];
+        uint32_t bindingIndex = 0;
         for (const ScopedRefPtr<ShaderParameter>& parameter : shaderParemeters) {
-            const uint32_t binding = parameter->GetBinding();
             vk::WriteDescriptorSet descriptorUpdate =
                 vk::WriteDescriptorSet()
                     .setDstSet(descriptorSet)
-                    .setDstBinding(binding)
+                    .setDstBinding(bindingIndex)
                     .setDescriptorType(parameter->GetDescriptorType())
                     .setDescriptorCount(1);
 
@@ -181,6 +180,7 @@ void ShaderParameterCollection::UpdateDescriptors(uint32_t frameIndex) {
             }
 
             writeDescriptorSets.emplace_back(descriptorUpdate);
+            ++bindingIndex;
         }
     }
     logicalDevice.updateDescriptorSets(writeDescriptorSets, {});

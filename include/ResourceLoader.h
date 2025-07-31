@@ -15,6 +15,9 @@ struct Resource {
         VertexShader,
         FragmentShader,
         CullingShader,
+        DepthOnlyVertexShader,
+        DepthOnlyFragmentShader,
+        ShadowCullingShader,
     };
 };
 

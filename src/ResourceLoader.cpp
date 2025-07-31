@@ -34,6 +34,15 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
         case Resource::Id::CullingShader:
             actualId = VKRT_RESOURCE_CULLING_SHADER;
             break;
+        case Resource::Id::DepthOnlyVertexShader:
+            actualId = VKRT_RESOURCE_DEPTH_ONLY_VERTEX_SHADER;
+            break;
+        case Resource::Id::DepthOnlyFragmentShader:
+            actualId = VKRT_RESOURCE_DEPTH_ONLY_FRAGMENT_SHADER;
+            break;
+        case Resource::Id::ShadowCullingShader:
+            actualId = VKRT_RESOURCE_SHADOW_CULLING_SHADER;
+            break;
         default:
             return {nullptr, 0};
     }

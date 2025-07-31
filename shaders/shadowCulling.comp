@@ -1,0 +1,72 @@
+#version 460
+
+#extension GL_EXT_scalar_block_layout : enable
+
+#include "definitions.glsl"
+
+layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
+    vec3 radiance;
+    vec3 direction;
+    ShadowParameters shadowParameters;
+} LightParameters;
+
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
+    DrawData perDrawData[];
+} SceneData;
+
+layout(binding = 2, set = UPDATE_PER_FRAME) buffer writeonly CommandBuffer {
+	VkDrawIndexedIndirectCommand commands[];
+} IndirectCommands;
+
+layout(local_size_x = 64) in;
+
+bool Test(const vec3 min, const vec3 max, const mat4 objectTransform) {
+    vec3 boxPoints[8] = vec3[](
+        vec3(min.x, min.y, min.z),
+        vec3(max.x, min.y, min.z),
+        vec3(max.x, max.y, min.z),
+        vec3(min.x, max.y, min.z),
+        vec3(min.x, min.y, max.z),
+        vec3(max.x, min.y, max.z),
+        vec3(max.x, max.y, max.z),
+        vec3(min.x, max.y, max.z)
+    );
+
+    for (uint cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
+        boxPoints[cornerIndex] = vec3(objectTransform * vec4(boxPoints[cornerIndex], 1.0f));
+    }
+
+    for (uint planeIndex = 0; planeIndex < 6; ++planeIndex) {
+        bool intersects = false;
+        vec4 plane = LightParameters.shadowParameters.frustumPlanes[planeIndex];
+        for (uint cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
+            if (dot(vec4(boxPoints[cornerIndex], 1.0f), plane) > 0) {
+                intersects = true;
+                break;
+            }
+        }
+        if (!intersects) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void main() {
+    uint drawID = gl_GlobalInvocationID.x;
+    if (drawID < LightParameters.shadowParameters.maxDrawCount) {
+        DrawData perDrawData = SceneData.perDrawData[drawID];
+
+        bool isVisible = Test(perDrawData.aabb.minBounds, perDrawData.aabb.maxBounds, perDrawData.modelMatrix);
+
+        VkDrawIndexedIndirectCommand command;
+        command.indexCount = perDrawData.indexCount;
+        command.instanceCount = isVisible ? 1 : 0;
+        command.firstIndex = perDrawData.firstIndex;
+        command.vertexOffset = perDrawData.vertexOffset;
+        command.firstInstance = 0;
+
+        IndirectCommands.commands[drawID] = command;
+    }
+
+}

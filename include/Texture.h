@@ -16,6 +16,7 @@ public:
         uint32_t layers,
         vk::Format format,
         vk::ImageUsageFlags usageFlags,
+        vk::ImageLayout initialLayout = vk::ImageLayout::eUndefined,
         vk::Image image = nullptr);
 
     Texture(
@@ -24,6 +25,7 @@ public:
         uint32_t height,
         vk::Format format,
         vk::ImageUsageFlags usageFlags,
+        vk::ImageLayout initialLayout = vk::ImageLayout::eUndefined,
         vk::Image image = nullptr);
 
     Texture(
@@ -40,6 +42,7 @@ public:
     const vk::ImageAspectFlagBits& GetImageAspect() const { return mImageAspect; }
     const uint32_t& GetWidth() const { return mWidth; }
     const uint32_t& GetHeight() const { return mHeight; }
+    vk::Extent2D GetExtent() { return vk::Extent2D{mWidth, mHeight}; }
 
     void SetImageLayout(
         vk::CommandBuffer& commandBuffer,

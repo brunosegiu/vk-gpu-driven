@@ -83,8 +83,14 @@ Swapchain::Swapchain(ScopedRefPtr<Context> context) : mContext(context), mCurren
         VKRT_ASSERT_VK(logicalDevice.getSwapchainImagesKHR(mSwapchainHandle));
 
     for (vk::Image& image : images) {
-        ScopedRefPtr<Texture> texture =
-            new Texture(mContext, surfaceExtent.width, surfaceExtent.height, mFormat, {}, image);
+        ScopedRefPtr<Texture> texture = new Texture(
+            mContext,
+            surfaceExtent.width,
+            surfaceExtent.height,
+            mFormat,
+            {},
+            vk::ImageLayout::eUndefined,
+            image);
         mImages.emplace_back(texture);
     }
 
@@ -105,7 +111,10 @@ uint32_t Swapchain::AcquireNextImage(uint32_t frameIndex) {
     return mCurrentImageIndex;
 }
 
-void Swapchain::Present(vk::CommandBuffer& commandBuffer, vk::Fence& signalFence, uint32_t frameIndex) {
+void Swapchain::Present(
+    vk::CommandBuffer& commandBuffer,
+    vk::Fence& signalFence,
+    uint32_t frameIndex) {
     const vk::Queue& queue = mContext->GetDevice()->GetQueue();
 
     std::vector<vk::PipelineStageFlags> waitStages{vk::PipelineStageFlagBits::eAllCommands};

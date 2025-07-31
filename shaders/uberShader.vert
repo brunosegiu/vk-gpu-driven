@@ -4,14 +4,20 @@
 
 #include "definitions.glsl"
 
-layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCameraParameters {
+layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
     mat4 viewProjection;
     vec4 cameraForwardDir;
     vec4 frustumPlanes[6];
     uint maxDrawCount;
 } CameraParameters;
 
-layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
+    vec3 radiance;
+    vec3 direction;
+    ShadowParameters shadowParameters;
+} LightParameters;
+
+layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
 } SceneData;
 
@@ -23,6 +29,14 @@ layout(location = 0) out vec3 outWorldSpacePos;
 layout(location = 1) out vec2 outTexCoord;
 layout(location = 2) out vec3 outNormal;
 layout(location = 3) out flat uint outDrawID;
+layout(location = 4) out vec4 outShadowCoord;
+
+const mat4 ShadowBiasMat = mat4( 
+	0.5, 0.0, 0.0, 0.0,
+	0.0, 0.5, 0.0, 0.0,
+	0.0, 0.0, 1.0, 0.0,
+	0.5, 0.5, 0.0, 1.0 
+);
 
 void main() {
     DrawData perDrawData = SceneData.perDrawData[gl_DrawID];
@@ -35,6 +49,8 @@ void main() {
     outNormal = normalize(perDrawData.normalTransform * unpackedNormal);
 
     outWorldSpacePos = (perDrawData.modelMatrix * vec4(inPosition, 1.0)).xyz;
+
+    outShadowCoord =  (ShadowBiasMat * LightParameters.shadowParameters.viewProjection * perDrawData.modelMatrix) * vec4(inPosition, 1.0f);
 
     outDrawID = gl_DrawID;
 }
