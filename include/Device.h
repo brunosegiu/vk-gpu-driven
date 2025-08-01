@@ -33,6 +33,13 @@ public:
         const VmaAllocationCreateFlags& memoryFlags,
         const vk::MemoryAllocateFlags& memoryAllocateFlags = {});
 
+    std::vector<ScopedRefPtr<VulkanBuffer>> CreateBuffers(
+        const size_t& count,
+        const vk::DeviceSize& size,
+        const vk::BufferUsageFlags& usageFlags,
+        const VmaAllocationCreateFlags& memoryFlags,
+        const vk::MemoryAllocateFlags& memoryAllocateFlags = {});
+
     vk::CommandBuffer CreateCommandBuffer();
     void SubmitCommand(const vk::CommandBuffer& commandBuffer, const vk::Fence& fence);
     void SubmitCommandAndFlush(const vk::CommandBuffer& commandBuffer);

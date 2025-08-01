@@ -40,8 +40,8 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
         case Resource::Id::DepthOnlyFragmentShader:
             actualId = VKRT_RESOURCE_DEPTH_ONLY_FRAGMENT_SHADER;
             break;
-        case Resource::Id::ShadowCullingShader:
-            actualId = VKRT_RESOURCE_SHADOW_CULLING_SHADER;
+        case Resource::Id::CompactionShader:
+            actualId = VKRT_RESOURCE_COMPACTION_SHADER;
             break;
         default:
             return {nullptr, 0};

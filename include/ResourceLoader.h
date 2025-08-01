@@ -17,7 +17,7 @@ struct Resource {
         CullingShader,
         DepthOnlyVertexShader,
         DepthOnlyFragmentShader,
-        ShadowCullingShader,
+        CompactionShader
     };
 };
 

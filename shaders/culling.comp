@@ -4,20 +4,18 @@
 
 #include "definitions.glsl"
 
-layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCameraParameters {
-    mat4 viewProjection;
-    vec4 cameraForwardDir;
+layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCullingData {
     vec4 frustumPlanes[6];
     uint maxDrawCount;
-} CameraParameters;
+};
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
 } SceneData;
 
 layout(binding = 2, set = UPDATE_PER_FRAME) buffer writeonly CommandBuffer {
-	VkDrawIndexedIndirectCommand commands[];
-} IndirectCommands;
+	VkDrawIndexedIndirectCommand outIndirectCommands[];
+};
 
 layout(local_size_x = 64) in;
 
@@ -39,7 +37,7 @@ bool Test(const vec3 min, const vec3 max, const mat4 objectTransform) {
 
     for (uint planeIndex = 0; planeIndex < 6; ++planeIndex) {
         bool intersects = false;
-        vec4 plane = CameraParameters.frustumPlanes[planeIndex];
+        vec4 plane = frustumPlanes[planeIndex];
         for (uint cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
             if (dot(vec4(boxPoints[cornerIndex], 1.0f), plane) > 0) {
                 intersects = true;
@@ -55,7 +53,7 @@ bool Test(const vec3 min, const vec3 max, const mat4 objectTransform) {
 
 void main() {
     uint drawID = gl_GlobalInvocationID.x;
-    if (drawID < CameraParameters.maxDrawCount) {
+    if (drawID < maxDrawCount) {
         DrawData perDrawData = SceneData.perDrawData[drawID];
 
         bool isVisible = Test(perDrawData.aabb.minBounds, perDrawData.aabb.maxBounds, perDrawData.modelMatrix);
@@ -67,7 +65,7 @@ void main() {
         command.vertexOffset = perDrawData.vertexOffset;
         command.firstInstance = 0;
 
-        IndirectCommands.commands[drawID] = command;
+        outIndirectCommands[drawID] = command;
     }
 
 }

@@ -16,24 +16,26 @@ layout(location = 0) out vec4 outColor;
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
     mat4 viewProjection;
     vec4 cameraForwardDir;
-    vec4 frustumPlanes[6];
-    uint maxDrawCount;
 } CameraParameters;
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
     vec3 radiance;
     vec3 direction;
-    ShadowParameters shadowParameters;
+    mat4 viewProjection;
 } LightParameters;
 
 layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
 } SceneData;
 
+layout(binding = 3, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
+	uint drawData[];
+};
+
 layout(binding = 0, set = UPDATE_ONCE) uniform sampler textureSampler;
 layout(binding = 1, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
-    Material values[];
-} Materials;
+    Material Materials[];
+};
 layout(binding = 2, set = UPDATE_ONCE) uniform texture2D shadowMap;
 layout(binding = 3, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
 
@@ -112,7 +114,7 @@ void main() {
     DrawData perDrawData = SceneData.perDrawData[inDrawID];
 
     uint materialId = perDrawData.materialId;
-    Material material = Materials.values[materialId];
+    Material material = Materials[materialId];
     vec3 albedo = material.albedo.rgb;
     if (material.albedoTextureIndex >= 0) {
         vec4 albedoAlpha =

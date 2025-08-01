@@ -7,19 +7,21 @@
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
     mat4 viewProjection;
     vec4 cameraForwardDir;
-    vec4 frustumPlanes[6];
-    uint maxDrawCount;
 } CameraParameters;
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
     vec3 radiance;
     vec3 direction;
-    ShadowParameters shadowParameters;
+    mat4 viewProjection;
 } LightParameters;
 
 layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
 } SceneData;
+
+layout(binding = 3, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
+	uint drawData[];
+};
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in uint inPackedTexCoord;
@@ -39,7 +41,8 @@ const mat4 ShadowBiasMat = mat4(
 );
 
 void main() {
-    DrawData perDrawData = SceneData.perDrawData[gl_DrawID];
+    uint actualDrawIndex = drawData[gl_DrawID];
+    DrawData perDrawData = SceneData.perDrawData[actualDrawIndex];
 
     gl_Position = CameraParameters.viewProjection * perDrawData.modelMatrix * vec4(inPosition, 1.0);
 
@@ -50,7 +53,7 @@ void main() {
 
     outWorldSpacePos = (perDrawData.modelMatrix * vec4(inPosition, 1.0)).xyz;
 
-    outShadowCoord =  (ShadowBiasMat * LightParameters.shadowParameters.viewProjection * perDrawData.modelMatrix) * vec4(inPosition, 1.0f);
+    outShadowCoord =  (ShadowBiasMat * LightParameters.viewProjection * perDrawData.modelMatrix) * vec4(inPosition, 1.0f);
 
-    outDrawID = gl_DrawID;
+    outDrawID = actualDrawIndex;
 }

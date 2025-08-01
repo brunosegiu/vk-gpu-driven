@@ -167,7 +167,7 @@ glm::vec3 SunLightColorSimple(const glm::vec3& lightForward) {
     const double alpha = 1.3;  // Angström exponent
     const double beta = std::max(0.0, 0.04608365822050 * T - 0.04586025928522);
 
-    // Wavelength samples (μm)
+    // Wavelength samples
     const double Lr = 0.680, Lg = 0.550, Lb = 0.440;
 
     auto trans = [&](double L_um) {

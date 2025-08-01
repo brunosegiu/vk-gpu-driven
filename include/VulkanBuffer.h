@@ -19,6 +19,9 @@ public:
     const vk::DeviceSize& GetBufferSize() const { return mSize; }
     const vk::Buffer& GetBufferHandle() const { return mBufferHandle; }
     const vk::DescriptorBufferInfo& GetDescriptorInfo() const { return mDescriptorInfo; }
+    vk::BufferMemoryBarrier GetBufferBarrierInfo(
+        vk::PipelineStageFlags srcStageMask,
+        vk::PipelineStageFlags dstStageMask);
 
     uint8_t* MapBuffer();
     void UnmapBuffer();

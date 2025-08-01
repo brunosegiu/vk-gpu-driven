@@ -2,6 +2,7 @@
 
 #include "DebugUtils.h"
 #include "Device.h"
+#include "VulkanHelpers.h"
 
 namespace VKRT {
 
@@ -49,6 +50,16 @@ VulkanBuffer::VulkanBuffer(
       mBufferHandle(bufferHandle),
       mAllocation(allocation),
       mDescriptorInfo(descriptorInfo) {}
+
+vk::BufferMemoryBarrier VulkanBuffer::GetBufferBarrierInfo(
+    vk::PipelineStageFlags srcStageMask,
+    vk::PipelineStageFlags dstStageMask) {
+    return vk::BufferMemoryBarrier()
+        .setBuffer(GetBufferHandle())
+        .setSize(GetBufferSize())
+        .setSrcAccessMask(Helpers::GetAccessMasksForStage(srcStageMask, true))
+        .setDstAccessMask(Helpers::GetAccessMasksForStage(dstStageMask, false));
+}
 
 uint8_t* VulkanBuffer::MapBuffer() {
     VmaAllocator allocator = mContext->GetDevice()->GetAllocator();

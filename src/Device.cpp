@@ -60,7 +60,8 @@ Device::Device(
             .setBufferDeviceAddress(true)
             .setDescriptorIndexing(true)
             .setRuntimeDescriptorArray(true)
-            .setDescriptorBindingVariableDescriptorCount(true);
+            .setDescriptorBindingVariableDescriptorCount(true)
+            .setDrawIndirectCount(true);
     enabledFeatures11.setPNext(&enabledFeatures12);
 
     const vk::DeviceCreateInfo deviceCreateInfo =
@@ -108,6 +109,22 @@ ScopedRefPtr<VulkanBuffer> Device::CreateBuffer(
     const vk::MemoryAllocateFlags& memoryAllocateFlags) {
     VKRT_ASSERT(mContext != nullptr);
     return VulkanBuffer::Create(mContext, size, usageFlags, memoryFlags, memoryAllocateFlags);
+}
+
+std::vector<ScopedRefPtr<VulkanBuffer>> Device::CreateBuffers(
+    const size_t& count,
+    const vk::DeviceSize& size,
+    const vk::BufferUsageFlags& usageFlags,
+    const VmaAllocationCreateFlags& memoryFlags,
+    const vk::MemoryAllocateFlags& memoryAllocateFlags) {
+    VKRT_ASSERT(mContext != nullptr);
+    std::vector<ScopedRefPtr<VulkanBuffer>> buffers;
+    for (uint32_t bufferIndex = 0; bufferIndex < count; ++bufferIndex) {
+        ScopedRefPtr<VulkanBuffer> buffer =
+            VulkanBuffer::Create(mContext, size, usageFlags, memoryFlags, memoryAllocateFlags);
+        buffers.push_back(buffer);
+    }
+    return buffers;
 }
 
 vk::CommandBuffer Device::CreateCommandBuffer() {

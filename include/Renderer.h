@@ -35,6 +35,34 @@ private:
     uint32_t mCurrentFrameIndex;
     ScopedRefPtr<CommandRing> mCommandRing;
 
+    // Culling resources
+    struct CullingPipelineResources {
+        ScopedRefPtr<ShaderParameterCollection> cullingParameters;
+        ScopedRefPtr<ShaderParameterBuffer> cullingDataUniform;
+        ScopedRefPtr<ShaderParameterBuffer> indirectDrawBufferParameter;
+        std::vector<ScopedRefPtr<VulkanBuffer>> indirectDrawBuffers;
+        ScopedRefPtr<ComputePipeline> cullingPipeline;
+
+        ScopedRefPtr<ShaderParameterCollection> compactionParameters;
+        ScopedRefPtr<ShaderParameterBuffer> compactIndirectDrawBufferParameter;
+        ScopedRefPtr<ShaderParameterBuffer> additionalDrawDataBufferParameter;
+        ScopedRefPtr<ShaderParameterBuffer> drawCallCountBufferParameter;
+        std::vector<ScopedRefPtr<VulkanBuffer>> compactIndirectDrawBuffers;
+        std::vector<ScopedRefPtr<VulkanBuffer>> additionalDrawDataBuffers;
+        std::vector<ScopedRefPtr<VulkanBuffer>> drawCallCountBuffer;
+        ScopedRefPtr<ComputePipeline> compactionPipeline;
+    };
+    CullingPipelineResources mShadowPassCulling;
+    CullingPipelineResources mBasePassCulling;
+
+    // Shadow pass resources
+    ScopedRefPtr<RenderPass> mDepthOnlyPass;
+    ScopedRefPtr<RenderTarget> mDepthOnlyPassRenderTarget;
+    ScopedRefPtr<Texture> mShadowMap;
+    ScopedRefPtr<ShaderParameterCollection> mDepthOnlyParameters;
+    ScopedRefPtr<GraphicsPipeline> mDepthOnlyPipeline;
+    ScopedRefPtr<ShaderParameterBuffer> mShadowCameraUniform;
+
     // Base pass resources
     ScopedRefPtr<ShaderParameterCollection> mBasePassParameters;
     ScopedRefPtr<GraphicsPipeline> mBasePassPipeline;
@@ -50,26 +78,6 @@ private:
     ScopedRefPtr<Texture> mDepthBuffer;
     ScopedRefPtr<RenderTarget> mDepthRenderTarget;
     ScopedRefPtr<RenderPass> mBasePass;
-
-    // Base pass culling
-    ScopedRefPtr<ShaderParameterCollection> mBasePassCullingParameters;
-    ScopedRefPtr<ShaderParameterBuffer> mIndirectDrawBufferParameter;
-    ScopedRefPtr<ComputePipeline> mCullingPipeline;
-    std::vector<ScopedRefPtr<VulkanBuffer>> mIndirectDrawBuffers;
-
-    // Shadow pass resources
-    ScopedRefPtr<RenderPass> mDepthOnlyPass;
-    ScopedRefPtr<RenderTarget> mDepthOnlyPassRenderTarget;
-    ScopedRefPtr<Texture> mShadowMap;
-    ScopedRefPtr<ShaderParameterCollection> mDepthOnlyParameters;
-    ScopedRefPtr<GraphicsPipeline> mDepthOnlyPipeline;
-    ScopedRefPtr<ShaderParameterBuffer> mShadowCameraUniform;
-
-    // Shadow pass culling
-    ScopedRefPtr<ShaderParameterCollection> mShadowPassCullingParameters;
-    ScopedRefPtr<ShaderParameterBuffer> mShadowIndirectDrawBufferParameter;
-    ScopedRefPtr<ComputePipeline> mShadowCullingPipeline;
-    std::vector<ScopedRefPtr<VulkanBuffer>> mShadowIndirectDrawBuffers;
 };
 
 }  // namespace VKRT

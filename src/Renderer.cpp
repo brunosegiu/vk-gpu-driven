@@ -6,21 +6,21 @@
 #include "Texture.h"
 
 namespace VKRT {
-struct CameraProperties {
+
+struct CameraData {
     glm::mat4 viewProjection;
     glm::vec4 cameraForwardDir;
-    std::array<glm::vec4, 6> frustumPlanes;
-    uint32_t maxDrawCount;
 };
 
-struct LightProperties {
+struct LightData {
     glm::vec3 radiance;
     glm::vec3 direction;
-    struct {
-        glm::mat4 viewProjection;
-        std::array<glm::vec4, 6> frustumPlanes;
-        uint32_t maxDrawCount;
-    } shadowParameters;
+    glm::mat4 viewProjection;
+};
+
+struct CullData {
+    std::array<glm::vec4, 6> frustumPlanes;
+    uint32_t maxDrawCount;
 };
 
 struct DrawData {
@@ -70,7 +70,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mDepthOnlyPass = new RenderPass(context, {mDepthOnlyPassRenderTarget});
     }
 
-    // Shared parameters
+    // Global resources
     {
         mPerDrawParameters = new ShaderParameterBuffer(
             mContext,
@@ -78,56 +78,91 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             ShaderParameter::UpdateFrequency::PerFrame,
             vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment |
                 vk::ShaderStageFlagBits::eCompute);
-
-        mCameraUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eUniformBuffer,
-            ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex |
-                vk::ShaderStageFlagBits::eCompute,
-            sizeof(CameraProperties),
-            vk::BufferUsageFlagBits::eUniformBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        mShadowCameraUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eUniformBuffer,
-            ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex |
-                vk::ShaderStageFlagBits::eCompute,
-            sizeof(LightProperties),
-            vk::BufferUsageFlagBits::eUniformBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        mShadowMapUniform = new ShaderParameterImage(
-            mContext,
-            vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment);
     }
 
     // Culling resources
     {
-        mIndirectDrawBufferParameter = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eStorageBuffer,
-            ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eCompute);
+        // Shadow culling resources
+        auto createCullingResources = [&](Renderer::CullingPipelineResources& resources) {
+            resources.cullingParameters = new ShaderParameterCollection(mContext);
+            resources.cullingDataUniform = new ShaderParameterBuffer(
+                mContext,
+                vk::DescriptorType::eUniformBuffer,
+                ShaderParameter::UpdateFrequency::PerFrame,
+                vk::ShaderStageFlagBits::eCompute,
+                sizeof(CullData),
+                vk::BufferUsageFlagBits::eUniformBuffer,
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                    VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
-        mBasePassCullingParameters = new ShaderParameterCollection(mContext);
-        mBasePassCullingParameters->AddParameter(mCameraUniform);
-        mBasePassCullingParameters->AddParameter(mPerDrawParameters);
-        mBasePassCullingParameters->AddParameter(mIndirectDrawBufferParameter);
+            resources.indirectDrawBufferParameter = new ShaderParameterBuffer(
+                mContext,
+                vk::DescriptorType::eStorageBuffer,
+                ShaderParameter::UpdateFrequency::PerFrame,
+                vk::ShaderStageFlagBits::eCompute);
 
-        mCullingPipeline = new ComputePipeline(
-            context,
-            mBasePassCullingParameters,
-            {vk::ShaderStageFlagBits::eCompute, Resource::Id::CullingShader});
+            resources.cullingParameters->AddParameter(resources.cullingDataUniform);
+            resources.cullingParameters->AddParameter(mPerDrawParameters);
+            resources.cullingParameters->AddParameter(resources.indirectDrawBufferParameter);
+
+            resources.cullingPipeline = new ComputePipeline(
+                context,
+                resources.cullingParameters,
+                {vk::ShaderStageFlagBits::eCompute, Resource::Id::CullingShader});
+
+            ScopedRefPtr<ComputePipeline>;
+
+            resources.compactionParameters = new ShaderParameterCollection(mContext);
+
+            resources.compactIndirectDrawBufferParameter = new ShaderParameterBuffer(
+                mContext,
+                vk::DescriptorType::eStorageBuffer,
+                ShaderParameter::UpdateFrequency::PerFrame,
+                vk::ShaderStageFlagBits::eCompute);
+
+            resources.additionalDrawDataBufferParameter = new ShaderParameterBuffer(
+                mContext,
+                vk::DescriptorType::eStorageBuffer,
+                ShaderParameter::UpdateFrequency::PerFrame,
+                vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eVertex |
+                    vk::ShaderStageFlagBits::eFragment);
+
+            resources.drawCallCountBufferParameter = new ShaderParameterBuffer(
+                mContext,
+                vk::DescriptorType::eStorageBuffer,
+                ShaderParameter::UpdateFrequency::PerFrame,
+                vk::ShaderStageFlagBits::eCompute);
+
+            resources.compactionParameters->AddParameter(resources.cullingDataUniform);
+            resources.compactionParameters->AddParameter(resources.indirectDrawBufferParameter);
+            resources.compactionParameters->AddParameter(
+                resources.compactIndirectDrawBufferParameter);
+            resources.compactionParameters->AddParameter(
+                resources.additionalDrawDataBufferParameter);
+            resources.compactionParameters->AddParameter(resources.drawCallCountBufferParameter);
+
+            resources.compactionPipeline = new ComputePipeline(
+                context,
+                resources.compactionParameters,
+                {vk::ShaderStageFlagBits::eCompute, Resource::Id::CompactionShader});
+        };
+
+        createCullingResources(mShadowPassCulling);
+        createCullingResources(mBasePassCulling);
     }
 
-    // Main pass resources
+    // Shadow pass parameters
     {
+        mShadowCameraUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eUniformBuffer,
+            ShaderParameter::UpdateFrequency::PerFrame,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex,
+            sizeof(LightData),
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
         const float anisotropy =
             mContext->GetDevice()->GetDeviceProperties().limits.maxSamplerAnisotropy;
         vk::SamplerCreateInfo samplerCreateInfo =
@@ -163,31 +198,10 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             4096,
             true);
 
-        mBasePassParameters = new ShaderParameterCollection(mContext);
-        mBasePassParameters->AddParameter(mCameraUniform);
-        mBasePassParameters->AddParameter(mShadowCameraUniform);
-        mBasePassParameters->AddParameter(mPerDrawParameters);
-        mBasePassParameters->AddParameter(mMaterialSampler);
-        mBasePassParameters->AddParameter(mMaterialsUniform);
-        mBasePassParameters->AddParameter(mShadowMapUniform);
-        mBasePassParameters->AddParameter(mMaterialsTextures);
-
-        std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
-            {vk::ShaderStageFlagBits::eVertex, Resource::Id::VertexShader},
-            {vk::ShaderStageFlagBits::eFragment, Resource::Id::FragmentShader},
-        };
-
-        const std::vector<GeometryLayout> geometryLayout = MeshSystem::GetGeometryLayout();
-
-        mBasePassPipeline =
-            new GraphicsPipeline(context, mBasePassParameters, stages, mBasePass, geometryLayout);
-    }
-
-    // Shadow pass parameters
-    {
         mDepthOnlyParameters = new ShaderParameterCollection(mContext);
         mDepthOnlyParameters->AddParameter(mShadowCameraUniform);
         mDepthOnlyParameters->AddParameter(mPerDrawParameters);
+        mDepthOnlyParameters->AddParameter(mShadowPassCulling.additionalDrawDataBufferParameter);
         mDepthOnlyParameters->AddParameter(mMaterialSampler);
         mDepthOnlyParameters->AddParameter(mMaterialsUniform);
         mDepthOnlyParameters->AddParameter(mMaterialsTextures);
@@ -213,47 +227,49 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
                 .enableDepthBias = true,
                 .depthBias = 1.0f,
                 .depthSlope = 1.0f * (2 + 1)});
+    }
 
-        // Shadow culling resources
-        {
-            mShadowIndirectDrawBufferParameter = new ShaderParameterBuffer(
-                mContext,
-                vk::DescriptorType::eStorageBuffer,
-                ShaderParameter::UpdateFrequency::PerFrame,
-                vk::ShaderStageFlagBits::eCompute);
+    // Main pass resources
+    {
+        mCameraUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eUniformBuffer,
+            ShaderParameter::UpdateFrequency::PerFrame,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex,
+            sizeof(CameraData),
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
-            mShadowPassCullingParameters = new ShaderParameterCollection(mContext);
-            mShadowPassCullingParameters->AddParameter(mShadowCameraUniform);
-            mShadowPassCullingParameters->AddParameter(mPerDrawParameters);
-            mShadowPassCullingParameters->AddParameter(mShadowIndirectDrawBufferParameter);
+        mShadowMapUniform = new ShaderParameterImage(
+            mContext,
+            vk::DescriptorType::eSampledImage,
+            vk::ShaderStageFlagBits::eFragment);
 
-            mShadowCullingPipeline = new ComputePipeline(
-                context,
-                mShadowPassCullingParameters,
-                {vk::ShaderStageFlagBits::eCompute, Resource::Id::ShadowCullingShader});
-        }
+        mBasePassParameters = new ShaderParameterCollection(mContext);
+        mBasePassParameters->AddParameter(mCameraUniform);
+        mBasePassParameters->AddParameter(mShadowCameraUniform);
+        mBasePassParameters->AddParameter(mPerDrawParameters);
+        mBasePassParameters->AddParameter(mBasePassCulling.additionalDrawDataBufferParameter);
+        mBasePassParameters->AddParameter(mMaterialSampler);
+        mBasePassParameters->AddParameter(mMaterialsUniform);
+        mBasePassParameters->AddParameter(mShadowMapUniform);
+        mBasePassParameters->AddParameter(mMaterialsTextures);
+
+        std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
+            {vk::ShaderStageFlagBits::eVertex, Resource::Id::VertexShader},
+            {vk::ShaderStageFlagBits::eFragment, Resource::Id::FragmentShader},
+        };
+
+        const std::vector<GeometryLayout> geometryLayout = MeshSystem::GetGeometryLayout();
+
+        mBasePassPipeline =
+            new GraphicsPipeline(context, mBasePassParameters, stages, mBasePass, geometryLayout);
     }
 }
 
 void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
-    // Update camera uniform
-    {
-        ScopedRefPtr<VulkanBuffer> buffer = mCameraUniform->GetBuffer(imageIndex);
-        uint8_t* mappedBuffer = buffer->MapBuffer();
-
-        CameraProperties cameraMatrices{
-            .viewProjection = camera->GetProjectionTransform() * camera->GetViewTransform(),
-            .cameraForwardDir = glm::vec4(camera->GetForwardDir(), 0.0f),
-            .frustumPlanes = camera->GetViewFrustum().GetPlanes(),
-            .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount())};
-        std::copy_n(
-            reinterpret_cast<uint8_t*>(&cameraMatrices),
-            sizeof(CameraProperties),
-            mappedBuffer);
-        buffer->UnmapBuffer();
-    }
-
-    // Create per-draw parameters
+    // Create and update per-draw parameters
     if (mPerDrawBuffers.empty()) {
         uint32_t descriptorCount = 0;
         const std::vector<ScopedRefPtr<Object>>& objects = mScene->GetFlattenedObjects();
@@ -309,22 +325,89 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
         currentBuffer->UnmapBuffer();
     }
 
-    // Create indirect draw buffer
-    {
-        if (mIndirectDrawBuffers.empty()) {
-            const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
-            for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
-                ScopedRefPtr<VulkanBuffer> indirectBuffer = mContext->GetDevice()->CreateBuffer(
-                    mScene->GetDrawCallCount() * sizeof(vk::DrawIndexedIndirectCommand),
-                    vk::BufferUsageFlagBits::eIndirectBuffer |
-                        vk::BufferUsageFlagBits::eStorageBuffer,
-                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                        VMA_ALLOCATION_CREATE_MAPPED_BIT);
-                mIndirectDrawBuffers.push_back(indirectBuffer);
-            }
+    // Update culling parameters
+    auto updateCullingResources = [&](Renderer::CullingPipelineResources& resources,
+                                      CullData cullData) {
+        resources.cullingDataUniform->Write(
+            imageIndex,
+            reinterpret_cast<uint8_t*>(&cullData),
+            sizeof(CullData));
 
-            mIndirectDrawBufferParameter->BindBuffers(mIndirectDrawBuffers);
+        const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
+
+        if (resources.indirectDrawBuffers.empty()) {
+            resources.indirectDrawBuffers = mContext->GetDevice()->CreateBuffers(
+                bufferCount,
+                mScene->GetDrawCallCount() * sizeof(vk::DrawIndexedIndirectCommand),
+                vk::BufferUsageFlagBits::eStorageBuffer,
+                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+            resources.indirectDrawBufferParameter->BindBuffers(resources.indirectDrawBuffers);
         }
+
+        if (resources.compactIndirectDrawBuffers.empty()) {
+            resources.compactIndirectDrawBuffers = mContext->GetDevice()->CreateBuffers(
+                bufferCount,
+                mScene->GetDrawCallCount() * sizeof(vk::DrawIndexedIndirectCommand),
+                vk::BufferUsageFlagBits::eIndirectBuffer | vk::BufferUsageFlagBits::eStorageBuffer,
+                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+            resources.compactIndirectDrawBufferParameter->BindBuffers(
+                resources.compactIndirectDrawBuffers);
+        }
+
+        if (resources.additionalDrawDataBuffers.empty()) {
+            resources.additionalDrawDataBuffers = mContext->GetDevice()->CreateBuffers(
+                bufferCount,
+                mScene->GetDrawCallCount() * sizeof(uint32_t),
+                vk::BufferUsageFlagBits::eStorageBuffer,
+                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+            resources.additionalDrawDataBufferParameter->BindBuffers(
+                resources.additionalDrawDataBuffers);
+        }
+
+        if (resources.drawCallCountBuffer.empty()) {
+            resources.drawCallCountBuffer = mContext->GetDevice()->CreateBuffers(
+                bufferCount,
+                sizeof(uint32_t),
+                vk::BufferUsageFlagBits::eIndirectBuffer | vk::BufferUsageFlagBits::eStorageBuffer |
+                    vk::BufferUsageFlagBits::eTransferDst,
+                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+            resources.drawCallCountBufferParameter->BindBuffers(resources.drawCallCountBuffer);
+        }
+    };
+
+    CullData shadowCullingData{
+        .frustumPlanes = ViewFrustum(mScene->GetLight().ComputeShadowMatrix()).GetPlanes(),
+        .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount())};
+    updateCullingResources(mShadowPassCulling, shadowCullingData);
+
+    CullData mainCameraCullingData{
+        .frustumPlanes = camera->GetViewFrustum().GetPlanes(),
+        .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount())};
+    updateCullingResources(mBasePassCulling, mainCameraCullingData);
+
+    // Shadow camera parameters
+    {
+        DirectionalLight& light = mScene->GetLight();
+        glm::mat4 shadowMatrix = light.ComputeShadowMatrix();
+        LightData cameraMatrices{
+            .radiance = light.GetRadiance(),
+            .direction = light.GetDirection(),
+            .viewProjection = shadowMatrix};
+        mShadowCameraUniform->Write(
+            imageIndex,
+            reinterpret_cast<uint8_t*>(&cameraMatrices),
+            sizeof(LightData));
+    }
+
+    // Update camera uniform
+    {
+        CameraData cameraMatrices{
+            .viewProjection = camera->GetProjectionTransform() * camera->GetViewTransform(),
+            .cameraForwardDir = glm::vec4(camera->GetForwardDir(), 0.0f)};
+        mCameraUniform->Write(
+            imageIndex,
+            reinterpret_cast<uint8_t*>(&cameraMatrices),
+            sizeof(CameraData));
     }
 
     // Update materials
@@ -352,44 +435,6 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
 
         mShadowMapUniform->Bind(mShadowMap);
     }
-
-    // Create shadow indirect draw buffer
-    {
-        if (mShadowIndirectDrawBuffers.empty()) {
-            const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
-            for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
-                ScopedRefPtr<VulkanBuffer> indirectBuffer = mContext->GetDevice()->CreateBuffer(
-                    mScene->GetDrawCallCount() * sizeof(vk::DrawIndexedIndirectCommand),
-                    vk::BufferUsageFlagBits::eIndirectBuffer |
-                        vk::BufferUsageFlagBits::eStorageBuffer,
-                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                        VMA_ALLOCATION_CREATE_MAPPED_BIT);
-                mShadowIndirectDrawBuffers.push_back(indirectBuffer);
-            }
-
-            mShadowIndirectDrawBufferParameter->BindBuffers(mShadowIndirectDrawBuffers);
-        }
-    }
-
-    // Shadow camera parameters
-    {
-        ScopedRefPtr<VulkanBuffer> buffer = mShadowCameraUniform->GetBuffer(imageIndex);
-        uint8_t* mappedBuffer = buffer->MapBuffer();
-        DirectionalLight& light = mScene->GetLight();
-        glm::mat4 shadowMatrix = light.ComputeShadowMatrix();
-        LightProperties cameraMatrices{
-            .radiance = light.GetRadiance(),
-            .direction = light.GetDirection(),
-            .shadowParameters = {
-                .viewProjection = shadowMatrix,
-                .frustumPlanes = ViewFrustum(shadowMatrix).GetPlanes(),
-                .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount())}};
-        std::copy_n(
-            reinterpret_cast<uint8_t*>(&cameraMatrices),
-            sizeof(LightProperties),
-            mappedBuffer);
-        buffer->UnmapBuffer();
-    }
 }
 
 void Renderer::Render(Camera* camera) {
@@ -410,19 +455,18 @@ void Renderer::Render(Camera* camera) {
         const std::vector<ScopedRefPtr<Object>>& objects = mScene->GetFlattenedObjects();
         size_t drawCallCount = mScene->GetDrawCallCount();
 
-        // Shadow pass culling
-        {
+        const auto dispatchCulling = [&](CullingPipelineResources& resources) {
+            ScopedRefPtr<VulkanBuffer> cullingIndirectBuffer =
+                resources.indirectDrawBuffers[mCurrentFrameIndex];
             {
-                ScopedRefPtr<VulkanBuffer> indirectBuffer =
-                    mShadowIndirectDrawBuffers[mCurrentFrameIndex];
                 vk::BufferMemoryBarrier bufferBarrier =
                     vk::BufferMemoryBarrier()
-                        .setBuffer(indirectBuffer->GetBufferHandle())
-                        .setSize(indirectBuffer->GetBufferSize())
-                        .setSrcAccessMask(vk::AccessFlagBits::eIndirectCommandRead)
+                        .setBuffer(cullingIndirectBuffer->GetBufferHandle())
+                        .setSize(cullingIndirectBuffer->GetBufferSize())
+                        .setSrcAccessMask(vk::AccessFlagBits::eShaderRead)
                         .setDstAccessMask(vk::AccessFlagBits::eShaderWrite);
                 command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eDrawIndirect,
+                    vk::PipelineStageFlagBits::eComputeShader,
                     vk::PipelineStageFlagBits::eComputeShader,
                     vk::DependencyFlags{},
                     {},
@@ -432,81 +476,126 @@ void Renderer::Render(Camera* camera) {
 
             command.buffer.bindPipeline(
                 vk::PipelineBindPoint::eCompute,
-                mShadowCullingPipeline->GetPipelineHandle());
+                resources.cullingPipeline->GetPipelineHandle());
 
-            std::vector<vk::DescriptorSet> descriptorSets =
-                mShadowPassCullingParameters->GetDescriptorSets(mCurrentFrameIndex);
+            std::vector<vk::DescriptorSet> cullingDescriptorSets =
+                resources.cullingParameters->GetDescriptorSets(mCurrentFrameIndex);
 
             command.buffer.bindDescriptorSets(
                 vk::PipelineBindPoint::eCompute,
-                mShadowCullingPipeline->GetPipelineLayout(),
+                resources.cullingPipeline->GetPipelineLayout(),
                 0,
-                descriptorSets,
+                cullingDescriptorSets,
                 nullptr);
 
             command.buffer.dispatch((drawCallCount / 64) + 1, 1, 1);
-        }
 
-        // Draw call GPU culling pass
-        {
+            ScopedRefPtr<VulkanBuffer> compactIndirectDrawBuffer =
+                resources.compactIndirectDrawBuffers[mCurrentFrameIndex];
+            ScopedRefPtr<VulkanBuffer> additionalDrawDataBuffer =
+                resources.additionalDrawDataBuffers[mCurrentFrameIndex];
+            ScopedRefPtr<VulkanBuffer> drawCallCountBuffer =
+                resources.drawCallCountBuffer[mCurrentFrameIndex];
+
+            // Write 0 in drawCallCountBuffer
             {
-                ScopedRefPtr<VulkanBuffer> indirectBuffer =
-                    mIndirectDrawBuffers[mCurrentFrameIndex];
+                std::vector<vk::BufferMemoryBarrier> bufferBarriers{
+                    drawCallCountBuffer->GetBufferBarrierInfo(
+                        vk::PipelineStageFlagBits::eDrawIndirect,
+                        vk::PipelineStageFlagBits::eTransfer),
+                };
 
-                vk::BufferMemoryBarrier bufferBarrier =
-                    vk::BufferMemoryBarrier()
-                        .setBuffer(indirectBuffer->GetBufferHandle())
-                        .setSize(indirectBuffer->GetBufferSize())
-                        .setSrcAccessMask(vk::AccessFlagBits::eIndirectCommandRead)
-                        .setDstAccessMask(vk::AccessFlagBits::eShaderWrite);
+                command.buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eDrawIndirect,
+                    vk::PipelineStageFlagBits::eTransfer,
+                    vk::DependencyFlags{},
+                    {},
+                    bufferBarriers,
+                    {});
+
+                command.buffer
+                    .fillBuffer(drawCallCountBuffer->GetBufferHandle(), 0, sizeof(uint32_t), 0);
+            }
+
+            {
+                std::vector<vk::BufferMemoryBarrier> bufferBarriers{
+                    drawCallCountBuffer->GetBufferBarrierInfo(
+                        vk::PipelineStageFlagBits::eTransfer,
+                        vk::PipelineStageFlagBits::eComputeShader)};
+
+                command.buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eTransfer,
+                    vk::PipelineStageFlagBits::eComputeShader,
+                    vk::DependencyFlags{},
+                    {},
+                    bufferBarriers,
+                    {});
+            }
+
+            {
+                std::vector<vk::BufferMemoryBarrier> bufferBarriers{
+                    compactIndirectDrawBuffer->GetBufferBarrierInfo(
+                        vk::PipelineStageFlagBits::eDrawIndirect,
+                        vk::PipelineStageFlagBits::eComputeShader),
+                    additionalDrawDataBuffer->GetBufferBarrierInfo(
+                        vk::PipelineStageFlagBits::eDrawIndirect,
+                        vk::PipelineStageFlagBits::eComputeShader)};
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eDrawIndirect,
                     vk::PipelineStageFlagBits::eComputeShader,
                     vk::DependencyFlags{},
                     {},
-                    bufferBarrier,
+                    bufferBarriers,
                     {});
             }
 
             command.buffer.bindPipeline(
                 vk::PipelineBindPoint::eCompute,
-                mCullingPipeline->GetPipelineHandle());
+                resources.compactionPipeline->GetPipelineHandle());
 
-            std::vector<vk::DescriptorSet> descriptorSets =
-                mBasePassCullingParameters->GetDescriptorSets(mCurrentFrameIndex);
+            std::vector<vk::DescriptorSet> compactionDescriptorSets =
+                resources.compactionParameters->GetDescriptorSets(mCurrentFrameIndex);
 
             command.buffer.bindDescriptorSets(
                 vk::PipelineBindPoint::eCompute,
-                mCullingPipeline->GetPipelineLayout(),
+                resources.compactionPipeline->GetPipelineLayout(),
                 0,
-                descriptorSets,
+                compactionDescriptorSets,
                 nullptr);
 
             command.buffer.dispatch((drawCallCount / 64) + 1, 1, 1);
-        }
+
+            // TODO: Wait until before actual draws are dispatched, this is too early
+            {
+                std::vector<vk::BufferMemoryBarrier> bufferBarriers{
+                    compactIndirectDrawBuffer->GetBufferBarrierInfo(
+                        vk::PipelineStageFlagBits::eComputeShader,
+                        vk::PipelineStageFlagBits::eAllGraphics),
+                    additionalDrawDataBuffer->GetBufferBarrierInfo(
+                        vk::PipelineStageFlagBits::eComputeShader,
+                        vk::PipelineStageFlagBits::eAllGraphics),
+                    drawCallCountBuffer->GetBufferBarrierInfo(
+                        vk::PipelineStageFlagBits::eComputeShader,
+                        vk::PipelineStageFlagBits::eAllGraphics)};
+
+                command.buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eComputeShader,
+                    vk::PipelineStageFlagBits::eAllGraphics,
+                    vk::DependencyFlags{},
+                    {},
+                    bufferBarriers,
+                    {});
+            }
+        };
+
+        dispatchCulling(mShadowPassCulling);
+        dispatchCulling(mBasePassCulling);
 
         // Shadow pass
         {
             {
-                ScopedRefPtr<VulkanBuffer> indirectBuffer =
-                    mShadowIndirectDrawBuffers[mCurrentFrameIndex];
-
-                vk::BufferMemoryBarrier bufferBarrier =
-                    vk::BufferMemoryBarrier()
-                        .setBuffer(indirectBuffer->GetBufferHandle())
-                        .setSize(indirectBuffer->GetBufferSize())
-                        .setSrcAccessMask(vk::AccessFlagBits::eShaderWrite)
-                        .setDstAccessMask(vk::AccessFlagBits::eIndirectCommandRead);
-
-                command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eComputeShader,
-                    vk::PipelineStageFlagBits::eDrawIndirect,
-                    vk::DependencyFlags{},
-                    {},
-                    bufferBarrier,
-                    {});
-
+                // Transition shadow map to depth attachment
                 vk::ImageMemoryBarrier imageBarrier =
                     vk::ImageMemoryBarrier()
                         .setImage(mShadowMap->GetImage())
@@ -571,19 +660,15 @@ void Renderer::Render(Camera* camera) {
             {
                 mScene->GetMeshSystem()->BindBuffers(command.buffer);
 
-                ScopedRefPtr<VulkanBuffer> indirectBuffer =
-                    mShadowIndirectDrawBuffers[mCurrentFrameIndex];
-
-                VKRT_ASSERT(
-                    indirectBuffer->GetBufferSize() ==
-                    drawCallCount * sizeof(VkDrawIndexedIndirectCommand));
-
                 uint32_t maxDrawIndirectCount =
                     mContext->GetDevice()->GetDeviceProperties().limits.maxDrawIndirectCount;
                 VKRT_ASSERT(maxDrawIndirectCount >= drawCallCount);
 
-                command.buffer.drawIndexedIndirect(
-                    indirectBuffer->GetBufferHandle(),
+                command.buffer.drawIndexedIndirectCount(
+                    mShadowPassCulling.compactIndirectDrawBuffers[mCurrentFrameIndex]
+                        ->GetBufferHandle(),
+                    0,
+                    mShadowPassCulling.drawCallCountBuffer[mCurrentFrameIndex]->GetBufferHandle(),
                     0,
                     drawCallCount,
                     sizeof(VkDrawIndexedIndirectCommand));
@@ -595,24 +680,6 @@ void Renderer::Render(Camera* camera) {
         // Base pass
         {
             {
-                ScopedRefPtr<VulkanBuffer> indirectBuffer =
-                    mIndirectDrawBuffers[mCurrentFrameIndex];
-
-                vk::BufferMemoryBarrier bufferBarrier =
-                    vk::BufferMemoryBarrier()
-                        .setBuffer(indirectBuffer->GetBufferHandle())
-                        .setSize(indirectBuffer->GetBufferSize())
-                        .setSrcAccessMask(vk::AccessFlagBits::eShaderWrite)
-                        .setDstAccessMask(vk::AccessFlagBits::eIndirectCommandRead);
-
-                command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eComputeShader,
-                    vk::PipelineStageFlagBits::eDrawIndirect,
-                    vk::DependencyFlags{},
-                    {},
-                    bufferBarrier,
-                    {});
-
                 vk::ImageMemoryBarrier imageBarrier =
                     vk::ImageMemoryBarrier()
                         .setImage(mShadowMap->GetImage())
@@ -680,18 +747,14 @@ void Renderer::Render(Camera* camera) {
         {
             mScene->GetMeshSystem()->BindBuffers(command.buffer);
 
-            ScopedRefPtr<VulkanBuffer> indirectBuffer = mIndirectDrawBuffers[mCurrentFrameIndex];
-
-            VKRT_ASSERT(
-                indirectBuffer->GetBufferSize() ==
-                drawCallCount * sizeof(VkDrawIndexedIndirectCommand));
-
             uint32_t maxDrawIndirectCount =
                 mContext->GetDevice()->GetDeviceProperties().limits.maxDrawIndirectCount;
             VKRT_ASSERT(maxDrawIndirectCount >= drawCallCount);
 
-            command.buffer.drawIndexedIndirect(
-                indirectBuffer->GetBufferHandle(),
+            command.buffer.drawIndexedIndirectCount(
+                mBasePassCulling.compactIndirectDrawBuffers[mCurrentFrameIndex]->GetBufferHandle(),
+                0,
+                mBasePassCulling.drawCallCountBuffer[mCurrentFrameIndex]->GetBufferHandle(),
                 0,
                 drawCallCount,
                 sizeof(VkDrawIndexedIndirectCommand));

@@ -45,6 +45,7 @@ set(HEADERS
     include/GraphicsPipeline.h
     include/ComputePipeline.h
     include/DirectionalLight.h
+    include/VulkanHelpers.h
 )
 
 set(SOURCE
@@ -77,6 +78,7 @@ set(SOURCE
     src/GraphicsPipeline.cpp
     src/ComputePipeline.cpp
     src/DirectionalLight.cpp
+    src/VulkanHelpers.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
@@ -91,7 +93,7 @@ set(SHADERS
     culling.comp
     depthOnlyShader.vert
     depthOnlyShader.frag
-    shadowCulling.comp
+    compactDrawCalls.comp
 )
 
 if(WIN32)
