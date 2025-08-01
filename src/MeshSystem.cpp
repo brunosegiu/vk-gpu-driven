@@ -6,6 +6,15 @@ namespace VKRT {
 
 MeshSystem::MeshSystem(ScopedRefPtr<Context> context) : mContext(context) {}
 
+const std::vector<GeometryLayout> MeshSystem::GetGeometryLayout() {
+    static std::vector<GeometryLayout> sGeometryLayout {
+        {.format = vk::Format::eR32G32B32A32Sfloat, .stride = sizeof(glm::vec3)},
+        {.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)},
+        {.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)},
+    };
+    return sGeometryLayout;
+}
+
 ScopedRefPtr<Mesh> MeshSystem::GetOrCreate(
     uint32_t meshId,
     const std::vector<glm::vec3>& vertices,
@@ -21,7 +30,11 @@ ScopedRefPtr<Mesh> MeshSystem::GetOrCreate(
         VKRT_ASSERT(vertices.size() == normals.size());
         mMeshData.emplace(
             meshId,
-            MeshData{.vertices = vertices, .indices = indices, .texCoord = texCoord, .normals = normals});
+            MeshData{
+                .vertices = vertices,
+                .indices = indices,
+                .texCoord = texCoord,
+                .normals = normals});
         ScopedRefPtr<Mesh> newMesh = new Mesh(material);
         newMesh->SetAABB(AABB(vertices));
         mMeshes.emplace(meshId, newMesh);
@@ -170,6 +183,13 @@ void MeshSystem::Upload() {
     FlattenBuffer(mContext, mUnifiedNormalBuffer, mMeshData, AttributeType::Normal);
 
     mMeshData.clear();
+}
+
+void MeshSystem::BindBuffers(vk::CommandBuffer& commandBuffer) {
+    commandBuffer.bindVertexBuffers(0, GetVertexBuffer()->GetBufferHandle(), {0});
+    commandBuffer.bindVertexBuffers(1, GetTexCoordBuffer()->GetBufferHandle(), {0});
+    commandBuffer.bindVertexBuffers(2, GetNormalBuffer()->GetBufferHandle(), {0});
+    commandBuffer.bindIndexBuffer(GetIndexBuffer()->GetBufferHandle(), {0}, vk::IndexType::eUint32);
 }
 
 }  // namespace VKRT

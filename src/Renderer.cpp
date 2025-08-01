@@ -177,11 +177,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             {vk::ShaderStageFlagBits::eFragment, Resource::Id::FragmentShader},
         };
 
-        const std::vector<GeometryLayout> geometryLayout{
-            {.format = vk::Format::eR32G32B32A32Sfloat, .stride = sizeof(glm::vec3)},
-            {.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)},
-            {.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)},
-        };
+        const std::vector<GeometryLayout> geometryLayout = MeshSystem::GetGeometryLayout();
 
         mBasePassPipeline =
             new GraphicsPipeline(context, mBasePassParameters, stages, mBasePass, geometryLayout);
@@ -573,22 +569,7 @@ void Renderer::Render(Camera* camera) {
                 nullptr);
 
             {
-                command.buffer.bindVertexBuffers(
-                    0,
-                    mScene->GetMeshSystem()->GetVertexBuffer()->GetBufferHandle(),
-                    {0});
-                command.buffer.bindVertexBuffers(
-                    1,
-                    mScene->GetMeshSystem()->GetTexCoordBuffer()->GetBufferHandle(),
-                    {0});
-                command.buffer.bindVertexBuffers(
-                    2,
-                    mScene->GetMeshSystem()->GetNormalBuffer()->GetBufferHandle(),
-                    {0});
-                command.buffer.bindIndexBuffer(
-                    mScene->GetMeshSystem()->GetIndexBuffer()->GetBufferHandle(),
-                    {0},
-                    vk::IndexType::eUint32);
+                mScene->GetMeshSystem()->BindBuffers(command.buffer);
 
                 ScopedRefPtr<VulkanBuffer> indirectBuffer =
                     mShadowIndirectDrawBuffers[mCurrentFrameIndex];
@@ -697,22 +678,7 @@ void Renderer::Render(Camera* camera) {
             nullptr);
 
         {
-            command.buffer.bindVertexBuffers(
-                0,
-                mScene->GetMeshSystem()->GetVertexBuffer()->GetBufferHandle(),
-                {0});
-            command.buffer.bindVertexBuffers(
-                1,
-                mScene->GetMeshSystem()->GetTexCoordBuffer()->GetBufferHandle(),
-                {0});
-            command.buffer.bindVertexBuffers(
-                2,
-                mScene->GetMeshSystem()->GetNormalBuffer()->GetBufferHandle(),
-                {0});
-            command.buffer.bindIndexBuffer(
-                mScene->GetMeshSystem()->GetIndexBuffer()->GetBufferHandle(),
-                {0},
-                vk::IndexType::eUint32);
+            mScene->GetMeshSystem()->BindBuffers(command.buffer);
 
             ScopedRefPtr<VulkanBuffer> indirectBuffer = mIndirectDrawBuffers[mCurrentFrameIndex];
 

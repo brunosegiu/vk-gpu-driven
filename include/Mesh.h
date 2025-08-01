@@ -2,14 +2,19 @@
 
 #include "glm/glm.hpp"
 
+#include "AABB.h"
 #include "Context.h"
 #include "Material.h"
 #include "RefCountPtr.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
-#include "AABB.h"
 
 namespace VKRT {
+
+struct GeometryLayout {
+    vk::Format format;
+    size_t stride;
+};
 
 class Mesh : public RefCountPtr {
 public:

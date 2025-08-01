@@ -12,15 +12,11 @@
 #include "ShaderParameterCollection.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
+#include "Mesh.h"
 
 namespace VKRT {
 
 class Context;
-
-struct GeometryLayout {
-    vk::Format format;
-    size_t stride;
-};
 
 struct GraphicsPipelineOptionals {
     bool enableDepthBias = false;

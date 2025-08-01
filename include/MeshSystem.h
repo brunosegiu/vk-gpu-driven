@@ -15,6 +15,8 @@ class MeshSystem : public RefCountPtr {
 public:
     MeshSystem(ScopedRefPtr<Context> context);
 
+    static const std::vector<GeometryLayout> GetGeometryLayout();
+
     ScopedRefPtr<Mesh> GetOrCreate(
         uint32_t meshId,
         const std::vector<glm::vec3>& vertices,
@@ -29,6 +31,8 @@ public:
     const ScopedRefPtr<VulkanBuffer>& GetNormalBuffer() const { return mUnifiedNormalBuffer; }
 
     void Upload();
+
+    void BindBuffers(vk::CommandBuffer& commandBuffer);
 
 private:
     ScopedRefPtr<Context> mContext;
