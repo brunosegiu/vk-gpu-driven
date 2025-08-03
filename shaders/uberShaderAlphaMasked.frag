@@ -11,6 +11,7 @@ layout(location = 1) in vec2 inTexCoord;
 layout(location = 2) in vec3 inNormal;
 layout(location = 3) in flat uint inDrawID;
 layout(location = 4) in vec4 inShadowCoord;
+layout(location = 5) in mat3 inTBN;
 
 layout(location = 0) out vec4 outColor;
 
@@ -66,7 +67,15 @@ void main() {
         metallic = metallicRoughness.y;
     }
 
-    vec3 N = normalize(inNormal);
+    vec3 normal = normalize(inNormal);
+    if (material.normalTextureIndex > 0) {
+        vec3 normalSample = texture(sampler2D(sceneTextures[material.normalTextureIndex], textureSampler), inTexCoord)
+                .xyz;
+        vec3 normalTangentSpace = normalize(normalSample * 2.0 - 1.0);
+        normal = normalize(inTBN * normalTangentSpace);
+    }
+
+    vec3 N = normal;
     vec3 V = -CameraParameters.cameraForwardDir.xyz;
     vec3 L = -LightParameters.direction;
     vec3 radiance = LightParameters.radiance;

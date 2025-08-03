@@ -26,11 +26,13 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
         const std::string positionName = "POSITION";
         const std::string normalName = "NORMAL";
         const std::string texCoordName = "TEXCOORD_0";
+        const std::string tangentName = "TANGENT";
 
         const std::map<std::string, int>& attributes = primitive.attributes;
         const bool hasPositionAndNormals = attributes.find(positionName) != attributes.end() &&
                                            attributes.find(normalName) != attributes.end();
         const bool hasTexCoords = attributes.find(texCoordName) != attributes.end();
+        const bool hasTangents = attributes.find(tangentName) != attributes.end();
 
         if (!hasPositionAndNormals || !hasTexCoords) {
             continue;
@@ -99,6 +101,34 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
             }
         }
 
+        std::vector<uint32_t> tangents(normalAccessor.count, 0); // Assume meshes without tangents will not use normal maps (lazy).
+        if (hasTangents) {
+            const tinygltf::Accessor& tangentAccessor = model.accessors[attributes.at(tangentName)];
+            tangents = std::vector<uint32_t>(tangentAccessor.count);
+            {
+                const tinygltf::BufferView& tangentBufferView =
+                    model.bufferViews[tangentAccessor.bufferView];
+                const tinygltf::Buffer& tangentBuffer = model.buffers[tangentBufferView.buffer];
+                const size_t tangentBufferOffset =
+                    tangentBufferView.byteOffset + tangentAccessor.byteOffset;
+                size_t tangentStride = tangentAccessor.ByteStride(tangentBufferView);
+                const unsigned char* tangentData = &tangentBuffer.data[tangentBufferOffset];
+
+                const uint32_t tangentCount = static_cast<uint32_t>(tangentAccessor.count);
+                VKRT_ASSERT(tangentAccessor.type == TINYGLTF_TYPE_VEC4);
+                for (uint32_t tangentIndex = 0; tangentIndex < tangentCount; ++tangentIndex) {
+                    const float* tangentDataFloat =
+                        reinterpret_cast<const float*>(&tangentData[tangentStride * tangentIndex]);
+                    glm::vec4 tangent = glm::vec4(
+                        tangentDataFloat[0],
+                        tangentDataFloat[1],
+                        tangentDataFloat[2],
+                        tangentDataFloat[3]);
+                    tangents[tangentIndex] = glm::packSnorm4x8(tangent);
+                }
+            }
+        }
+
         const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
         std::vector<uint32_t> indices;
         {
@@ -163,16 +193,7 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
                     image.image.size());
             }
 
-            Material::AlphaMode alphaMode = Material::AlphaMode::Opaque;
-            if (gltfMaterial.alphaMode == "OPAQUE") {
-                alphaMode = Material::AlphaMode::Opaque;
-            } else if (gltfMaterial.alphaMode == "MASK") {
-                alphaMode = Material::AlphaMode::Masked;
-            } else if (gltfMaterial.alphaMode == "BLEND") {
-                alphaMode = Material::AlphaMode::Blended;
-            }
-
-            /* const int32_t normalMapIndex = gltfMaterial.normalTexture.index;
+            const int32_t normalMapIndex = gltfMaterial.normalTexture.index;
             ScopedRefPtr<Texture> normalTexture = nullptr;
             if (normalMapIndex >= 0) {
                 const tinygltf::Texture& texture = model.textures[normalMapIndex];
@@ -184,7 +205,16 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
                     vk::Format::eR8G8B8A8Unorm,
                     image.image.data(),
                     image.image.size());
-            }*/
+            }
+
+            Material::AlphaMode alphaMode = Material::AlphaMode::Opaque;
+            if (gltfMaterial.alphaMode == "OPAQUE") {
+                alphaMode = Material::AlphaMode::Opaque;
+            } else if (gltfMaterial.alphaMode == "MASK") {
+                alphaMode = Material::AlphaMode::Masked;
+            } else if (gltfMaterial.alphaMode == "BLEND") {
+                alphaMode = Material::AlphaMode::Blended;
+            }
 
             material = new Material(
                 alphaMode,
@@ -192,7 +222,8 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
                 roughness,
                 metallic,
                 albedoTexture,
-                roughnessTexture);
+                roughnessTexture,
+                normalTexture);
         } else {
             material = new Material();
         }
@@ -202,6 +233,7 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
             indices,
             texCoords,
             normals,
+            tangents,
             material);
         meshes.push_back(newMesh);
     }

@@ -26,12 +26,14 @@ layout(binding = 3, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in uint inPackedTexCoord;
 layout(location = 2) in uint inPackedNormal;
+layout(location = 3) in uint inPackedTangent;
 
 layout(location = 0) out vec3 outWorldSpacePos;
 layout(location = 1) out vec2 outTexCoord;
 layout(location = 2) out vec3 outNormal;
 layout(location = 3) out flat uint outDrawID;
 layout(location = 4) out vec4 outShadowCoord;
+layout(location = 5) out mat3 outTBN;
 
 const mat4 ShadowBiasMat = mat4( 
 	0.5, 0.0, 0.0, 0.0,
@@ -56,4 +58,10 @@ void main() {
     outShadowCoord =  (ShadowBiasMat * LightParameters.viewProjection * perDrawData.modelMatrix) * vec4(inPosition, 1.0f);
 
     outDrawID = globalDrawIndex;
+
+    vec4 unpackedTangent = unpackSnorm4x8(inPackedTangent);
+    vec3 tangent = normalize(perDrawData.normalTransform * unpackedTangent.xyz);
+    vec3 bitangent = normalize(cross(outNormal, tangent) * unpackedTangent.w);
+
+    outTBN = mat3(tangent, bitangent, outNormal);
 }

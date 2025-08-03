@@ -7,8 +7,9 @@ namespace VKRT {
 MeshSystem::MeshSystem(ScopedRefPtr<Context> context) : mContext(context) {}
 
 const std::vector<GeometryLayout> MeshSystem::GetGeometryLayout() {
-    static std::vector<GeometryLayout> sGeometryLayout {
+    static std::vector<GeometryLayout> sGeometryLayout{
         {.format = vk::Format::eR32G32B32A32Sfloat, .stride = sizeof(glm::vec3)},
+        {.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)},
         {.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)},
         {.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)},
     };
@@ -21,6 +22,7 @@ ScopedRefPtr<Mesh> MeshSystem::GetOrCreate(
     const std::vector<uint32_t>& indices,
     const std::vector<uint32_t>& texCoord,
     const std::vector<uint32_t>& normals,
+    const std::vector<uint32_t>& tangents,
     ScopedRefPtr<Material> material) {
     auto it = mMeshes.find(meshId);
     if (it != mMeshes.end()) {
@@ -28,13 +30,15 @@ ScopedRefPtr<Mesh> MeshSystem::GetOrCreate(
     } else {
         VKRT_ASSERT(vertices.size() == texCoord.size());
         VKRT_ASSERT(vertices.size() == normals.size());
+        VKRT_ASSERT(vertices.size() == tangents.size());
         mMeshData.emplace(
             meshId,
             MeshData{
                 .vertices = vertices,
                 .indices = indices,
                 .texCoord = texCoord,
-                .normals = normals});
+                .normals = normals,
+                .tangents = tangents});
         ScopedRefPtr<Mesh> newMesh = new Mesh(material);
         newMesh->SetAABB(AABB(vertices));
         mMeshes.emplace(meshId, newMesh);
@@ -63,6 +67,9 @@ void MeshSystem::FlattenBuffer(
             case AttributeType::Normal: {
                 itemCount += data.normals.size();
             } break;
+            case AttributeType::Tangent: {
+                itemCount += data.tangents.size();
+            } break;
         }
     }
 
@@ -79,6 +86,9 @@ void MeshSystem::FlattenBuffer(
         } break;
         case AttributeType::Normal: {
             bufferSize *= sizeof(MeshData::normals[0]);
+        } break;
+        case AttributeType::Tangent: {
+            bufferSize *= sizeof(MeshData::tangents[0]);
         } break;
     }
 
@@ -109,6 +119,10 @@ void MeshSystem::FlattenBuffer(
                 subBufferSize = data.normals.size() * sizeof(data.normals[0]);
                 dataBuffer = reinterpret_cast<uint8_t const*>(data.normals.data());
             } break;
+            case AttributeType::Tangent: {
+                subBufferSize = data.tangents.size() * sizeof(data.tangents[0]);
+                dataBuffer = reinterpret_cast<uint8_t const*>(data.tangents.data());
+            } break;
         }
         std::copy_n(dataBuffer, subBufferSize, bufferData + globalBufferOffset);
         globalBufferOffset += subBufferSize;
@@ -121,13 +135,10 @@ void MeshSystem::FlattenBuffer(
             case AttributeType::Index: {
                 usageFlags |= vk::BufferUsageFlagBits::eIndexBuffer;
             } break;
-            case AttributeType::Position: {
-                usageFlags |= vk::BufferUsageFlagBits::eVertexBuffer;
-            } break;
-            case AttributeType::TexCoord: {
-                usageFlags |= vk::BufferUsageFlagBits::eVertexBuffer;
-            } break;
-            case AttributeType::Normal: {
+            case AttributeType::Position:
+            case AttributeType::TexCoord:
+            case AttributeType::Normal:
+            case AttributeType::Tangent: {
                 usageFlags |= vk::BufferUsageFlagBits::eVertexBuffer;
             } break;
         }
@@ -181,6 +192,7 @@ void MeshSystem::Upload() {
     FlattenBuffer(mContext, mUnifiedVertexBuffer, mMeshData, AttributeType::Position);
     FlattenBuffer(mContext, mUnifiedTexCoordBuffer, mMeshData, AttributeType::TexCoord);
     FlattenBuffer(mContext, mUnifiedNormalBuffer, mMeshData, AttributeType::Normal);
+    FlattenBuffer(mContext, mUnifiedTangentBuffer, mMeshData, AttributeType::Tangent);
 
     mMeshData.clear();
 }
@@ -189,6 +201,7 @@ void MeshSystem::BindBuffers(vk::CommandBuffer& commandBuffer) {
     commandBuffer.bindVertexBuffers(0, GetVertexBuffer()->GetBufferHandle(), {0});
     commandBuffer.bindVertexBuffers(1, GetTexCoordBuffer()->GetBufferHandle(), {0});
     commandBuffer.bindVertexBuffers(2, GetNormalBuffer()->GetBufferHandle(), {0});
+    commandBuffer.bindVertexBuffers(3, GetTangentBuffer()->GetBufferHandle(), {0});
     commandBuffer.bindIndexBuffer(GetIndexBuffer()->GetBufferHandle(), {0}, vk::IndexType::eUint32);
 }
 
