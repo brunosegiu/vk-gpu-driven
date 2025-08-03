@@ -497,13 +497,17 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
 }
 
 void Renderer::BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name) {
+#ifdef VKRT_ENABLE_VALIDATION
     commandBuffer.beginDebugUtilsLabelEXT(
         vk::DebugUtilsLabelEXT().setPLabelName(name.c_str()),
         mContext->GetDevice()->GetDispatcher());
+#endif
 }
 
 void Renderer::EndMarker(const vk::CommandBuffer& commandBuffer) {
+#ifdef VKRT_ENABLE_VALIDATION
     commandBuffer.endDebugUtilsLabelEXT(mContext->GetDevice()->GetDispatcher());
+#endif
 }
 
 std::string AlphaModeToStr(const Material::AlphaMode& alphaMode) {
