@@ -4,6 +4,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 
 #include "definitions.glsl"
+#include "shading.glsl"
 
 layout(location = 0) in vec3 inWorldSpacePos;
 layout(location = 1) in vec2 inTexCoord;
@@ -39,77 +40,6 @@ layout(binding = 1, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
 layout(binding = 2, set = UPDATE_ONCE) uniform texture2D shadowMap;
 layout(binding = 3, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
 
-const float PI = 3.14159265359;
-
-float DistributionGGX(vec3 N, vec3 H, float roughness) {
-    float a      = roughness*roughness;
-    float a2     = a*a;
-    float NdotH  = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH*NdotH;
-	
-    float num   = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom;
-	
-    return num / denom;
-}
-
-float GeometrySchlickGGX(float NdotV, float roughness) {
-    float r = (roughness + 1.0);
-    float k = (r*r) / 8.0;
-
-    float num   = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
-	
-    return num / denom;
-}
-
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx2  = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1  = GeometrySchlickGGX(NdotL, roughness);
-	
-    return ggx1 * ggx2;
-}
-
-vec3 FresnelSchlick(float cosTheta, vec3 F0)
-{
-    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-}
-
-// From Sascha Willem's examples
-float textureProj(vec4 shadowCoord, vec2 off) {
-	float shadow = 1.0;
-	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
-        float dist = texture( sampler2D(shadowMap, textureSampler), shadowCoord.st + off ).r;
-		if ( shadowCoord.w > 0.0 && dist < shadowCoord.z) {
-			shadow = 0.0f;
-		}
-	}
-	return shadow;
-}
-
-float filterPCF(vec4 sc) {
-	ivec2 texDim = textureSize(sampler2D(shadowMap, textureSampler), 0);
-	float scale = 1.5;
-	float dx = scale / float(texDim.x);
-	float dy = scale / float(texDim.y);
-
-	float shadowFactor = 0.0;
-	int count = 0;
-	int range = 2;
-	
-	for (int x = -range; x <= range; x++) {
-		for (int y = -range; y <= range; y++) {
-			shadowFactor += textureProj(sc, vec2(dx*x, dy*y));
-			count++;
-		}
-	
-	}
-	return shadowFactor / count;
-}
-
 void main() {
     DrawData perDrawData = SceneData.perDrawData[inDrawID];
 
@@ -121,7 +51,6 @@ void main() {
             texture(sampler2D(sceneTextures[material.albedoTextureIndex], textureSampler), inTexCoord)
                 .rgba;
         albedo =  albedoAlpha.rgb;
-        //TODO: Alpha test in separate pass
         if (albedoAlpha.a - 0.5f < 0.0f) {
             discard;
         }
@@ -146,7 +75,7 @@ void main() {
 
     float shadowTerm = 0.0f;
     {
-		shadowTerm = filterPCF(inShadowCoord / inShadowCoord.w);
+		shadowTerm = filterPCF(inShadowCoord / inShadowCoord.w, textureSampler, shadowMap);
 	    shadowTerm = clamp(shadowTerm, 0.0f, 1.0f);
     }
 

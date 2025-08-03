@@ -47,7 +47,6 @@ private:
     uint32_t mCount;
     vk::ShaderStageFlags mStageFlags;
     bool mHasVariableCount;
-    uint32_t mBinding;
 };
 
 class ShaderParameterBuffer : public ShaderParameter {

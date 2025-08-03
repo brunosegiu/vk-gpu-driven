@@ -41,8 +41,8 @@ const mat4 ShadowBiasMat = mat4(
 );
 
 void main() {
-    uint actualDrawIndex = drawData[gl_DrawID];
-    DrawData perDrawData = SceneData.perDrawData[actualDrawIndex];
+    uint globalDrawIndex = drawData[gl_DrawID];
+    DrawData perDrawData = SceneData.perDrawData[globalDrawIndex];
 
     gl_Position = CameraParameters.viewProjection * perDrawData.modelMatrix * vec4(inPosition, 1.0);
 
@@ -55,5 +55,5 @@ void main() {
 
     outShadowCoord =  (ShadowBiasMat * LightParameters.viewProjection * perDrawData.modelMatrix) * vec4(inPosition, 1.0f);
 
-    outDrawID = actualDrawIndex;
+    outDrawID = globalDrawIndex;
 }

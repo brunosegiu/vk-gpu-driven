@@ -36,7 +36,7 @@ ResultValue<ScopedRefPtr<Instance>> Instance::Create(ScopedRefPtr<Window> window
                                             .setEngineVersion(VK_MAKE_VERSION(0, 0, 1))
                                             .setApiVersion(sVulkanVersion);
 
-    std::vector<const char*> layersToEnable {
+    std::vector<const char*> layersToEnable{
 #if defined(VKRT_ENABLE_VALIDATION)
         "VK_LAYER_KHRONOS_validation"
 #endif

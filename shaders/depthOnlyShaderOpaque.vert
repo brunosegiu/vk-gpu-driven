@@ -22,16 +22,8 @@ layout(location = 0) in vec3 inPosition;
 layout(location = 1) in uint inPackedTexCoord;
 layout(location = 2) in uint inPackedNormal;
 
-layout(location = 0) out vec2 outTexCoord;
-layout(location = 1) out flat uint outDrawID;
-
 void main() {
-    uint actualDrawIndex = drawData[gl_DrawID];
-    DrawData perDrawData = SceneData.perDrawData[actualDrawIndex];
-
+    uint globalDrawIndex = drawData[gl_DrawID];
+    DrawData perDrawData = SceneData.perDrawData[globalDrawIndex];
     gl_Position = viewProjection * perDrawData.modelMatrix * vec4(inPosition, 1.0);
-
-    outTexCoord = unpackHalf2x16(inPackedTexCoord);
-
-    outDrawID = actualDrawIndex;
 }

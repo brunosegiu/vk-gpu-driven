@@ -85,14 +85,19 @@ set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
 
 set(SHADER_HEADERS 
     definitions.glsl
+    shading.glsl
 )
 
 set(SHADERS
-    uberShader.vert
-    uberShader.frag
+    uberShaderOpaque.vert
+    uberShaderOpaque.frag
+    uberShaderAlphaMasked.vert
+    uberShaderAlphaMasked.frag
     culling.comp
-    depthOnlyShader.vert
-    depthOnlyShader.frag
+    depthOnlyShaderOpaque.vert
+    depthOnlyShaderOpaque.frag
+    depthOnlyShaderAlphaMasked.vert
+    depthOnlyShaderAlphaMasked.frag
     compactDrawCalls.comp
 )
 

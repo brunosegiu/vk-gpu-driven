@@ -9,10 +9,10 @@ namespace VKRT {
 DirectionalLight::DirectionalLight()
     : mRadiance(10.0f),
       mDirection(0.0f, -1.0f, 0.0f),
-      mFrustumWidth(60.0f),
+      mFrustumWidth(80.0f),
       mDistance(500.0f),
       mNear(1.0f),
-      mFar(1500.0f) {}
+      mFar(1000.0f) {}
 
 glm::mat4 DirectionalLight::ComputeShadowMatrix() {
     glm::vec3 shadowPos = -mDirection * mDistance;

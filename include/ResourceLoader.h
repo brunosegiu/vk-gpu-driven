@@ -12,12 +12,16 @@ struct Resource {
     size_t size;
 
     enum class Id {
-        VertexShader,
-        FragmentShader,
         CullingShader,
-        DepthOnlyVertexShader,
-        DepthOnlyFragmentShader,
-        CompactionShader
+        CompactionShader,
+        UberShaderOpaqueVertexShader,
+        UberShaderOpaqueFragmentShader,
+        UberShaderAlphaMaskedVertexShader,
+        UberShaderAlphaMaskedFragmentShader,
+        DepthOnlyOpaqueVertexShader,
+        DepthOnlyOpaqueFragmentShader,
+        DepthOnlyAlphaMaskedVertexShader,
+        DepthOnlyAlphaMaskedFragmentShader,
     };
 };
 

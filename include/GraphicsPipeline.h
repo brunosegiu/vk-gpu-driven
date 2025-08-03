@@ -22,6 +22,7 @@ struct GraphicsPipelineOptionals {
     bool enableDepthBias = false;
     float depthBias = 0.0f;
     float depthSlope = 1.0f;
+    bool enableBlending = false;
 };
 
 class GraphicsPipeline : public Pipeline {

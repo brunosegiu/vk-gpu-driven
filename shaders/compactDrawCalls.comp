@@ -6,6 +6,7 @@
 
 layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCullingData {
     vec4 frustumPlanes[6];
+    uint globalDrawOffset;
     uint maxDrawCount;
 };
 
@@ -28,13 +29,14 @@ layout(binding = 4, set = UPDATE_PER_FRAME, std430) buffer DrawCallCount {
 layout(local_size_x = 64) in;
 
 void main() {
-    uint drawID = gl_GlobalInvocationID.x;
-    if (drawID < maxDrawCount) {
-        VkDrawIndexedIndirectCommand drawCommand = inDrawCommands[drawID];
+    uint localDrawID = gl_GlobalInvocationID.x;
+    if (localDrawID < maxDrawCount) {
+        VkDrawIndexedIndirectCommand drawCommand = inDrawCommands[localDrawID];
         if (drawCommand.instanceCount > 0) {
             uint compactedIndex = atomicAdd(outIndirectDrawCount, 1);
             outDrawCommands[compactedIndex] = drawCommand;
-            outDrawData[compactedIndex] = drawID;
+            uint globalDrawID = globalDrawOffset + localDrawID;
+            outDrawData[compactedIndex] = globalDrawID;
         }
     }
 }

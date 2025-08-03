@@ -107,10 +107,16 @@ GraphicsPipeline::GraphicsPipeline(
     // Color blending state
     const vk::PipelineColorBlendAttachmentState baseAttachmentCreateInfo =
         vk::PipelineColorBlendAttachmentState()
+            .setBlendEnable(optionals.enableBlending)
+            .setSrcColorBlendFactor(vk::BlendFactor::eSrcAlpha)
+            .setDstColorBlendFactor(vk::BlendFactor::eOneMinusSrcAlpha)
+            .setColorBlendOp(vk::BlendOp::eAdd)
+            .setSrcAlphaBlendFactor(vk::BlendFactor::eOne)
+            .setDstAlphaBlendFactor(vk::BlendFactor::eZero)
+            .setAlphaBlendOp(vk::BlendOp::eAdd)
             .setColorWriteMask(
                 vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA)
-            .setBlendEnable(false);
+                vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
 
     std::vector<vk::PipelineColorBlendAttachmentState> blendAttachments(
         1,

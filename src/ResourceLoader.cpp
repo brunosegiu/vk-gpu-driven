@@ -25,23 +25,35 @@ namespace VKRT {
 Resource ResourceLoader::Load(const Resource::Id& resourceId) {
     uint32_t actualId = 0;
     switch (resourceId) {
-        case Resource::Id::VertexShader:
-            actualId = VKRT_RESOURCE_VERTEX_SHADER;
-            break;
-        case Resource::Id::FragmentShader:
-            actualId = VKRT_RESOURCE_FRAGMENT_SHADER;
-            break;
         case Resource::Id::CullingShader:
             actualId = VKRT_RESOURCE_CULLING_SHADER;
             break;
-        case Resource::Id::DepthOnlyVertexShader:
-            actualId = VKRT_RESOURCE_DEPTH_ONLY_VERTEX_SHADER;
-            break;
-        case Resource::Id::DepthOnlyFragmentShader:
-            actualId = VKRT_RESOURCE_DEPTH_ONLY_FRAGMENT_SHADER;
-            break;
         case Resource::Id::CompactionShader:
             actualId = VKRT_RESOURCE_COMPACTION_SHADER;
+            break;
+        case Resource::Id::UberShaderOpaqueVertexShader:
+            actualId = VKRT_RESOURCE_UBER_SHADER_OPAQUE_VERTEX;
+            break;
+        case Resource::Id::UberShaderOpaqueFragmentShader:
+            actualId = VKRT_RESOURCE_UBER_SHADER_OPAQUE_FRAGMENT;
+            break;
+        case Resource::Id::UberShaderAlphaMaskedVertexShader:
+            actualId = VKRT_RESOURCE_UBER_SHADER_ALPHA_MASKED_VERTEX;
+            break;
+        case Resource::Id::UberShaderAlphaMaskedFragmentShader:
+            actualId = VKRT_RESOURCE_UBER_SHADER_ALPHA_MASKED_FRAGMENT;
+            break;
+        case Resource::Id::DepthOnlyOpaqueVertexShader:
+            actualId = VKRT_RESOURCE_DEPTH_ONLY_OPAQUE_VERTEX_SHADER;
+            break;
+        case Resource::Id::DepthOnlyOpaqueFragmentShader:
+            actualId = VKRT_RESOURCE_DEPTH_ONLY_OPAQUE_FRAGMENT_SHADER;
+            break;
+        case Resource::Id::DepthOnlyAlphaMaskedVertexShader:
+            actualId = VKRT_RESOURCE_DEPTH_ONLY_ALPHA_MASKED_VERTEX_SHADER;
+            break;
+        case Resource::Id::DepthOnlyAlphaMaskedFragmentShader:
+            actualId = VKRT_RESOURCE_DEPTH_ONLY_ALPHA_MASKED_FRAGMENT_SHADER;
             break;
         default:
             return {nullptr, 0};

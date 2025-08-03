@@ -23,6 +23,7 @@ struct DrawData {
 	mat4 modelMatrix;
     uint materialId;
     mat3 normalTransform;
+	uint alphaMode;
 	AABB aabb;
 };
 

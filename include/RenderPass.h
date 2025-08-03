@@ -8,12 +8,18 @@
 namespace VKRT {
 class RenderPass : public RefCountPtr {
 public:
+    struct RenderTargetBinding {
+        ScopedRefPtr<RenderTarget> renderTarget = nullptr;
+        vk::AttachmentLoadOp loadOp = vk::AttachmentLoadOp::eClear;
+        vk::ImageLayout initialLayout = vk::ImageLayout::eUndefined;
+        vk::AttachmentStoreOp storeOp = vk::AttachmentStoreOp::eStore;
+        vk::ImageLayout finalLayout = vk::ImageLayout::eUndefined;
+    };
     RenderPass(
         ScopedRefPtr<Context> context,
-        const std::vector<ScopedRefPtr<RenderTarget>>& renderTargets);
+        const std::vector<RenderTargetBinding>& renderTargetBindings);
 
-    RenderPass(
-        ScopedRefPtr<Context> context, const ScopedRefPtr<RenderTarget>& renderTarget);
+    RenderPass(ScopedRefPtr<Context> context, const RenderTargetBinding& renderTarget);
 
     const vk::RenderPass& GetRenderPassHandle() const { return mRenderPassHandle; };
     const vk::Framebuffer& GetFramebufferHandle(uint32_t index = 0) const {

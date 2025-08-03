@@ -163,6 +163,15 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
                     image.image.size());
             }
 
+            Material::AlphaMode alphaMode = Material::AlphaMode::Opaque;
+            if (gltfMaterial.alphaMode == "OPAQUE") {
+                alphaMode = Material::AlphaMode::Opaque;
+            } else if (gltfMaterial.alphaMode == "MASK") {
+                alphaMode = Material::AlphaMode::Masked;
+            } else if (gltfMaterial.alphaMode == "BLEND") {
+                alphaMode = Material::AlphaMode::Blended;
+            }
+
             /* const int32_t normalMapIndex = gltfMaterial.normalTexture.index;
             ScopedRefPtr<Texture> normalTexture = nullptr;
             if (normalMapIndex >= 0) {
@@ -178,6 +187,7 @@ std::vector<ScopedRefPtr<Mesh>> LoadMeshes(
             }*/
 
             material = new Material(
+                alphaMode,
                 albedo,
                 roughness,
                 metallic,

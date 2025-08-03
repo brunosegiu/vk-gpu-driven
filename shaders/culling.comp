@@ -6,6 +6,7 @@
 
 layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCullingData {
     vec4 frustumPlanes[6];
+    uint globalDrawOffset;
     uint maxDrawCount;
 };
 
@@ -52,9 +53,10 @@ bool Test(const vec3 min, const vec3 max, const mat4 objectTransform) {
 }
 
 void main() {
-    uint drawID = gl_GlobalInvocationID.x;
-    if (drawID < maxDrawCount) {
-        DrawData perDrawData = SceneData.perDrawData[drawID];
+    uint localDrawID = gl_GlobalInvocationID.x;
+    if (localDrawID < maxDrawCount) {
+        uint globalDrawID = globalDrawOffset + localDrawID;
+        DrawData perDrawData = SceneData.perDrawData[globalDrawID];
 
         bool isVisible = Test(perDrawData.aabb.minBounds, perDrawData.aabb.maxBounds, perDrawData.modelMatrix);
 
@@ -65,7 +67,7 @@ void main() {
         command.vertexOffset = perDrawData.vertexOffset;
         command.firstInstance = 0;
 
-        outIndirectCommands[drawID] = command;
+        outIndirectCommands[localDrawID] = command;
     }
 
 }

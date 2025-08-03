@@ -23,7 +23,7 @@ public:
     const glm::vec3& GetDirection() const { return mDirection; }
 
     void SetRadiance(glm::vec3 radiance) { mRadiance = radiance; }
-    void SetDireciton(const glm::vec3& direction) { mDirection = direction; }
+    void SetDirection(const glm::vec3& direction) { mDirection = direction; }
 
     ~DirectionalLight();
 

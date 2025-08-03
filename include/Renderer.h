@@ -52,20 +52,24 @@ private:
         std::vector<ScopedRefPtr<VulkanBuffer>> drawCallCountBuffer;
         ScopedRefPtr<ComputePipeline> compactionPipeline;
     };
-    CullingPipelineResources mShadowPassCulling;
-    CullingPipelineResources mBasePassCulling;
+    std::unordered_map<Material::AlphaMode, CullingPipelineResources> mShadowPassCulling;
+    std::unordered_map<Material::AlphaMode, CullingPipelineResources> mBasePassCulling;
+
+    struct MaterialDomainPipeline {
+        ScopedRefPtr<ShaderParameterCollection> parameters;
+        ScopedRefPtr<GraphicsPipeline> pipeline;
+    };
 
     // Shadow pass resources
     ScopedRefPtr<RenderPass> mDepthOnlyPass;
     ScopedRefPtr<RenderTarget> mDepthOnlyPassRenderTarget;
     ScopedRefPtr<Texture> mShadowMap;
-    ScopedRefPtr<ShaderParameterCollection> mDepthOnlyParameters;
-    ScopedRefPtr<GraphicsPipeline> mDepthOnlyPipeline;
+    std::unordered_map<Material::AlphaMode, MaterialDomainPipeline> mShadowPassPipeline;
+
     ScopedRefPtr<ShaderParameterBuffer> mShadowCameraUniform;
 
     // Base pass resources
-    ScopedRefPtr<ShaderParameterCollection> mBasePassParameters;
-    ScopedRefPtr<GraphicsPipeline> mBasePassPipeline;
+    std::unordered_map<Material::AlphaMode, MaterialDomainPipeline> mBasePassPipeline;
     ScopedRefPtr<VulkanBuffer> mMaterialsBuffer;
     std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffers;
     ScopedRefPtr<ShaderParameterBuffer> mCameraUniform;
@@ -78,6 +82,11 @@ private:
     ScopedRefPtr<Texture> mDepthBuffer;
     ScopedRefPtr<RenderTarget> mDepthRenderTarget;
     ScopedRefPtr<RenderPass> mBasePass;
-};
 
+    // Tranparency resources
+    ScopedRefPtr<RenderPass> mTransparentPass;
+
+    void BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name);
+    void EndMarker(const vk::CommandBuffer& commandBuffer);
+};
 }  // namespace VKRT

@@ -11,58 +11,59 @@ namespace VKRT {
 
 RenderPass::RenderPass(
     ScopedRefPtr<Context> context,
-    const std::vector<ScopedRefPtr<RenderTarget>>& renderTargets)
+    const std::vector<RenderTargetBinding>& renderTargetBindings)
     : mContext(context), mColorAttachmentCount(0) {
-    VKRT_ASSERT(!renderTargets.empty());
+    VKRT_ASSERT(!renderTargetBindings.empty());
 
-    for (const ScopedRefPtr<RenderTarget>& renderTarget : renderTargets) {
-        if (renderTarget->GetImageAspect() & vk::ImageAspectFlagBits::eColor) {
+    for (const RenderTargetBinding& renderTargetBinding : renderTargetBindings) {
+        if (renderTargetBinding.renderTarget->GetImageAspect() & vk::ImageAspectFlagBits::eColor) {
             ++mColorAttachmentCount;
         }
     }
 
     std::vector<vk::AttachmentDescription> attachments;
     std::vector<vk::AttachmentReference> colorReferences;
-    attachments.reserve(renderTargets.size());
-    colorReferences.reserve(renderTargets.size());
+    attachments.reserve(renderTargetBindings.size());
+    colorReferences.reserve(renderTargetBindings.size());
     for (uint32_t index = 0; index < mColorAttachmentCount; ++index) {
-        const ScopedRefPtr<RenderTarget> renderTarget = renderTargets[index];
+        const RenderTargetBinding& renderTargetBinding = renderTargetBindings[index];
+        const ScopedRefPtr<RenderTarget>& renderTarget = renderTargetBinding.renderTarget;
         attachments.emplace_back(vk::AttachmentDescription()
                                      .setFormat(renderTarget->GetFormat())
                                      .setSamples(vk::SampleCountFlagBits::e1)
-                                     .setLoadOp(vk::AttachmentLoadOp::eClear)
-                                     .setStoreOp(vk::AttachmentStoreOp::eStore)
+                                     .setLoadOp(renderTargetBinding.loadOp)
+                                     .setStoreOp(renderTargetBinding.storeOp)
                                      .setStencilLoadOp(vk::AttachmentLoadOp::eDontCare)
                                      .setStencilStoreOp(vk::AttachmentStoreOp::eDontCare)
-                                     .setInitialLayout(vk::ImageLayout::eUndefined)
-                                     .setFinalLayout(vk::ImageLayout::ePresentSrcKHR));
+                                     .setInitialLayout(renderTargetBinding.initialLayout)
+                                     .setFinalLayout(renderTargetBinding.finalLayout));
         colorReferences.emplace_back(vk::AttachmentReference()
                                          .setLayout(vk::ImageLayout::eColorAttachmentOptimal)
                                          .setAttachment(index));
     }
 
     const auto depthRenderTargetIt = std::find_if(
-        renderTargets.begin(),
-        renderTargets.end(),
-        [](const ScopedRefPtr<RenderTarget>& renderTarget) -> bool {
-            return (renderTarget->GetImageAspect() & vk::ImageAspectFlagBits::eDepth) !=
-                   vk::ImageAspectFlagBits::eNoneKHR;
+        renderTargetBindings.begin(),
+        renderTargetBindings.end(),
+        [](const RenderTargetBinding& renderTargetBinding) -> bool {
+            return (renderTargetBinding.renderTarget->GetImageAspect() &
+                    vk::ImageAspectFlagBits::eDepth) != vk::ImageAspectFlagBits::eNoneKHR;
         });
 
-    mHasDepthTesting = depthRenderTargetIt != renderTargets.end();
+    mHasDepthTesting = depthRenderTargetIt != renderTargetBindings.end();
 
     if (mHasDepthTesting) {
-        const ScopedRefPtr<RenderTarget> depthRenderTarget = *depthRenderTargetIt;
+        const RenderTargetBinding depthRenderTargetBinding = *depthRenderTargetIt;
         const vk::AttachmentDescription depthAttachmentDescription =
             vk::AttachmentDescription()
-                .setFormat(depthRenderTarget->GetFormat())
+                .setFormat(depthRenderTargetBinding.renderTarget->GetFormat())
                 .setSamples(vk::SampleCountFlagBits::e1)
-                .setLoadOp(vk::AttachmentLoadOp::eClear)
-                .setStoreOp(vk::AttachmentStoreOp::eStore)
+                .setLoadOp(depthRenderTargetBinding.loadOp)
+                .setStoreOp(depthRenderTargetBinding.storeOp)
                 .setStencilLoadOp(vk::AttachmentLoadOp::eDontCare)
                 .setStencilStoreOp(vk::AttachmentStoreOp::eDontCare)
-                .setInitialLayout(vk::ImageLayout::eUndefined)
-                .setFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
+                .setInitialLayout(depthRenderTargetBinding.initialLayout)
+                .setFinalLayout(depthRenderTargetBinding.finalLayout);
         attachments.emplace_back(depthAttachmentDescription);
     }
 
@@ -83,11 +84,13 @@ RenderPass::RenderPass(
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
     mRenderPassHandle = VKRT_ASSERT_VK(logicalDevice.createRenderPass(renderPassCreateInfo));
 
-    const uint32_t framebufferCount = renderTargets.front()->GetImageViews().size();
+    const uint32_t framebufferCount =
+        renderTargetBindings.front().renderTarget->GetImageViews().size();
     for (uint32_t framebufferIndex = 0; framebufferIndex < framebufferCount; ++framebufferIndex) {
         std::vector<vk::ImageView> framebufferAttachments;
-        for (const ScopedRefPtr<RenderTarget>& renderTarget : renderTargets) {
-            const std::vector<vk::ImageView> imageViews = renderTarget->GetImageViews();
+        for (const RenderTargetBinding& renderTargetBinding : renderTargetBindings) {
+            const std::vector<vk::ImageView> imageViews =
+                renderTargetBinding.renderTarget->GetImageViews();
             const vk::ImageView imageView = framebufferIndex >= imageViews.size()
                                                 ? imageViews.front()
                                                 : imageViews[framebufferIndex];
@@ -97,8 +100,8 @@ RenderPass::RenderPass(
             vk::FramebufferCreateInfo()
                 .setRenderPass(mRenderPassHandle)
                 .setAttachments(framebufferAttachments)
-                .setWidth(renderTargets.front()->GetWidth())
-                .setHeight(renderTargets.front()->GetHeight())
+                .setWidth(renderTargetBindings.front().renderTarget->GetWidth())
+                .setHeight(renderTargetBindings.front().renderTarget->GetHeight())
                 .setLayers(1);
 
         const vk::Framebuffer framebuffer =
@@ -110,8 +113,8 @@ RenderPass::RenderPass(
 
 RenderPass::RenderPass(
     ScopedRefPtr<Context> context,
-    const ScopedRefPtr<RenderTarget>& renderTarget)
-    : RenderPass(context, std::vector<ScopedRefPtr<RenderTarget>>{renderTarget}) {}
+    const RenderTargetBinding& renderTargetBinding)
+    : RenderPass(context, std::vector<RenderTargetBinding>{renderTargetBinding}) {}
 
 RenderPass::~RenderPass() {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
