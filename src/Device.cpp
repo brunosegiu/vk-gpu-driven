@@ -49,7 +49,8 @@ Device::Device(
     vk::PhysicalDeviceFeatures enabledFeatures = vk::PhysicalDeviceFeatures()
                                                      .setShaderInt64(true)
                                                      .setSamplerAnisotropy(true)
-                                                     .setMultiDrawIndirect(true);
+                                                     .setMultiDrawIndirect(true)
+                                                     .setGeometryShader(true);
 
     vk::PhysicalDeviceVulkan11Features enabledFeatures11 =
         vk::PhysicalDeviceVulkan11Features().setShaderDrawParameters(true);
@@ -61,7 +62,8 @@ Device::Device(
             .setDescriptorIndexing(true)
             .setRuntimeDescriptorArray(true)
             .setDescriptorBindingVariableDescriptorCount(true)
-            .setDrawIndirectCount(true);
+            .setDrawIndirectCount(true)
+            .setShaderSampledImageArrayNonUniformIndexing(true);
     enabledFeatures11.setPNext(&enabledFeatures12);
 
     const vk::DeviceCreateInfo deviceCreateInfo =

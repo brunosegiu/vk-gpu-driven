@@ -40,17 +40,17 @@ Texture::Texture(
         VmaAllocator allocator = context->GetDevice()->GetAllocator();
 
         VmaAllocationCreateInfo allocationInfo{};
-        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocationInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
         allocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         VmaAllocationInfo allocInfo{};
 
-        vmaCreateImage(
+        VKRT_ASSERT_VK(vmaCreateImage(
             allocator,
             (VkImageCreateInfo*)&imageCreateInfo,
             &allocationInfo,
             (VkImage*)&mImage,
             &mAllocation,
-            &allocInfo);
+            &allocInfo));
     }
 
     mImageAspect = bool(usageFlags & vk::ImageUsageFlagBits::eDepthStencilAttachment)

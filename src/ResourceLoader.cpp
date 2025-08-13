@@ -31,17 +31,23 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
         case Resource::Id::CompactionShader:
             actualId = VKRT_RESOURCE_COMPACTION_SHADER;
             break;
-        case Resource::Id::UberShaderOpaqueVertexShader:
-            actualId = VKRT_RESOURCE_UBER_SHADER_OPAQUE_VERTEX;
+        case Resource::Id::GeometryPassOpaqueVertexShader:
+            actualId = VKRT_RESOURCE_GEOMETRY_PASS_OPAQUE_VERTEX;
             break;
-        case Resource::Id::UberShaderOpaqueFragmentShader:
-            actualId = VKRT_RESOURCE_UBER_SHADER_OPAQUE_FRAGMENT;
+        case Resource::Id::GeometryPassOpaqueFragmentShader:
+            actualId = VKRT_RESOURCE_GEOMETRY_PASS_OPAQUE_FRAGMENT;
             break;
-        case Resource::Id::UberShaderAlphaMaskedVertexShader:
-            actualId = VKRT_RESOURCE_UBER_SHADER_ALPHA_MASKED_VERTEX;
+        case Resource::Id::GeometryPassAlphaMaskedVertexShader:
+            actualId = VKRT_RESOURCE_GEOMETRY_PASS_ALPHA_MASKED_VERTEX;
             break;
-        case Resource::Id::UberShaderAlphaMaskedFragmentShader:
-            actualId = VKRT_RESOURCE_UBER_SHADER_ALPHA_MASKED_FRAGMENT;
+        case Resource::Id::GeometryPassAlphaMaskedFragmentShader:
+            actualId = VKRT_RESOURCE_GEOMETRY_PASS_ALPHA_MASKED_FRAGMENT;
+            break;
+        case Resource::Id::TransparentPassVertexShader:
+            actualId = VKRT_RESOURCE_TRANSPARENT_VERTEX;
+            break;
+        case Resource::Id::TransparentPassFragmentShader:
+            actualId = VKRT_RESOURCE_TRANSPARENT_FRAGMENT;
             break;
         case Resource::Id::DepthOnlyOpaqueVertexShader:
             actualId = VKRT_RESOURCE_DEPTH_ONLY_OPAQUE_VERTEX_SHADER;
@@ -54,6 +60,12 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
             break;
         case Resource::Id::DepthOnlyAlphaMaskedFragmentShader:
             actualId = VKRT_RESOURCE_DEPTH_ONLY_ALPHA_MASKED_FRAGMENT_SHADER;
+            break;
+        case Resource::Id::VisibilityBufferShadeVertexShader:
+            actualId = VKRT_RESOURCE_VISIBILITY_BUFFER_SHADE_VERTEX_SHADER;
+            break;
+        case Resource::Id::VisibilityBufferShadeFragmentShader:
+            actualId = VKRT_RESOURCE_VISIBILITY_BUFFER_SHADE_FRAGMENT_SHADER;
             break;
         default:
             return {nullptr, 0};

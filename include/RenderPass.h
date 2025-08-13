@@ -25,8 +25,8 @@ public:
     const vk::Framebuffer& GetFramebufferHandle(uint32_t index = 0) const {
         return mFramebufferHandles[index];
     };
-
     const bool& GetHasDepthTesting() const { return mHasDepthTesting; }
+    const uint32_t& GetColorAttachmentCount() const { return mColorAttachmentCount; }
 
     ~RenderPass();
 

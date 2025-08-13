@@ -68,20 +68,36 @@ private:
 
     ScopedRefPtr<ShaderParameterBuffer> mShadowCameraUniform;
 
+    // Geometry pass resources
+    ScopedRefPtr<Texture> mVisibilityBuffer;
+    ScopedRefPtr<RenderTarget> mVisibilityBufferRT;
+
     // Base pass resources
-    std::unordered_map<Material::AlphaMode, MaterialDomainPipeline> mBasePassPipeline;
+    std::unordered_map<Material::AlphaMode, MaterialDomainPipeline> mGeometryPassPipeline;
     ScopedRefPtr<VulkanBuffer> mMaterialsBuffer;
     std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffers;
     ScopedRefPtr<ShaderParameterBuffer> mCameraUniform;
     ScopedRefPtr<ShaderParameterBuffer> mMaterialsUniform;
     ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
+    ScopedRefPtr<ShaderParameterSampler> mFrameBufferSampler;
     ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
     ScopedRefPtr<ShaderParameterImage> mShadowMapUniform;
     ScopedRefPtr<ShaderParameterBuffer> mPerDrawParameters;
-    ScopedRefPtr<RenderTarget> mRenderTarget;
+    ScopedRefPtr<RenderTarget> mMainRenderTarget;
     ScopedRefPtr<Texture> mDepthBuffer;
     ScopedRefPtr<RenderTarget> mDepthRenderTarget;
-    ScopedRefPtr<RenderPass> mBasePass;
+    ScopedRefPtr<RenderPass> mGeometryPass;
+
+    // Shading pass resources
+    ScopedRefPtr<RenderPass> mShadePass;
+    ScopedRefPtr<ShaderParameterCollection> mShadePassParameters;
+    ScopedRefPtr<ShaderParameterImage> mVisibilityBufferUniform;
+    ScopedRefPtr<ShaderParameterBuffer> mIndexBufferUniform;
+    ScopedRefPtr<ShaderParameterBuffer> mPositionBufferUniform;
+    ScopedRefPtr<ShaderParameterBuffer> mTexCoordBufferUniform;
+    ScopedRefPtr<ShaderParameterBuffer> mNormalBufferUniform;
+    ScopedRefPtr<ShaderParameterBuffer> mTangentBufferUniform;
+    ScopedRefPtr<GraphicsPipeline> mShadePassPipeline;
 
     // Tranparency resources
     ScopedRefPtr<RenderPass> mTransparentPass;

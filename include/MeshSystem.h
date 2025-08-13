@@ -11,11 +11,20 @@
 namespace VKRT {
 class Device;
 
+enum VertexAttributeFlag : uint32_t {
+    Index = 0,
+    Position = 0x1,
+    TexCoord = 0x2,
+    Normal = 0x4,
+    Tangent = 0x8,
+    All = Position | TexCoord | Normal | Tangent
+};
+
 class MeshSystem : public RefCountPtr {
 public:
     MeshSystem(ScopedRefPtr<Context> context);
 
-    static const std::vector<GeometryLayout> GetGeometryLayout();
+    static const std::vector<GeometryLayout> GetGeometryLayout(VertexAttributeFlag attributeFlags);
 
     ScopedRefPtr<Mesh> GetOrCreate(
         uint32_t meshId,
@@ -34,7 +43,7 @@ public:
 
     void Upload();
 
-    void BindBuffers(vk::CommandBuffer& commandBuffer);
+    void BindBuffers(vk::CommandBuffer& commandBuffer, VertexAttributeFlag attributeFlags);
 
 private:
     ScopedRefPtr<Context> mContext;
@@ -54,12 +63,11 @@ private:
         std::vector<uint32_t> tangents;
     };
     std::unordered_map<uint32_t, MeshData> mMeshData;
-    enum class AttributeType { Index, Position, TexCoord, Normal, Tangent };
     static void FlattenBuffer(
         ScopedRefPtr<Context> context,
         ScopedRefPtr<VulkanBuffer>& target,
         const std::unordered_map<uint32_t, MeshData>& meshData,
-        AttributeType type);
+        VertexAttributeFlag type);
 };
 
 }  // namespace VKRT

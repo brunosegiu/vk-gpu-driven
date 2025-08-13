@@ -9,7 +9,7 @@ namespace VKRT {
 
 struct CameraData {
     glm::mat4 viewProjection;
-    glm::vec4 cameraForwardDir;
+    glm::vec4 cameraPos;
 };
 
 struct LightData {
@@ -43,23 +43,20 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
     mDepthRenderTarget = new RenderTarget(mContext, mDepthBuffer);
 
     mCommandRing = new CommandRing(mContext);
-    mRenderTarget = new RenderTarget(mContext, mContext->GetSwapchain()->GetRenderTargets());
-    mBasePass = new RenderPass(
+    mMainRenderTarget = new RenderTarget(mContext, mContext->GetSwapchain()->GetRenderTargets());
+
+    mShadePass = new RenderPass(
         context,
-        {{.renderTarget = mRenderTarget,
+        {{.renderTarget = mMainRenderTarget,
           .loadOp = vk::AttachmentLoadOp::eClear,
           .initialLayout = vk::ImageLayout::eUndefined,
           .storeOp = vk::AttachmentStoreOp::eStore,
-          .finalLayout = vk::ImageLayout::eColorAttachmentOptimal},
-         {.renderTarget = mDepthRenderTarget,
-          .loadOp = vk::AttachmentLoadOp::eClear,
-          .initialLayout = vk::ImageLayout::eUndefined,
-          .storeOp = vk::AttachmentStoreOp::eStore,
-          .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal}});
+          .finalLayout = vk::ImageLayout::eColorAttachmentOptimal}});
+
     mTransparentPass = new RenderPass(
         context,
         {
-            {.renderTarget = mRenderTarget,
+            {.renderTarget = mMainRenderTarget,
              .loadOp = vk::AttachmentLoadOp::eLoad,
              .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
              .storeOp = vk::AttachmentStoreOp::eStore,
@@ -87,6 +84,30 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
              .initialLayout = vk::ImageLayout::eUndefined,
              .storeOp = vk::AttachmentStoreOp::eStore,
              .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal});
+    }
+
+    {
+        mVisibilityBuffer = new Texture(
+            mContext,
+            imageSize.width,
+            imageSize.height,
+            vk::Format::eR32Uint,
+            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+            vk::ImageLayout::eShaderReadOnlyOptimal);
+        mVisibilityBufferRT = new RenderTarget(mContext, mVisibilityBuffer);
+
+        mGeometryPass = new RenderPass(
+            context,
+            {{.renderTarget = mVisibilityBufferRT,
+              .loadOp = vk::AttachmentLoadOp::eClear,
+              .initialLayout = vk::ImageLayout::eUndefined,
+              .storeOp = vk::AttachmentStoreOp::eStore,
+              .finalLayout = vk::ImageLayout::eColorAttachmentOptimal},
+             {.renderTarget = mDepthRenderTarget,
+              .loadOp = vk::AttachmentLoadOp::eClear,
+              .initialLayout = vk::ImageLayout::eUndefined,
+              .storeOp = vk::AttachmentStoreOp::eStore,
+              .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal}});
     }
 
     // Global resources
@@ -187,7 +208,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
 
         const float anisotropy =
             mContext->GetDevice()->GetDeviceProperties().limits.maxSamplerAnisotropy;
-        vk::SamplerCreateInfo samplerCreateInfo =
+        vk::SamplerCreateInfo materialSamplerCreateInfo =
             vk::SamplerCreateInfo()
                 .setMagFilter(vk::Filter::eLinear)
                 .setMinFilter(vk::Filter::eLinear)
@@ -205,7 +226,26 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mMaterialSampler = new ShaderParameterSampler(
             mContext,
             vk::ShaderStageFlagBits::eFragment,
-            samplerCreateInfo);
+            materialSamplerCreateInfo);
+
+        vk::SamplerCreateInfo frameBufferSamplerCreateInfo =
+            vk::SamplerCreateInfo()
+                .setMagFilter(vk::Filter::eNearest)
+                .setMinFilter(vk::Filter::eNearest)
+                .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+                .setAddressModeU(vk::SamplerAddressMode::eRepeat)
+                .setAddressModeV(vk::SamplerAddressMode::eRepeat)
+                .setAddressModeW(vk::SamplerAddressMode::eRepeat)
+                .setMipLodBias(0.0f)
+                .setCompareOp(vk::CompareOp::eNever)
+                .setMinLod(0.0f)
+                .setMaxLod(0.0f)
+                .setAnisotropyEnable(false);
+
+        mFrameBufferSampler = new ShaderParameterSampler(
+            mContext,
+            vk::ShaderStageFlagBits::eFragment,
+            frameBufferSamplerCreateInfo);
 
         mMaterialsUniform = new ShaderParameterBuffer(
             mContext,
@@ -254,7 +294,13 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
                 parameters->AddParameter(mMaterialsUniform);
                 parameters->AddParameter(mMaterialsTextures);
 
-                const std::vector<GeometryLayout> geometryLayout = MeshSystem::GetGeometryLayout();
+                VertexAttributeFlag geometryFlags =
+                    alphaMode == Material::AlphaMode::Opaque
+                        ? VertexAttributeFlag::Position
+                        : VertexAttributeFlag(
+                              VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord);
+                const std::vector<GeometryLayout> geometryLayout =
+                    MeshSystem::GetGeometryLayout(geometryFlags);
 
                 pipeline = new GraphicsPipeline(
                     context,
@@ -270,7 +316,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         }
     }
 
-    // Main pass resources
+    // Base pass resources
     {
         mCameraUniform = new ShaderParameterBuffer(
             mContext,
@@ -286,6 +332,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             mContext,
             vk::DescriptorType::eSampledImage,
             vk::ShaderStageFlagBits::eFragment);
+        mShadowMapUniform->Bind(mShadowMap);
 
         std::unordered_map<
             Material::AlphaMode,
@@ -293,50 +340,128 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             stages{
                 {Material::AlphaMode::Opaque,
                  {
-                     {vk::ShaderStageFlagBits::eVertex, Resource::Id::UberShaderOpaqueVertexShader},
+                     {vk::ShaderStageFlagBits::eVertex,
+                      Resource::Id::GeometryPassOpaqueVertexShader},
                      {vk::ShaderStageFlagBits::eFragment,
-                      Resource::Id::UberShaderOpaqueFragmentShader},
+                      Resource::Id::GeometryPassOpaqueFragmentShader},
                  }},
                 {Material::AlphaMode::Masked,
                  {
                      {vk::ShaderStageFlagBits::eVertex,
-                      Resource::Id::UberShaderAlphaMaskedVertexShader},
+                      Resource::Id::GeometryPassAlphaMaskedVertexShader},
                      {vk::ShaderStageFlagBits::eFragment,
-                      Resource::Id::UberShaderAlphaMaskedFragmentShader},
+                      Resource::Id::GeometryPassAlphaMaskedFragmentShader},
                  }},
                 {Material::AlphaMode::Blended,
                  {
-                     {vk::ShaderStageFlagBits::eVertex, Resource::Id::UberShaderOpaqueVertexShader},
+                     {vk::ShaderStageFlagBits::eVertex, Resource::Id::TransparentPassVertexShader},
                      {vk::ShaderStageFlagBits::eFragment,
-                      Resource::Id::UberShaderOpaqueFragmentShader},
+                      Resource::Id::TransparentPassFragmentShader},
                  }}};
 
         for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
             bool isTransparentPass = alphaMode == Material::AlphaMode::Blended;
+            bool isAlphaMaskedPass = alphaMode == Material::AlphaMode::Masked;
             ScopedRefPtr<ShaderParameterCollection>& parameters =
-                mBasePassPipeline[alphaMode].parameters;
-            ScopedRefPtr<GraphicsPipeline>& pipeline = mBasePassPipeline[alphaMode].pipeline;
+                mGeometryPassPipeline[alphaMode].parameters;
+            ScopedRefPtr<GraphicsPipeline>& pipeline = mGeometryPassPipeline[alphaMode].pipeline;
 
             parameters = new ShaderParameterCollection(mContext);
             parameters->AddParameter(mCameraUniform);
-            parameters->AddParameter(mShadowCameraUniform);
+            if (isTransparentPass) {
+                parameters->AddParameter(mShadowCameraUniform);
+            }
             parameters->AddParameter(mPerDrawParameters);
             parameters->AddParameter(mBasePassCulling[alphaMode].additionalDrawDataBufferParameter);
-            parameters->AddParameter(mMaterialSampler);
-            parameters->AddParameter(mMaterialsUniform);
-            parameters->AddParameter(mShadowMapUniform);
-            parameters->AddParameter(mMaterialsTextures);
-
-            const std::vector<GeometryLayout> geometryLayout = MeshSystem::GetGeometryLayout();
+            if (isTransparentPass || isAlphaMaskedPass) {
+                parameters->AddParameter(mMaterialSampler);
+                parameters->AddParameter(mMaterialsUniform);
+                if (isTransparentPass) {
+                    parameters->AddParameter(mShadowMapUniform);
+                }
+                parameters->AddParameter(mMaterialsTextures);
+            }
+            const VertexAttributeFlag geometryFlags =
+                isTransparentPass ? VertexAttributeFlag::All
+                : isAlphaMaskedPass
+                    ? VertexAttributeFlag(
+                          VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord)
+                    : VertexAttributeFlag::Position;
+            const std::vector<GeometryLayout> geometryLayout =
+                MeshSystem::GetGeometryLayout(geometryFlags);
 
             pipeline = new GraphicsPipeline(
                 context,
                 parameters,
                 stages[alphaMode],
-                isTransparentPass ? mTransparentPass : mBasePass,
+                isTransparentPass ? mTransparentPass : mGeometryPass,
                 geometryLayout,
-                {.enableBlending = isTransparentPass});
+                {.enableCulling = !isAlphaMaskedPass, .enableBlending = isTransparentPass});
         }
+    }
+
+    // Shade pass resources
+    {
+        std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
+            {vk::ShaderStageFlagBits::eVertex, Resource::Id::VisibilityBufferShadeVertexShader},
+            {vk::ShaderStageFlagBits::eFragment, Resource::Id::VisibilityBufferShadeFragmentShader},
+        };
+
+        mVisibilityBufferUniform = new ShaderParameterImage(
+            mContext,
+            vk::DescriptorType::eSampledImage,
+            vk::ShaderStageFlagBits::eFragment);
+        mVisibilityBufferUniform->Bind(mVisibilityBuffer);
+
+        mIndexBufferUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eStorageBuffer,
+            ShaderParameter::UpdateFrequency::Once,
+            vk::ShaderStageFlagBits::eFragment);
+
+        mPositionBufferUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eStorageBuffer,
+            ShaderParameter::UpdateFrequency::Once,
+            vk::ShaderStageFlagBits::eFragment);
+        mTexCoordBufferUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eStorageBuffer,
+            ShaderParameter::UpdateFrequency::Once,
+            vk::ShaderStageFlagBits::eFragment);
+        mNormalBufferUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eStorageBuffer,
+            ShaderParameter::UpdateFrequency::Once,
+            vk::ShaderStageFlagBits::eFragment);
+        mTangentBufferUniform = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eStorageBuffer,
+            ShaderParameter::UpdateFrequency::Once,
+            vk::ShaderStageFlagBits::eFragment);
+        mShadePassParameters = new ShaderParameterCollection(mContext);
+        mShadePassParameters->AddParameter(mCameraUniform);
+        mShadePassParameters->AddParameter(mShadowCameraUniform);
+        mShadePassParameters->AddParameter(mPerDrawParameters);
+        mShadePassParameters->AddParameter(mMaterialSampler);
+        mShadePassParameters->AddParameter(mFrameBufferSampler);
+        mShadePassParameters->AddParameter(mMaterialsUniform);
+        mShadePassParameters->AddParameter(mShadowMapUniform);
+        mShadePassParameters->AddParameter(mVisibilityBufferUniform);
+        mShadePassParameters->AddParameter(mIndexBufferUniform);
+        mShadePassParameters->AddParameter(mPositionBufferUniform);
+        mShadePassParameters->AddParameter(mTexCoordBufferUniform);
+        mShadePassParameters->AddParameter(mNormalBufferUniform);
+        mShadePassParameters->AddParameter(mTangentBufferUniform);
+        mShadePassParameters->AddParameter(mMaterialsTextures);
+
+        mShadePassPipeline = new GraphicsPipeline(
+            context,
+            mShadePassParameters,
+            stages,
+            mShadePass,
+            std::vector<GeometryLayout>{},
+            {.enableDepthTest = false});
     }
 }
 
@@ -462,7 +587,7 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
     {
         CameraData cameraMatrices{
             .viewProjection = camera->GetProjectionTransform() * camera->GetViewTransform(),
-            .cameraForwardDir = glm::vec4(camera->GetForwardDir(), 0.0f)};
+            .cameraPos = glm::vec4(camera->GetPosition(), 0.0f)};
         mCameraUniform->Write(
             imageIndex,
             reinterpret_cast<uint8_t*>(&cameraMatrices),
@@ -491,8 +616,14 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
             mMaterialsTextures->Bind(materialTexture);
         }
         mMaterialsUniform->BindBuffer(mMaterialsBuffer);
+    }
 
-        mShadowMapUniform->Bind(mShadowMap);
+    {
+        mIndexBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetIndexBuffer());
+        mPositionBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetVertexBuffer());
+        mTexCoordBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTexCoordBuffer());
+        mNormalBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetNormalBuffer());
+        mTangentBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTangentBuffer());
     }
 }
 
@@ -771,7 +902,12 @@ void Renderer::Render(Camera* camera) {
                     nullptr);
 
                 {
-                    mScene->GetMeshSystem()->BindBuffers(command.buffer);
+                    mScene->GetMeshSystem()->BindBuffers(
+                        command.buffer,
+                        alphaMode == Material::AlphaMode::Opaque
+                            ? VertexAttributeFlag::Position
+                            : VertexAttributeFlag(
+                                  VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord));
 
                     uint32_t maxDrawIndirectCount =
                         mContext->GetDevice()->GetDeviceProperties().limits.maxDrawIndirectCount;
@@ -799,37 +935,38 @@ void Renderer::Render(Camera* camera) {
         // Base pass
         {
             BeginMarker(command.buffer, "Base pass");
+
             {
-                vk::ImageMemoryBarrier imageBarrier =
+                std::vector<vk::ImageMemoryBarrier> imageBarriers{
                     vk::ImageMemoryBarrier()
-                        .setImage(mShadowMap->GetImage())
-                        .setOldLayout(vk::ImageLayout::eDepthAttachmentOptimal)
-                        .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                        .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
-                        .setDstAccessMask(vk::AccessFlagBits::eUniformRead)
+                        .setImage(mVisibilityBuffer->GetImage())
+                        .setOldLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                        .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
+                        .setSrcAccessMask(vk::AccessFlagBits::eUniformRead)
+                        .setDstAccessMask(vk::AccessFlagBits::eShaderWrite)
                         .setSubresourceRange(vk::ImageSubresourceRange{}
-                                                 .setAspectMask(vk::ImageAspectFlagBits::eDepth)
+                                                 .setAspectMask(vk::ImageAspectFlagBits::eColor)
                                                  .setLevelCount(1)
-                                                 .setLayerCount(1));
+                                                 .setLayerCount(1)),
+                };
 
                 command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eColorAttachmentOutput,
                     vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::PipelineStageFlagBits::eVertexShader,
                     vk::DependencyFlags{},
                     {},
                     {},
-                    imageBarrier);
+                    imageBarriers);
             }
 
             const std::vector<vk::ClearValue> clearValues{
-                vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
+                vk::ClearColorValue(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF),
                 vk::ClearDepthStencilValue(1.0f, 0),
             };
             const vk::RenderPassBeginInfo renderPassBeginInfo =
                 vk::RenderPassBeginInfo()
-                    .setRenderPass(mBasePass->GetRenderPassHandle())
-                    .setFramebuffer(mBasePass->GetFramebufferHandle(
-                        mContext->GetSwapchain()->GetCurrentIndex()))
+                    .setRenderPass(mGeometryPass->GetRenderPassHandle())
+                    .setFramebuffer(mGeometryPass->GetFramebufferHandle())
                     .setRenderArea({vk::Offset2D{0, 0}, imageSize})
                     .setClearValues(clearValues);
             command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
@@ -857,20 +994,26 @@ void Renderer::Render(Camera* camera) {
                 BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
                 command.buffer.bindPipeline(
                     vk::PipelineBindPoint::eGraphics,
-                    mBasePassPipeline[alphaMode].pipeline->GetPipelineHandle());
+                    mGeometryPassPipeline[alphaMode].pipeline->GetPipelineHandle());
 
                 std::vector<vk::DescriptorSet> descriptorSets =
-                    mBasePassPipeline[alphaMode].parameters->GetDescriptorSets(mCurrentFrameIndex);
+                    mGeometryPassPipeline[alphaMode].parameters->GetDescriptorSets(
+                        mCurrentFrameIndex);
 
                 command.buffer.bindDescriptorSets(
                     vk::PipelineBindPoint::eGraphics,
-                    mBasePassPipeline[alphaMode].pipeline->GetPipelineLayout(),
+                    mGeometryPassPipeline[alphaMode].pipeline->GetPipelineLayout(),
                     0,
                     descriptorSets,
                     nullptr);
 
                 {
-                    mScene->GetMeshSystem()->BindBuffers(command.buffer);
+                    mScene->GetMeshSystem()->BindBuffers(
+                        command.buffer,
+                        alphaMode == Material::AlphaMode::Opaque
+                            ? VertexAttributeFlag::Position
+                            : VertexAttributeFlag(
+                                  VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord));
 
                     uint32_t maxDrawIndirectCount =
                         mContext->GetDevice()->GetDeviceProperties().limits.maxDrawIndirectCount;
@@ -894,9 +1037,94 @@ void Renderer::Render(Camera* camera) {
             EndMarker(command.buffer);
         }
 
+        // Shade pass
+        {
+            BeginMarker(command.buffer, "Shade pass");
+
+            {
+                std::vector<vk::ImageMemoryBarrier> imageBarriers{
+                    vk::ImageMemoryBarrier()
+                        .setImage(mShadowMap->GetImage())
+                        .setOldLayout(vk::ImageLayout::eDepthAttachmentOptimal)
+                        .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                        .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
+                        .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
+                        .setSubresourceRange(vk::ImageSubresourceRange{}
+                                                 .setAspectMask(vk::ImageAspectFlagBits::eDepth)
+                                                 .setLevelCount(1)
+                                                 .setLayerCount(1)),
+                    vk::ImageMemoryBarrier()
+                        .setImage(mVisibilityBuffer->GetImage())
+                        .setOldLayout(vk::ImageLayout::eColorAttachmentOptimal)
+                        .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                        .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
+                        .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
+                        .setSubresourceRange(vk::ImageSubresourceRange{}
+                                                 .setAspectMask(vk::ImageAspectFlagBits::eColor)
+                                                 .setLevelCount(1)
+                                                 .setLayerCount(1)),
+                };
+
+                command.buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                    vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::DependencyFlags{},
+                    {},
+                    {},
+                    imageBarriers);
+            }
+
+            const std::vector<vk::ClearValue> clearValues{
+                vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
+                vk::ClearDepthStencilValue(1.0f, 0),
+            };
+            const vk::RenderPassBeginInfo renderPassBeginInfo =
+                vk::RenderPassBeginInfo()
+                    .setRenderPass(mShadePass->GetRenderPassHandle())
+                    .setFramebuffer(mShadePass->GetFramebufferHandle(
+                        mContext->GetSwapchain()->GetCurrentIndex()))
+                    .setRenderArea({vk::Offset2D{0, 0}, imageSize})
+                    .setClearValues(clearValues);
+            command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+
+            {
+                const vk::Viewport viewport{
+                    0.0f,
+                    0.0f,
+                    static_cast<float>(imageSize.width),
+                    static_cast<float>(imageSize.height),
+                    0.0f,
+                    1.0f};
+                command.buffer.setViewport(0, viewport);
+
+                const vk::Rect2D scissor = vk::Rect2D().setOffset(0).setExtent(
+                    vk::Extent2D{imageSize.width, imageSize.height});
+                command.buffer.setScissor(0, scissor);
+            }
+
+            command.buffer.bindPipeline(
+                vk::PipelineBindPoint::eGraphics,
+                mShadePassPipeline->GetPipelineHandle());
+
+            std::vector<vk::DescriptorSet> descriptorSets =
+                mShadePassParameters->GetDescriptorSets(mCurrentFrameIndex);
+
+            command.buffer.bindDescriptorSets(
+                vk::PipelineBindPoint::eGraphics,
+                mShadePassPipeline->GetPipelineLayout(),
+                0,
+                descriptorSets,
+                nullptr);
+
+            command.buffer.draw(3, 1, 0, 0);
+
+            command.buffer.endRenderPass();
+            EndMarker(command.buffer);
+        }
+
         // Render transparencies
         {
-            BeginMarker(command.buffer, "Translucency pass");
+            BeginMarker(command.buffer, "Transparent pass");
             const std::vector<vk::ClearValue> clearValues{
                 vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
                 vk::ClearDepthStencilValue(1.0f, 0),
@@ -931,21 +1159,23 @@ void Renderer::Render(Camera* camera) {
                 if (drawCallCount > 0) {
                     command.buffer.bindPipeline(
                         vk::PipelineBindPoint::eGraphics,
-                        mBasePassPipeline[alphaMode].pipeline->GetPipelineHandle());
+                        mGeometryPassPipeline[alphaMode].pipeline->GetPipelineHandle());
 
                     std::vector<vk::DescriptorSet> descriptorSets =
-                        mBasePassPipeline[alphaMode].parameters->GetDescriptorSets(
+                        mGeometryPassPipeline[alphaMode].parameters->GetDescriptorSets(
                             mCurrentFrameIndex);
 
                     command.buffer.bindDescriptorSets(
                         vk::PipelineBindPoint::eGraphics,
-                        mBasePassPipeline[alphaMode].pipeline->GetPipelineLayout(),
+                        mGeometryPassPipeline[alphaMode].pipeline->GetPipelineLayout(),
                         0,
                         descriptorSets,
                         nullptr);
 
                     {
-                        mScene->GetMeshSystem()->BindBuffers(command.buffer);
+                        mScene->GetMeshSystem()->BindBuffers(
+                            command.buffer,
+                            VertexAttributeFlag::All);
 
                         uint32_t maxDrawIndirectCount = mContext->GetDevice()
                                                             ->GetDeviceProperties()

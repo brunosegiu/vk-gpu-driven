@@ -20,8 +20,6 @@ layout(binding = 2, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in uint inPackedTexCoord;
-layout(location = 2) in uint inPackedNormal;
-layout(location = 3) in uint inPackedTangent;
 
 layout(location = 0) out vec2 outTexCoord;
 layout(location = 1) out flat uint outDrawID;

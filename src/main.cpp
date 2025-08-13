@@ -70,8 +70,9 @@ SunLight GetSunDirectionAndRadiance(
     // Wrap to [0, dayDuration)
     float t = fmod(elapsedSeconds, dayDurationSeconds);
 
-    // Map t to angle in [0, π] (sunrise to sunset)
-    float angle = glm::pi<float>() * (t / dayDurationSeconds);  // θ = 0 at sunrise, π at sunset
+    constexpr float pi = glm::pi<float>();
+    float angle =
+        pi * (0.75 * (t / dayDurationSeconds));  // θ = pi/4 at sunrise, 3 * pi / 4 at sunset
 
     // Sun arc in XZ plane (Y = up): arc from east (−Z), through +Y, to west (+Z)
     glm::vec3 sunDir =

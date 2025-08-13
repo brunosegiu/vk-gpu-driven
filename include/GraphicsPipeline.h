@@ -19,7 +19,9 @@ namespace VKRT {
 class Context;
 
 struct GraphicsPipelineOptionals {
+    bool enableDepthTest = true;
     bool enableDepthBias = false;
+    bool enableCulling = true;
     float depthBias = 0.0f;
     float depthSlope = 1.0f;
     bool enableBlending = false;

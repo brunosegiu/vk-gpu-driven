@@ -14,14 +14,18 @@ struct Resource {
     enum class Id {
         CullingShader,
         CompactionShader,
-        UberShaderOpaqueVertexShader,
-        UberShaderOpaqueFragmentShader,
-        UberShaderAlphaMaskedVertexShader,
-        UberShaderAlphaMaskedFragmentShader,
+        GeometryPassOpaqueVertexShader,
+        GeometryPassOpaqueFragmentShader,
+        GeometryPassAlphaMaskedVertexShader,
+        GeometryPassAlphaMaskedFragmentShader,
+        TransparentPassVertexShader,
+        TransparentPassFragmentShader,
         DepthOnlyOpaqueVertexShader,
         DepthOnlyOpaqueFragmentShader,
         DepthOnlyAlphaMaskedVertexShader,
         DepthOnlyAlphaMaskedFragmentShader,
+        VisibilityBufferShadeVertexShader,
+        VisibilityBufferShadeFragmentShader,
     };
 };
 

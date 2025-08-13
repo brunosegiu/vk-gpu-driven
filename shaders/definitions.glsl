@@ -1,7 +1,11 @@
+#ifndef DEFINITIONS_GLSL
+#define DEFINITIONS_GLSL
+
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
 
 #define UPDATE_PER_FRAME 0
 #define UPDATE_ONCE 1
+#define PRIMITIVE_ID_NONE 0xFFFFFFFF
 
 struct VkDrawIndexedIndirectCommand {
 	uint indexCount;
@@ -36,3 +40,4 @@ struct Material {
     int normalTextureIndex;
 };
 
+#endif

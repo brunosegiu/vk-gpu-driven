@@ -75,3 +75,7 @@ inline auto VKRT_ASSERT_VK(ResultValue resultValue) -> decltype(resultValue.valu
 inline void VKRT_ASSERT_VK(vk::Result result) {
     VKRT_ASSERT_MSG(result == vk::Result::eSuccess, "Vulkan error " << vk::to_string(result));
 }
+
+inline void VKRT_ASSERT_VK(VkResult result) {
+    VKRT_ASSERT_VK(static_cast<vk::Result>(result));
+}

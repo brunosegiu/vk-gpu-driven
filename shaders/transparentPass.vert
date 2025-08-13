@@ -3,10 +3,11 @@
 #extension GL_EXT_scalar_block_layout : enable
 
 #include "definitions.glsl"
+#include "shading.glsl"
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
     mat4 viewProjection;
-    vec4 cameraForwardDir;
+    vec4 cameraPos;
 } CameraParameters;
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
@@ -34,13 +35,6 @@ layout(location = 2) out vec3 outNormal;
 layout(location = 3) out flat uint outDrawID;
 layout(location = 4) out vec4 outShadowCoord;
 layout(location = 5) out mat3 outTBN;
-
-const mat4 ShadowBiasMat = mat4( 
-	0.5, 0.0, 0.0, 0.0,
-	0.0, 0.5, 0.0, 0.0,
-	0.0, 0.0, 1.0, 0.0,
-	0.5, 0.5, 0.0, 1.0 
-);
 
 void main() {
     uint globalDrawIndex = drawData[gl_DrawID];

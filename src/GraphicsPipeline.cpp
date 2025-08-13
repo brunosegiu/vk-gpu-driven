@@ -69,7 +69,7 @@ GraphicsPipeline::GraphicsPipeline(
             .setRasterizerDiscardEnable(false)
             .setPolygonMode(vk::PolygonMode::eFill)
             .setLineWidth(1.0f)
-            .setCullMode(vk::CullModeFlagBits::eBack)
+            .setCullMode(optionals.enableCulling ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone)
             .setFrontFace(vk::FrontFace::eCounterClockwise)
             .setDepthBiasEnable(optionals.enableDepthBias)
             .setDepthBiasConstantFactor(optionals.depthBias)
@@ -78,8 +78,8 @@ GraphicsPipeline::GraphicsPipeline(
     // Depth testing
     vk::PipelineDepthStencilStateCreateInfo depthStencilState =
         vk::PipelineDepthStencilStateCreateInfo{}
-            .setDepthTestEnable(true)
-            .setDepthWriteEnable(true)
+            .setDepthTestEnable(optionals.enableDepthTest)
+            .setDepthWriteEnable(optionals.enableDepthTest)
             .setDepthCompareOp(vk::CompareOp::eLess)
             .setDepthBoundsTestEnable(false)
             .setStencilTestEnable(false);
@@ -119,7 +119,7 @@ GraphicsPipeline::GraphicsPipeline(
                 vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
 
     std::vector<vk::PipelineColorBlendAttachmentState> blendAttachments(
-        1,
+        glm::max<uint32_t>(renderPass->GetColorAttachmentCount(), 1),
         baseAttachmentCreateInfo);
 
     vk::PipelineColorBlendStateCreateInfo colorBlendCreateInfo =

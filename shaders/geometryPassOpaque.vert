@@ -4,11 +4,10 @@
 
 #include "definitions.glsl"
 
-layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    vec3 radiance;
-    vec3 direction;
+layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
     mat4 viewProjection;
-};
+    vec4 cameraPos;
+} CameraParameters;
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
@@ -20,8 +19,14 @@ layout(binding = 2, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
 
 layout(location = 0) in vec3 inPosition;
 
+layout(location = 0) out flat uint outDrawID;
+
 void main() {
     uint globalDrawIndex = drawData[gl_DrawID];
+
     DrawData perDrawData = SceneData.perDrawData[globalDrawIndex];
-    gl_Position = viewProjection * perDrawData.modelMatrix * vec4(inPosition, 1.0);
+
+    gl_Position = CameraParameters.viewProjection * perDrawData.modelMatrix * vec4(inPosition, 1.0);
+
+    outDrawID = globalDrawIndex;
 }

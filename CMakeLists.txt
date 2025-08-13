@@ -86,19 +86,24 @@ set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
 set(SHADER_HEADERS 
     definitions.glsl
     shading.glsl
+    visibilityBufferUtils.glsl
 )
 
 set(SHADERS
-    uberShaderOpaque.vert
-    uberShaderOpaque.frag
-    uberShaderAlphaMasked.vert
-    uberShaderAlphaMasked.frag
+    geometryPassOpaque.vert
+    geometryPassOpaque.frag
+    geometryPassAlphaMasked.vert
+    geometryPassAlphaMasked.frag
+    transparentPass.vert
+    transparentPass.frag
     culling.comp
     depthOnlyShaderOpaque.vert
     depthOnlyShaderOpaque.frag
     depthOnlyShaderAlphaMasked.vert
     depthOnlyShaderAlphaMasked.frag
     compactDrawCalls.comp
+    visibilityBufferShade.vert
+    visibilityBufferShade.frag
 )
 
 if(WIN32)
