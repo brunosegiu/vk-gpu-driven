@@ -40,17 +40,12 @@ private:
         ScopedRefPtr<ShaderParameterCollection> cullingParameters;
         ScopedRefPtr<ShaderParameterBuffer> cullingDataUniform;
         ScopedRefPtr<ShaderParameterBuffer> indirectDrawBufferParameter;
-        std::vector<ScopedRefPtr<VulkanBuffer>> indirectDrawBuffers;
-        ScopedRefPtr<ComputePipeline> cullingPipeline;
-
-        ScopedRefPtr<ShaderParameterCollection> compactionParameters;
-        ScopedRefPtr<ShaderParameterBuffer> compactIndirectDrawBufferParameter;
         ScopedRefPtr<ShaderParameterBuffer> additionalDrawDataBufferParameter;
         ScopedRefPtr<ShaderParameterBuffer> drawCallCountBufferParameter;
-        std::vector<ScopedRefPtr<VulkanBuffer>> compactIndirectDrawBuffers;
+        std::vector<ScopedRefPtr<VulkanBuffer>> indirectDrawBuffers;
         std::vector<ScopedRefPtr<VulkanBuffer>> additionalDrawDataBuffers;
         std::vector<ScopedRefPtr<VulkanBuffer>> drawCallCountBuffer;
-        ScopedRefPtr<ComputePipeline> compactionPipeline;
+        ScopedRefPtr<ComputePipeline> cullingPipeline;
     };
     std::unordered_map<Material::AlphaMode, CullingPipelineResources> mShadowPassCulling;
     std::unordered_map<Material::AlphaMode, CullingPipelineResources> mBasePassCulling;

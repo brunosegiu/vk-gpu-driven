@@ -101,7 +101,6 @@ set(SHADERS
     depthOnlyShaderOpaque.frag
     depthOnlyShaderAlphaMasked.vert
     depthOnlyShaderAlphaMasked.frag
-    compactDrawCalls.comp
     visibilityBufferShade.vert
     visibilityBufferShade.frag
 )

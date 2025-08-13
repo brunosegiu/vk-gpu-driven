@@ -108,7 +108,7 @@ int main() {
         if (contextResult == Result::Success) {
             ScopedRefPtr<Scene> scene = new Scene(context);
 
-            LoadBistro(context, scene);
+            LoadBasicScene(context, scene);
 
             ScopedRefPtr<Camera> camera = new Camera(window);
             camera->SetTranslation(glm::vec3(-14.0f, 5.0f, -1.0f));

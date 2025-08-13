@@ -4,7 +4,6 @@
 // clang-format off
 
 VKRT_RESOURCE_CULLING_SHADER RCDATA "./culling.comp.spv"
-VKRT_RESOURCE_COMPACTION_SHADER RCDATA "./compactDrawCalls.comp.spv"
 VKRT_RESOURCE_GEOMETRY_PASS_OPAQUE_VERTEX RCDATA "./geometryPassOpaque.vert.spv"
 VKRT_RESOURCE_GEOMETRY_PASS_OPAQUE_FRAGMENT RCDATA "./geometryPassOpaque.frag.spv"
 VKRT_RESOURCE_GEOMETRY_PASS_ALPHA_MASKED_VERTEX RCDATA "./geometryPassAlphaMasked.vert.spv"

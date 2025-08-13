@@ -141,25 +141,6 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
                 ShaderParameter::UpdateFrequency::PerFrame,
                 vk::ShaderStageFlagBits::eCompute);
 
-            resources.cullingParameters->AddParameter(resources.cullingDataUniform);
-            resources.cullingParameters->AddParameter(mPerDrawParameters);
-            resources.cullingParameters->AddParameter(resources.indirectDrawBufferParameter);
-
-            resources.cullingPipeline = new ComputePipeline(
-                context,
-                resources.cullingParameters,
-                {vk::ShaderStageFlagBits::eCompute, Resource::Id::CullingShader});
-
-            ScopedRefPtr<ComputePipeline>;
-
-            resources.compactionParameters = new ShaderParameterCollection(mContext);
-
-            resources.compactIndirectDrawBufferParameter = new ShaderParameterBuffer(
-                mContext,
-                vk::DescriptorType::eStorageBuffer,
-                ShaderParameter::UpdateFrequency::PerFrame,
-                vk::ShaderStageFlagBits::eCompute);
-
             resources.additionalDrawDataBufferParameter = new ShaderParameterBuffer(
                 mContext,
                 vk::DescriptorType::eStorageBuffer,
@@ -173,18 +154,16 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
                 ShaderParameter::UpdateFrequency::PerFrame,
                 vk::ShaderStageFlagBits::eCompute);
 
-            resources.compactionParameters->AddParameter(resources.cullingDataUniform);
-            resources.compactionParameters->AddParameter(resources.indirectDrawBufferParameter);
-            resources.compactionParameters->AddParameter(
-                resources.compactIndirectDrawBufferParameter);
-            resources.compactionParameters->AddParameter(
-                resources.additionalDrawDataBufferParameter);
-            resources.compactionParameters->AddParameter(resources.drawCallCountBufferParameter);
+            resources.cullingParameters->AddParameter(resources.cullingDataUniform);
+            resources.cullingParameters->AddParameter(mPerDrawParameters);
+            resources.cullingParameters->AddParameter(resources.indirectDrawBufferParameter);
+            resources.cullingParameters->AddParameter(resources.drawCallCountBufferParameter);
+            resources.cullingParameters->AddParameter(resources.additionalDrawDataBufferParameter);
 
-            resources.compactionPipeline = new ComputePipeline(
+            resources.cullingPipeline = new ComputePipeline(
                 context,
-                resources.compactionParameters,
-                {vk::ShaderStageFlagBits::eCompute, Resource::Id::CompactionShader});
+                resources.cullingParameters,
+                {vk::ShaderStageFlagBits::eCompute, Resource::Id::CullingShader});
         };
 
         createCullingResources(mShadowPassCulling[Material::AlphaMode::Opaque]);
@@ -517,19 +496,9 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
             resources.indirectDrawBuffers = mContext->GetDevice()->CreateBuffers(
                 bufferCount,
                 drawCallCount * sizeof(vk::DrawIndexedIndirectCommand),
-                vk::BufferUsageFlagBits::eStorageBuffer,
+                vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
             resources.indirectDrawBufferParameter->BindBuffers(resources.indirectDrawBuffers);
-        }
-
-        if (resources.compactIndirectDrawBuffers.empty()) {
-            resources.compactIndirectDrawBuffers = mContext->GetDevice()->CreateBuffers(
-                bufferCount,
-                drawCallCount * sizeof(vk::DrawIndexedIndirectCommand),
-                vk::BufferUsageFlagBits::eIndirectBuffer | vk::BufferUsageFlagBits::eStorageBuffer,
-                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-            resources.compactIndirectDrawBufferParameter->BindBuffers(
-                resources.compactIndirectDrawBuffers);
         }
 
         if (resources.additionalDrawDataBuffers.empty()) {
@@ -674,47 +643,13 @@ void Renderer::Render(Camera* camera) {
             if (maxDrawCallCount == 0) {
                 return;
             }
-            ScopedRefPtr<VulkanBuffer> cullingIndirectBuffer =
-                resources.indirectDrawBuffers[mCurrentFrameIndex];
-            {
-                vk::BufferMemoryBarrier bufferBarrier =
-                    vk::BufferMemoryBarrier()
-                        .setBuffer(cullingIndirectBuffer->GetBufferHandle())
-                        .setSize(cullingIndirectBuffer->GetBufferSize())
-                        .setSrcAccessMask(vk::AccessFlagBits::eShaderRead)
-                        .setDstAccessMask(vk::AccessFlagBits::eShaderWrite);
-                command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eComputeShader,
-                    vk::PipelineStageFlagBits::eComputeShader,
-                    vk::DependencyFlags{},
-                    {},
-                    bufferBarrier,
-                    {});
-            }
 
-            command.buffer.bindPipeline(
-                vk::PipelineBindPoint::eCompute,
-                resources.cullingPipeline->GetPipelineHandle());
-
-            std::vector<vk::DescriptorSet> cullingDescriptorSets =
-                resources.cullingParameters->GetDescriptorSets(mCurrentFrameIndex);
-
-            command.buffer.bindDescriptorSets(
-                vk::PipelineBindPoint::eCompute,
-                resources.cullingPipeline->GetPipelineLayout(),
-                0,
-                cullingDescriptorSets,
-                nullptr);
-
-            command.buffer.dispatch((maxDrawCallCount / 64) + 1, 1, 1);
-
-            ScopedRefPtr<VulkanBuffer> compactIndirectDrawBuffer =
-                resources.compactIndirectDrawBuffers[mCurrentFrameIndex];
-            ScopedRefPtr<VulkanBuffer> additionalDrawDataBuffer =
-                resources.additionalDrawDataBuffers[mCurrentFrameIndex];
             ScopedRefPtr<VulkanBuffer> drawCallCountBuffer =
                 resources.drawCallCountBuffer[mCurrentFrameIndex];
-
+            ScopedRefPtr<VulkanBuffer> indirectDrawBuffer =
+                resources.indirectDrawBuffers[mCurrentFrameIndex];
+            ScopedRefPtr<VulkanBuffer> additionalDrawDataBuffer =
+                resources.additionalDrawDataBuffers[mCurrentFrameIndex];
             // Write 0 in drawCallCountBuffer
             {
                 std::vector<vk::BufferMemoryBarrier> bufferBarriers{
@@ -752,12 +687,13 @@ void Renderer::Render(Camera* camera) {
 
             {
                 std::vector<vk::BufferMemoryBarrier> bufferBarriers{
-                    compactIndirectDrawBuffer->GetBufferBarrierInfo(
+                    indirectDrawBuffer->GetBufferBarrierInfo(
                         vk::PipelineStageFlagBits::eDrawIndirect,
                         vk::PipelineStageFlagBits::eComputeShader),
                     additionalDrawDataBuffer->GetBufferBarrierInfo(
                         vk::PipelineStageFlagBits::eDrawIndirect,
-                        vk::PipelineStageFlagBits::eComputeShader)};
+                        vk::PipelineStageFlagBits::eComputeShader),
+                };
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eDrawIndirect,
@@ -770,16 +706,16 @@ void Renderer::Render(Camera* camera) {
 
             command.buffer.bindPipeline(
                 vk::PipelineBindPoint::eCompute,
-                resources.compactionPipeline->GetPipelineHandle());
+                resources.cullingPipeline->GetPipelineHandle());
 
-            std::vector<vk::DescriptorSet> compactionDescriptorSets =
-                resources.compactionParameters->GetDescriptorSets(mCurrentFrameIndex);
+            std::vector<vk::DescriptorSet> cullingDescriptorSets =
+                resources.cullingParameters->GetDescriptorSets(mCurrentFrameIndex);
 
             command.buffer.bindDescriptorSets(
                 vk::PipelineBindPoint::eCompute,
-                resources.compactionPipeline->GetPipelineLayout(),
+                resources.cullingPipeline->GetPipelineLayout(),
                 0,
-                compactionDescriptorSets,
+                cullingDescriptorSets,
                 nullptr);
 
             command.buffer.dispatch((maxDrawCallCount / 64) + 1, 1, 1);
@@ -787,7 +723,7 @@ void Renderer::Render(Camera* camera) {
             // TODO: Wait until before actual draws are dispatched, this is too early
             {
                 std::vector<vk::BufferMemoryBarrier> bufferBarriers{
-                    compactIndirectDrawBuffer->GetBufferBarrierInfo(
+                    indirectDrawBuffer->GetBufferBarrierInfo(
                         vk::PipelineStageFlagBits::eComputeShader,
                         vk::PipelineStageFlagBits::eAllGraphics),
                     additionalDrawDataBuffer->GetBufferBarrierInfo(
@@ -915,7 +851,7 @@ void Renderer::Render(Camera* camera) {
 
                     command.buffer.drawIndexedIndirectCount(
                         mShadowPassCulling[alphaMode]
-                            .compactIndirectDrawBuffers[mCurrentFrameIndex]
+                            .indirectDrawBuffers[mCurrentFrameIndex]
                             ->GetBufferHandle(),
                         0,
                         mShadowPassCulling[alphaMode]
@@ -1021,7 +957,7 @@ void Renderer::Render(Camera* camera) {
 
                     command.buffer.drawIndexedIndirectCount(
                         mBasePassCulling[alphaMode]
-                            .compactIndirectDrawBuffers[mCurrentFrameIndex]
+                            .indirectDrawBuffers[mCurrentFrameIndex]
                             ->GetBufferHandle(),
                         0,
                         mBasePassCulling[alphaMode]
@@ -1184,7 +1120,7 @@ void Renderer::Render(Camera* camera) {
 
                         command.buffer.drawIndexedIndirectCount(
                             mBasePassCulling[alphaMode]
-                                .compactIndirectDrawBuffers[mCurrentFrameIndex]
+                                .indirectDrawBuffers[mCurrentFrameIndex]
                                 ->GetBufferHandle(),
                             0,
                             mBasePassCulling[alphaMode]

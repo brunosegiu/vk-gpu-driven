@@ -28,9 +28,6 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
         case Resource::Id::CullingShader:
             actualId = VKRT_RESOURCE_CULLING_SHADER;
             break;
-        case Resource::Id::CompactionShader:
-            actualId = VKRT_RESOURCE_COMPACTION_SHADER;
-            break;
         case Resource::Id::GeometryPassOpaqueVertexShader:
             actualId = VKRT_RESOURCE_GEOMETRY_PASS_OPAQUE_VERTEX;
             break;

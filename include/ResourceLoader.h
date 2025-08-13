@@ -13,7 +13,6 @@ struct Resource {
 
     enum class Id {
         CullingShader,
-        CompactionShader,
         GeometryPassOpaqueVertexShader,
         GeometryPassOpaqueFragmentShader,
         GeometryPassAlphaMaskedVertexShader,

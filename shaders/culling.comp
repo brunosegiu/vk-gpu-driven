@@ -18,6 +18,14 @@ layout(binding = 2, set = UPDATE_PER_FRAME) buffer writeonly CommandBuffer {
 	VkDrawIndexedIndirectCommand outIndirectCommands[];
 };
 
+layout(binding = 3, set = UPDATE_PER_FRAME, std430) buffer DrawCallCount {
+	uint outIndirectDrawCount;
+};
+
+layout(binding = 4, set = UPDATE_PER_FRAME, std430) buffer writeonly OutDrawData {
+	uint outDrawData[];
+};
+
 layout(local_size_x = 64) in;
 
 bool Test(const vec3 min, const vec3 max, const mat4 objectTransform) {
@@ -67,7 +75,11 @@ void main() {
         command.vertexOffset = perDrawData.vertexOffset;
         command.firstInstance = 0;
 
-        outIndirectCommands[localDrawID] = command;
+        if (isVisible) {
+            uint compactedIndex = atomicAdd(outIndirectDrawCount, 1);
+            outDrawData[compactedIndex] = globalDrawID;
+            outIndirectCommands[compactedIndex] = command;
+        }
     }
 
 }
