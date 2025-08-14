@@ -25,6 +25,10 @@ struct Resource {
         DepthOnlyAlphaMaskedFragmentShader,
         VisibilityBufferShadeVertexShader,
         VisibilityBufferShadeFragmentShader,
+        SSAOVertexShader,
+        SSAOFragmentShader,
+        EdgeAwareBoxBlurVertexShader,
+        EdgeAwareBoxBlurFragmentShader,
     };
 };
 

@@ -87,6 +87,7 @@ private:
     ScopedRefPtr<RenderPass> mShadePass;
     ScopedRefPtr<ShaderParameterCollection> mShadePassParameters;
     ScopedRefPtr<ShaderParameterImage> mVisibilityBufferUniform;
+    ScopedRefPtr<ShaderParameterImage> mSSAOTextureParameter;
     ScopedRefPtr<ShaderParameterBuffer> mIndexBufferUniform;
     ScopedRefPtr<ShaderParameterBuffer> mPositionBufferUniform;
     ScopedRefPtr<ShaderParameterBuffer> mTexCoordBufferUniform;
@@ -96,6 +97,22 @@ private:
 
     // Tranparency resources
     ScopedRefPtr<RenderPass> mTransparentPass;
+
+    // SSAO resources
+    ScopedRefPtr<RenderPass> mSSAOPass;
+    ScopedRefPtr<ShaderParameterCollection> mSSAOParameters;
+    ScopedRefPtr<ShaderParameterImage> mDepthBufferParameter;
+    ScopedRefPtr<GraphicsPipeline> mSSAOPipeline;
+    ScopedRefPtr<Texture> mSSAOBuffer;
+    ScopedRefPtr<RenderTarget> mSSAORenderTarget;
+
+    // SSAO blur resources
+    ScopedRefPtr<RenderPass> mSSAOBlurPass;
+    ScopedRefPtr<ShaderParameterCollection> mSSAOBlurParameters;
+    ScopedRefPtr<ShaderParameterImage> mSSAOBufferParameter;
+    ScopedRefPtr<GraphicsPipeline> mSSAOBlurPipeline;
+    ScopedRefPtr<Texture> mSSAOBlurredBuffer;
+    ScopedRefPtr<RenderTarget> mSSAOBlurredRenderTarget;
 
     void BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name);
     void EndMarker(const vk::CommandBuffer& commandBuffer);

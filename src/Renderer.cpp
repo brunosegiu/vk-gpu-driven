@@ -8,7 +8,10 @@
 namespace VKRT {
 
 struct CameraData {
+    glm::mat4 projection;
     glm::mat4 viewProjection;
+    glm::mat4 invViewProjection;
+    glm::mat4 invProjection;
     glm::vec4 cameraPos;
 };
 
@@ -39,8 +42,24 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         imageSize.width,
         imageSize.height,
         vk::Format::eD32Sfloat,
-        vk::ImageUsageFlagBits::eDepthStencilAttachment);
+        vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled);
     mDepthRenderTarget = new RenderTarget(mContext, mDepthBuffer);
+
+    mSSAOBuffer = new Texture(
+        mContext,
+        imageSize.width,
+        imageSize.height,
+        vk::Format::eR16Unorm,
+        vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled);
+    mSSAORenderTarget = new RenderTarget(mContext, mSSAOBuffer);
+
+    mSSAOBlurredBuffer = new Texture(
+        mContext,
+        imageSize.width,
+        imageSize.height,
+        vk::Format::eR16Unorm,
+        vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled);
+    mSSAOBlurredRenderTarget = new RenderTarget(mContext, mSSAOBlurredBuffer);
 
     mCommandRing = new CommandRing(mContext);
     mMainRenderTarget = new RenderTarget(mContext, mContext->GetSwapchain()->GetRenderTargets());
@@ -52,6 +71,22 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
           .initialLayout = vk::ImageLayout::eUndefined,
           .storeOp = vk::AttachmentStoreOp::eStore,
           .finalLayout = vk::ImageLayout::eColorAttachmentOptimal}});
+
+    mSSAOPass = new RenderPass(
+        context,
+        {{.renderTarget = mSSAORenderTarget,
+          .loadOp = vk::AttachmentLoadOp::eClear,
+          .initialLayout = vk::ImageLayout::eUndefined,
+          .storeOp = vk::AttachmentStoreOp::eStore,
+          .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal}});
+
+    mSSAOBlurPass = new RenderPass(
+        context,
+        {{.renderTarget = mSSAOBlurredRenderTarget,
+          .loadOp = vk::AttachmentLoadOp::eClear,
+          .initialLayout = vk::ImageLayout::eUndefined,
+          .storeOp = vk::AttachmentStoreOp::eStore,
+          .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal}});
 
     mTransparentPass = new RenderPass(
         context,
@@ -212,9 +247,9 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
                 .setMagFilter(vk::Filter::eNearest)
                 .setMinFilter(vk::Filter::eNearest)
                 .setMipmapMode(vk::SamplerMipmapMode::eNearest)
-                .setAddressModeU(vk::SamplerAddressMode::eRepeat)
-                .setAddressModeV(vk::SamplerAddressMode::eRepeat)
-                .setAddressModeW(vk::SamplerAddressMode::eRepeat)
+                .setAddressModeU(vk::SamplerAddressMode::eClampToBorder)
+                .setAddressModeV(vk::SamplerAddressMode::eClampToBorder)
+                .setAddressModeW(vk::SamplerAddressMode::eClampToBorder)
                 .setMipLodBias(0.0f)
                 .setCompareOp(vk::CompareOp::eNever)
                 .setMinLod(0.0f)
@@ -392,6 +427,11 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::ShaderStageFlagBits::eFragment);
         mVisibilityBufferUniform->Bind(mVisibilityBuffer);
 
+        mSSAOTextureParameter = new ShaderParameterImage(
+            mContext,
+            vk::DescriptorType::eSampledImage,
+            vk::ShaderStageFlagBits::eFragment);
+
         mIndexBufferUniform = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
@@ -418,6 +458,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::Once,
             vk::ShaderStageFlagBits::eFragment);
+
         mShadePassParameters = new ShaderParameterCollection(mContext);
         mShadePassParameters->AddParameter(mCameraUniform);
         mShadePassParameters->AddParameter(mShadowCameraUniform);
@@ -427,6 +468,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mShadePassParameters->AddParameter(mMaterialsUniform);
         mShadePassParameters->AddParameter(mShadowMapUniform);
         mShadePassParameters->AddParameter(mVisibilityBufferUniform);
+        mShadePassParameters->AddParameter(mSSAOTextureParameter);
         mShadePassParameters->AddParameter(mIndexBufferUniform);
         mShadePassParameters->AddParameter(mPositionBufferUniform);
         mShadePassParameters->AddParameter(mTexCoordBufferUniform);
@@ -439,6 +481,57 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             mShadePassParameters,
             stages,
             mShadePass,
+            std::vector<GeometryLayout>{},
+            {.enableDepthTest = false});
+    }
+
+    // SSAO resources
+    {
+        std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
+            {vk::ShaderStageFlagBits::eVertex, Resource::Id::SSAOVertexShader},
+            {vk::ShaderStageFlagBits::eFragment, Resource::Id::SSAOFragmentShader},
+        };
+
+        mDepthBufferParameter = new ShaderParameterImage(
+            mContext,
+            vk::DescriptorType::eSampledImage,
+            vk::ShaderStageFlagBits::eFragment);
+
+        mSSAOParameters = new ShaderParameterCollection(mContext);
+        mSSAOParameters->AddParameter(mCameraUniform);
+        mSSAOParameters->AddParameter(mFrameBufferSampler);
+        mSSAOParameters->AddParameter(mDepthBufferParameter);
+        mSSAOPipeline = new GraphicsPipeline(
+            context,
+            mSSAOParameters,
+            stages,
+            mSSAOPass,
+            std::vector<GeometryLayout>{},
+            {.enableDepthTest = false});
+    }
+
+    // SSAO blur resources
+    {
+        std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
+            {vk::ShaderStageFlagBits::eVertex, Resource::Id::EdgeAwareBoxBlurVertexShader},
+            {vk::ShaderStageFlagBits::eFragment, Resource::Id::EdgeAwareBoxBlurFragmentShader},
+        };
+
+        mSSAOBufferParameter = new ShaderParameterImage(
+            mContext,
+            vk::DescriptorType::eSampledImage,
+            vk::ShaderStageFlagBits::eFragment);
+
+        mSSAOBlurParameters = new ShaderParameterCollection(mContext);
+        mSSAOBlurParameters->AddParameter(mCameraUniform);
+        mSSAOBlurParameters->AddParameter(mFrameBufferSampler);
+        mSSAOBlurParameters->AddParameter(mDepthBufferParameter);
+        mSSAOBlurParameters->AddParameter(mSSAOBufferParameter);
+        mSSAOBlurPipeline = new GraphicsPipeline(
+            context,
+            mSSAOBlurParameters,
+            stages,
+            mSSAOBlurPass,
             std::vector<GeometryLayout>{},
             {.enableDepthTest = false});
     }
@@ -555,7 +648,11 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
     // Update camera uniform
     {
         CameraData cameraMatrices{
+            .projection = camera->GetProjectionTransform(),
             .viewProjection = camera->GetProjectionTransform() * camera->GetViewTransform(),
+            .invViewProjection =
+                glm::inverse(camera->GetProjectionTransform() * camera->GetViewTransform()),
+            .invProjection = glm::inverse(camera->GetProjectionTransform()),
             .cameraPos = glm::vec4(camera->GetPosition(), 0.0f)};
         mCameraUniform->Write(
             imageIndex,
@@ -594,6 +691,10 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
         mNormalBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetNormalBuffer());
         mTangentBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTangentBuffer());
     }
+
+    mDepthBufferParameter->Bind(mDepthBuffer);
+    mSSAOBufferParameter->Bind(mSSAOBuffer);
+    mSSAOTextureParameter->Bind(mSSAOBlurredBuffer);
 }
 
 void Renderer::BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name) {
@@ -973,6 +1074,131 @@ void Renderer::Render(Camera* camera) {
             EndMarker(command.buffer);
         }
 
+        // SSAO pass
+        {
+            BeginMarker(command.buffer, "SSAO");
+            {
+                BeginMarker(command.buffer, "SSAO draw");
+                {
+                    std::vector<vk::ImageMemoryBarrier> imageBarriers{
+                        vk::ImageMemoryBarrier()
+                            .setImage(mDepthBuffer->GetImage())
+                            .setOldLayout(vk::ImageLayout::eDepthAttachmentOptimal)
+                            .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                            .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
+                            .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
+                            .setSubresourceRange(vk::ImageSubresourceRange{}
+                                                     .setAspectMask(vk::ImageAspectFlagBits::eDepth)
+                                                     .setLevelCount(1)
+                                                     .setLayerCount(1)),
+                    };
+
+                    command.buffer.pipelineBarrier(
+                        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                        vk::PipelineStageFlagBits::eFragmentShader,
+                        vk::DependencyFlags{},
+                        {},
+                        {},
+                        imageBarriers);
+                }
+
+                const std::vector<vk::ClearValue> clearValues{
+                    vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
+                };
+                const vk::RenderPassBeginInfo renderPassBeginInfo =
+                    vk::RenderPassBeginInfo()
+                        .setRenderPass(mSSAOPass->GetRenderPassHandle())
+                        .setFramebuffer(mSSAOPass->GetFramebufferHandle())
+                        .setRenderArea({vk::Offset2D{0, 0}, imageSize})
+                        .setClearValues(clearValues);
+                command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+
+                {
+                    const vk::Viewport viewport{
+                        0.0f,
+                        0.0f,
+                        static_cast<float>(imageSize.width),
+                        static_cast<float>(imageSize.height),
+                        0.0f,
+                        1.0f};
+                    command.buffer.setViewport(0, viewport);
+
+                    const vk::Rect2D scissor = vk::Rect2D().setOffset(0).setExtent(
+                        vk::Extent2D{imageSize.width, imageSize.height});
+                    command.buffer.setScissor(0, scissor);
+                }
+
+                command.buffer.bindPipeline(
+                    vk::PipelineBindPoint::eGraphics,
+                    mSSAOPipeline->GetPipelineHandle());
+
+                std::vector<vk::DescriptorSet> descriptorSets =
+                    mSSAOParameters->GetDescriptorSets(mCurrentFrameIndex);
+
+                command.buffer.bindDescriptorSets(
+                    vk::PipelineBindPoint::eGraphics,
+                    mSSAOPipeline->GetPipelineLayout(),
+                    0,
+                    descriptorSets,
+                    nullptr);
+
+                command.buffer.draw(3, 1, 0, 0);
+
+                command.buffer.endRenderPass();
+                EndMarker(command.buffer);
+            }
+
+            BeginMarker(command.buffer, "SSAO blur");
+            {
+
+                const std::vector<vk::ClearValue> clearValues{
+                    vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
+                };
+                const vk::RenderPassBeginInfo renderPassBeginInfo =
+                    vk::RenderPassBeginInfo()
+                        .setRenderPass(mSSAOBlurPass->GetRenderPassHandle())
+                        .setFramebuffer(mSSAOBlurPass->GetFramebufferHandle())
+                        .setRenderArea({vk::Offset2D{0, 0}, imageSize})
+                        .setClearValues(clearValues);
+                command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+
+                {
+                    const vk::Viewport viewport{
+                        0.0f,
+                        0.0f,
+                        static_cast<float>(imageSize.width),
+                        static_cast<float>(imageSize.height),
+                        0.0f,
+                        1.0f};
+                    command.buffer.setViewport(0, viewport);
+
+                    const vk::Rect2D scissor = vk::Rect2D().setOffset(0).setExtent(
+                        vk::Extent2D{imageSize.width, imageSize.height});
+                    command.buffer.setScissor(0, scissor);
+                }
+
+                command.buffer.bindPipeline(
+                    vk::PipelineBindPoint::eGraphics,
+                    mSSAOBlurPipeline->GetPipelineHandle());
+
+                std::vector<vk::DescriptorSet> descriptorSets =
+                    mSSAOBlurParameters->GetDescriptorSets(mCurrentFrameIndex);
+
+                command.buffer.bindDescriptorSets(
+                    vk::PipelineBindPoint::eGraphics,
+                    mSSAOBlurPipeline->GetPipelineLayout(),
+                    0,
+                    descriptorSets,
+                    nullptr);
+
+                command.buffer.draw(3, 1, 0, 0);
+
+                command.buffer.endRenderPass();
+                EndMarker(command.buffer);
+            }
+            EndMarker(command.buffer);
+        }
+
         // Shade pass
         {
             BeginMarker(command.buffer, "Shade pass");
@@ -1011,9 +1237,7 @@ void Renderer::Render(Camera* camera) {
             }
 
             const std::vector<vk::ClearValue> clearValues{
-                vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
-                vk::ClearDepthStencilValue(1.0f, 0),
-            };
+                vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f)};
             const vk::RenderPassBeginInfo renderPassBeginInfo =
                 vk::RenderPassBeginInfo()
                     .setRenderPass(mShadePass->GetRenderPassHandle())
@@ -1061,6 +1285,30 @@ void Renderer::Render(Camera* camera) {
         // Render transparencies
         {
             BeginMarker(command.buffer, "Transparent pass");
+
+            {
+                std::vector<vk::ImageMemoryBarrier> imageBarriers{
+                    vk::ImageMemoryBarrier()
+                        .setImage(mDepthBuffer->GetImage())
+                        .setOldLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                        .setNewLayout(vk::ImageLayout::eDepthAttachmentOptimal)
+                        .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
+                        .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
+                        .setSubresourceRange(vk::ImageSubresourceRange{}
+                                                 .setAspectMask(vk::ImageAspectFlagBits::eDepth)
+                                                 .setLevelCount(1)
+                                                 .setLayerCount(1)),
+                };
+
+                command.buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                    vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::DependencyFlags{},
+                    {},
+                    {},
+                    imageBarriers);
+            }
+
             const std::vector<vk::ClearValue> clearValues{
                 vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
                 vk::ClearDepthStencilValue(1.0f, 0),

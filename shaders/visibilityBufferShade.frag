@@ -12,9 +12,8 @@ layout(location = 0) in vec2 inTexCoord;
 layout(location = 0) out vec4 outColor;
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    mat4 viewProjection;
-    vec4 cameraPos;
-} CameraParameters;
+    CameraData CameraParameters;
+};
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
     vec3 radiance;
@@ -33,22 +32,23 @@ layout(binding = 2, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
 };
 layout(binding = 3, set = UPDATE_ONCE) uniform texture2D shadowMap;
 layout(binding = 4, set = UPDATE_ONCE) uniform utexture2D visibilityBuffer;
-layout(binding = 5, set = UPDATE_ONCE, scalar) readonly buffer Index {
+layout(binding = 5, set = UPDATE_ONCE) uniform texture2D ssaoBuffer;
+layout(binding = 6, set = UPDATE_ONCE, scalar) readonly buffer Index {
     uint indices[];
 };
-layout(binding = 6, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
+layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
     vec3 positions[];
 };
-layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
+layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
     uint packedTexCoord[];
 };
-layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
+layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
     uint packedNormal[];
 };
-layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
+layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
     uint packedTangent[];
 };
-layout(binding = 10, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
+layout(binding = 11, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
 
 vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
     return textureGrad(
@@ -58,18 +58,14 @@ vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
             uv.ddy);
 }
 
-vec3 viewDirWS_fromInvViewProj(mat4 invViewProj, vec2 ndc)
+vec3 viewDirFromViewProjection(mat4 invViewProj, vec2 ndc)
 {
-    // Unproject near and far clip points at this pixel
     vec4 nearClip = vec4(ndc, 0.0, 1.0);
     vec4 farClip  = vec4(ndc, 1.0, 1.0);
-
     vec4 nearWS = invViewProj * nearClip;
     vec4 farWS  = invViewProj * farClip;
-
     nearWS /= nearWS.w;
     farWS  /= farWS.w;
-
     return normalize(farWS.xyz - nearWS.xyz);
 }
 
@@ -85,7 +81,7 @@ void main() {
     if (encodedVbData == PRIMITIVE_ID_NONE) {
         ProceduralSkyShaderParameters params = initSkyShaderParameters(-LightParameters.direction);
         params.lightColor = normalize(LightParameters.radiance);
-        vec3 viewDir = viewDirWS_fromInvViewProj(inverse(CameraParameters.viewProjection), ndc);
+        vec3 viewDir = viewDirFromViewProjection(CameraParameters.invViewProjection, ndc);
         outColor = vec4(getProceduralSkyColor(params, viewDir, 0), 1.0);
         return;
     }
@@ -178,7 +174,9 @@ void main() {
 
     vec3 viewVector = normalize(CameraParameters.cameraPos.xyz - worldPos);
 
-    vec3 color = evalLighting(normal, viewVector, -LightParameters.direction, LightParameters.radiance, shadowTerm, albedo, metallic, roughness);
+    float visibility = texture(sampler2D(ssaoBuffer, frameBufferTextureSampler), inTexCoord).r;
+
+    vec3 color = evalLighting(normal, viewVector, -LightParameters.direction, LightParameters.radiance, shadowTerm, albedo, metallic, roughness, visibility);
 
     outColor = vec4(gammaCorrection(color), 1.0);
 }

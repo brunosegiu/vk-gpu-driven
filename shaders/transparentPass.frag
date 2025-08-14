@@ -16,9 +16,8 @@ layout(location = 5) in mat3 inTBN;
 layout(location = 0) out vec4 outColor;
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    mat4 viewProjection;
-    vec4 cameraPos;
-} CameraParameters;
+    CameraData CameraParameters;
+};
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
     vec3 radiance;
@@ -82,7 +81,7 @@ void main() {
 
     vec3 viewVector = normalize(CameraParameters.cameraPos.xyz - inWorldSpacePos);
 
-    vec3 color = evalLighting(normal, viewVector, -LightParameters.direction, LightParameters.radiance, shadowTerm, albedo, metallic, roughness);
+    vec3 color = evalLighting(normal, viewVector, -LightParameters.direction, LightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0);
 
     outColor = vec4(gammaCorrection(color), albedo.a);
 }

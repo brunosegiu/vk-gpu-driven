@@ -64,6 +64,18 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
         case Resource::Id::VisibilityBufferShadeFragmentShader:
             actualId = VKRT_RESOURCE_VISIBILITY_BUFFER_SHADE_FRAGMENT_SHADER;
             break;
+        case Resource::Id::SSAOVertexShader:
+            actualId = VKRT_RESOURCE_SSAO_VERTEX_SHADER;
+            break;
+        case Resource::Id::SSAOFragmentShader:
+            actualId = VKRT_RESOURCE_SSAO_FRAGMENT_SHADER;
+            break;
+        case Resource::Id::EdgeAwareBoxBlurVertexShader:
+            actualId = VKRT_RESOURCE_EDGE_AWARE_BOX_BLUR_VERTEX_SHADER;
+            break;
+        case Resource::Id::EdgeAwareBoxBlurFragmentShader:
+            actualId = VKRT_RESOURCE_EDGE_AWARE_BOX_BLUR_FRAGMENT_SHADER;
+            break;
         default:
             return {nullptr, 0};
     }

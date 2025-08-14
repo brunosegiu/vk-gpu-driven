@@ -108,7 +108,11 @@ int main() {
         if (contextResult == Result::Success) {
             ScopedRefPtr<Scene> scene = new Scene(context);
 
+#ifdef VKRT_DEBUG
             LoadBasicScene(context, scene);
+#else
+            LoadBistro(context, scene);
+#endif
 
             ScopedRefPtr<Camera> camera = new Camera(window);
             camera->SetTranslation(glm::vec3(-14.0f, 5.0f, -1.0f));

@@ -6,9 +6,8 @@
 #include "shading.glsl"
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    mat4 viewProjection;
-    vec4 cameraPos;
-} CameraParameters;
+    CameraData CameraParameters;
+};
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
     vec3 radiance;

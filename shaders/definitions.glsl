@@ -40,4 +40,12 @@ struct Material {
     int normalTextureIndex;
 };
 
+struct CameraData {
+    mat4 projection;
+    mat4 viewProjection;
+	mat4 invViewProjection;
+	mat4 invProjection;
+    vec4 cameraPos;
+};
+
 #endif

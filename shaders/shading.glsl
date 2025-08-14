@@ -153,7 +153,7 @@ vec3 fakeSkyReflectionFast(vec3 N, vec3 V, float roughness, vec3 F0, ProceduralS
     return specularLight;
 }
 
-vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 albedo, float metallic, float roughness) {
+vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 albedo, float metallic, float roughness, float visibility) {
     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo.rgb, metallic);
 
@@ -185,7 +185,7 @@ vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 
     params.lightColor = normalize(radiance);
     vec3 skySpecular = fakeSkyReflectionFast(N, V, roughness, F0, params);
 
-    return ambient + Lo + skySpecular;
+    return ambient * visibility + Lo + skySpecular;
 }
 
 vec3 gammaCorrection(vec3 color) {

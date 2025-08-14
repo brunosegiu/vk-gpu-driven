@@ -103,6 +103,10 @@ set(SHADERS
     depthOnlyShaderAlphaMasked.frag
     visibilityBufferShade.vert
     visibilityBufferShade.frag
+    ssao.vert
+    ssao.frag
+    edgeAwareBoxBlur.vert
+    edgeAwareBoxBlur.frag
 )
 
 if(WIN32)
