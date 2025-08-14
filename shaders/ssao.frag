@@ -96,18 +96,17 @@ void main() {
     vec2 texelSize = 1.0 / fbSize;
 
     vec3 randomRotation = vec3(getRandomHemisphereRotation(), 0.0);
-    vec3 viewSpaceNormal = -reconstructNormal(inTexCoord, deviceDepth, texelSize);
+    vec3 viewSpaceNormal = reconstructNormal(inTexCoord, deviceDepth, texelSize);
     vec3 viewSpaceTangent = normalize(randomRotation - viewSpaceNormal * dot(randomRotation, viewSpaceNormal));
     vec3 viewSpaceBitangent = cross(viewSpaceNormal, viewSpaceTangent);
 
     mat3 TBN = mat3(viewSpaceTangent, viewSpaceBitangent, viewSpaceNormal);
 
     float radius = 0.5;
-    float bias = 0.025;
     float power = 2.0;
 
     float occlusion = 0.0;
-    uint kernelSize = 64;
+    uint kernelSize = 8;
     for (uint sampleIndex = 0; sampleIndex < kernelSize; ++sampleIndex) {
         // Sample more directions toward origin: https://john-chapman-graphics.blogspot.com/2013/01/ssao-tutorial.html
         vec2 xi = hammersley(sampleIndex, kernelSize);
@@ -118,11 +117,13 @@ void main() {
         vec3 samplePos = viewSpacePos + TBN * hemisphereDir * radius;
         vec4 clipSpacePos = CameraParameters.projection * vec4(samplePos, 1.0);
         vec2 projectedSampleUV = (clipSpacePos.xy / clipSpacePos.w) * 0.5 + 0.5;
+        if (any(lessThan(projectedSampleUV, vec2(0.0))) || any(greaterThan(projectedSampleUV, vec2(1.0)))) continue;
         float sampleDeviceDepth = texture(sampler2D(depthBuffer, frameBufferTextureSampler), projectedSampleUV).r;
+        if (sampleDeviceDepth >= 1.0) continue;
 
         vec3 viewSpaceSamplePos = reconstructViewSpacePos(projectedSampleUV, sampleDeviceDepth);
         float rangeCheck = smoothstep(0.0, 1.0, radius / abs(samplePos.z - viewSpaceSamplePos.z));
-        occlusion += (viewSpaceSamplePos.z <= samplePos.z - bias) ? rangeCheck : 0.0;
+        occlusion += (viewSpaceSamplePos.z > samplePos.z) ? rangeCheck : 0.0;
     }
     occlusion /= kernelSize;
     outVisibilityFactor = pow(1.0 - occlusion, power);
