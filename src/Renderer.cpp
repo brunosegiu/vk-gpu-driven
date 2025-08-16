@@ -22,6 +22,8 @@ struct LightData {
 };
 
 struct CullData {
+    uint32_t ortho;
+    glm::vec3 viewDirectionOrCameraPos;
     std::array<glm::vec4, 6> frustumPlanes;
     uint32_t globalDrawOffset;
     uint32_t maxDrawCount;
@@ -32,7 +34,8 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
       mScene(scene),
       mCurrentFrameIndex(0),
       mMaterialsBuffer(nullptr),
-      mPerDrawBuffers() {
+      mPerDrawBuffers(),
+      mFreezeCulling(false) {
     ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
     inputManager->Subscribe(this);
 
@@ -578,10 +581,12 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
         if (drawCallCount == 0) {
             return;
         }
-        resources.cullingDataUniform->Write(
-            imageIndex,
-            reinterpret_cast<uint8_t*>(&cullData),
-            sizeof(CullData));
+        if (!mFreezeCulling) {
+            resources.cullingDataUniform->Write(
+                imageIndex,
+                reinterpret_cast<uint8_t*>(&cullData),
+                sizeof(CullData));
+        }
 
         const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
 
@@ -618,6 +623,8 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
     for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
         if (alphaMode != Material::AlphaMode::Blended) {  // Blended materials aren't shadow casters
             CullData shadowCullingData{
+                .ortho = 1,
+                .viewDirectionOrCameraPos = mScene->GetLight().GetDirection(),
                 .frustumPlanes = ViewFrustum(mScene->GetLight().ComputeShadowMatrix()).GetPlanes(),
                 .globalDrawOffset = static_cast<uint32_t>(mScene->GetDrawCallOffset(alphaMode)),
                 .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount(alphaMode))};
@@ -625,6 +632,8 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
         }
 
         CullData mainCameraCullingData{
+            .ortho = 0,
+            .viewDirectionOrCameraPos = camera->GetPosition(),
             .frustumPlanes = camera->GetViewFrustum().GetPlanes(),
             .globalDrawOffset = static_cast<uint32_t>(mScene->GetDrawCallOffset(alphaMode)),
             .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount(alphaMode))};
@@ -727,7 +736,6 @@ void Renderer::Render(Camera* camera) {
     mCurrentFrameIndex = (mCurrentFrameIndex + 1) % mContext->GetMaxInFlightFrameCount();
     CommandRing::CommandResources command = mCommandRing->Cycle();
 
-    mScene->Lock();
     mContext->GetSwapchain()->AcquireNextImage(mCurrentFrameIndex);
 
     mScene->Update();
@@ -1390,7 +1398,11 @@ void Renderer::Render(Camera* camera) {
     mContext->GetSwapchain()->Present(command.buffer, command.fence, mCurrentFrameIndex);
 }
 
-void Renderer::OnKeyPressed(int key) {}
+void Renderer::OnKeyPressed(int key) {
+    if (key == GLFW_KEY_P) {
+        mFreezeCulling = !mFreezeCulling;
+    }
+}
 
 void Renderer::OnKeyReleased(int key) {}
 

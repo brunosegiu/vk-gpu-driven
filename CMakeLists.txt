@@ -166,19 +166,6 @@ add_compile_definitions(GLM_ENABLE_EXPERIMENTAL)
 find_package(glm CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE glm::glm)
 
-# Find and link TinyGLTF
-add_compile_definitions(TINYGLTF_IMPLEMENTATION)
-add_compile_definitions(STB_IMAGE_IMPLEMENTATION)
-add_compile_definitions(STB_IMAGE_WRITE_IMPLEMENTATION)
-add_compile_definitions(TINYGLTF_NO_INCLUDE_JSON)
-find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
-target_include_directories(${PROJECT_NAME} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
-
-# Find and link JSON (TinyGLTF dependency)
-find_package(nlohmann_json CONFIG REQUIRED)
-find_path(NLOHMANN_JSON_INCLUDE nlohmann/json.hpp)
-include_directories(${NLOHMANN_JSON_INCLUDE})
-
 # Find and link SDL2
 find_package(SDL2 CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME}
@@ -232,3 +219,6 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT $
 if(MSVC)
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
 endif()
+
+# Add Baker project
+add_subdirectory(baker)

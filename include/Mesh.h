@@ -16,35 +16,32 @@ struct GeometryLayout {
     size_t stride;
 };
 
+struct Meshlet {
+    uint32_t vertexOffset = 0;
+    uint32_t indexOffset = 0;
+    uint32_t indexCount = 0;
+    glm::vec3 minBounds;
+    glm::vec3 maxBounds;
+    glm::vec3 coneApex;
+    glm::vec3 coneAxis;
+    float coneCutoff;
+};
+
 class Mesh : public RefCountPtr {
 public:
-    Mesh(ScopedRefPtr<Material> material);
+    Mesh(ScopedRefPtr<Material> material, const std::vector<Meshlet>& meshlets);
 
     const ScopedRefPtr<Material> GetMaterial() const { return mMaterial; }
     ScopedRefPtr<Material> GetMaterial() { return mMaterial; }
 
-    void SetIndexCount(uint32_t indexCount) { mIndexCount = indexCount; }
-    const uint32_t& GetIndexCount() const { return mIndexCount; }
-
-    void SetFirstIndex(uint32_t firstIndex) { mFirstIndex = firstIndex; }
-    const uint32_t& GetFirstIndex() const { return mFirstIndex; }
-
-    void SetVertexOffset(uint32_t vertexOffset) { mVertexOffset = vertexOffset; }
-    const uint32_t& GetVertexOffset() const { return mVertexOffset; }
-
-    void SetAABB(AABB aabb) { mAABB = aabb; }
-    const AABB& GetAABB() const { return mAABB; }
-
     ~Mesh();
 
+    std::vector<Meshlet> mMeshlets;
+
 private:
-    uint32_t mVertexOffset;
     uint32_t mIndexCount;
-    uint32_t mFirstIndex;
 
     ScopedRefPtr<Material> mMaterial;
-
-    AABB mAABB;
 };
 
 }  // namespace VKRT

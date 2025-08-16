@@ -114,6 +114,8 @@ private:
     ScopedRefPtr<Texture> mSSAOBlurredBuffer;
     ScopedRefPtr<RenderTarget> mSSAOBlurredRenderTarget;
 
+    bool mFreezeCulling;
+
     void BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name);
     void EndMarker(const vk::CommandBuffer& commandBuffer);
 };

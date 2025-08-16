@@ -6,7 +6,8 @@
 
 namespace VKRT {
 
-Mesh::Mesh(ScopedRefPtr<Material> material) : mMaterial(material) {}
+Mesh::Mesh(ScopedRefPtr<Material> material, const std::vector<Meshlet>& meshlets)
+    : mIndexCount(0), mMaterial(material), mMeshlets(meshlets) {}
 
 Mesh::~Mesh() {}
 

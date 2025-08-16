@@ -2,11 +2,13 @@
 
 #include "DebugUtils.h"
 
+#include "../baker/include/BakedSceneSerialization.h"
+
 #undef MemoryBarrier
 
 namespace VKRT {
 
-Scene::Scene(ScopedRefPtr<Context> context) : mContext(context), mLocked(false), mObjects() {
+Scene::Scene(ScopedRefPtr<Context> context) : mContext(context), mObjects() {
     uint64_t dummyData = 0;
     mMeshSystem = new MeshSystem(mContext);
     mDummyTexture = new Texture(
@@ -18,141 +20,164 @@ Scene::Scene(ScopedRefPtr<Context> context) : mContext(context), mLocked(false),
         4);
 }
 
-void Scene::AddObject(ScopedRefPtr<Object> object) {
-    if (object != nullptr) {
-        mObjects.emplace_back(object);
-    }
-}
+void Scene::Load(std::string path) {
+    VKRTBaker::BakedFile fileIn;
+    std::ifstream ifs(path, std::ios::binary);
+    fileIn.deserialize(ifs);
+    ifs.close();
 
-void Scene::Lock() {
-    // Create unified geometry buffers
-    GetMeshSystem()->Upload();
-    // Flatten object tree structure
-    PackDrawData();
+    const auto toVec3 = [](const VKRTBaker::Vec3& a) -> glm::vec3 {
+        return glm::vec3(a.x, a.y, a.z);
+    };
+
+    // Upload textures to GPU
+    for (VKRTBaker::Texture& unpackedTexture : fileIn.textures) {
+        ScopedRefPtr<Texture> texture = new Texture(
+            mContext,
+            unpackedTexture.width,
+            unpackedTexture.height,
+            vk::Format::eR8G8B8A8Unorm,
+            reinterpret_cast<const uint8_t*>(unpackedTexture.data.data()),
+            unpackedTexture.data.size() * sizeof(unpackedTexture.data[0]));
+        mSceneMaterials.textures.push_back(texture);
+    }
+
+    if (fileIn.textures.empty()) {
+        mSceneMaterials.textures.push_back(mDummyTexture);
+    }
+
     // Create material proxies
-    GenerateMaterialProxies();
-    mLocked = true;
-}
+    for (VKRTBaker::Material& unpackedMaterial : fileIn.materials) {
+        ScopedRefPtr<Texture> albedoTexture =
+            unpackedMaterial.albedoTextureIndex >= 0
+                ? mSceneMaterials.textures[unpackedMaterial.albedoTextureIndex]
+                : nullptr;
+        ScopedRefPtr<Texture> metallicRoughnessTexture =
+            unpackedMaterial.metallicRoughnessTextureIndex >= 0
+                ? mSceneMaterials.textures[unpackedMaterial.metallicRoughnessTextureIndex]
+                : nullptr;
+        ScopedRefPtr<Texture> normalTexture =
+            unpackedMaterial.normalTextureIndex >= 0
+                ? mSceneMaterials.textures[unpackedMaterial.normalTextureIndex]
+                : nullptr;
 
-void Scene::GenerateMaterialProxies() {
-    // Gather textures first
-    std::vector<std::pair<ScopedRefPtr<Texture>, int32_t>> textureIndices;
-    textureIndices.push_back({mDummyTexture, 1});
-    int32_t currentTextureIndex = 1;
-    for (ScopedRefPtr<Mesh>& mesh : mFlattenedMeshes) {
-        const Material* material = mesh->GetMaterial();
-        std::vector<ScopedRefPtr<Texture>> meshTextures{
-            material->GetAlbedoTexture(),
-            material->GetMetallicRoughnessTexture(),
-            material->GetNormalTexture()};
-        for (const ScopedRefPtr<Texture>& texture : meshTextures) {
-            if (texture != nullptr) {
-                auto it = std::find_if(
-                    textureIndices.begin(),
-                    textureIndices.end(),
-                    [&texture](const auto& entry) { return entry.first == texture; });
+        ScopedRefPtr<Material> material = new Material(
+            static_cast<Material::AlphaMode>(unpackedMaterial.materialType),
+            toVec3(unpackedMaterial.albedo),
+            unpackedMaterial.roughness,
+            unpackedMaterial.metallic,
+            albedoTexture,
+            metallicRoughnessTexture,
+            normalTexture);
+        material->SetMaterialId(mMaterials.size());
+        mMaterials.push_back(material);
 
-                if (it == textureIndices.end()) {
-                    textureIndices.emplace_back(texture, currentTextureIndex);
-                    ++currentTextureIndex;
-                }
-            }
-        }
-    }
-
-    // Gather materials and generate texture indices if applicable
-    std::vector<MaterialProxy> materials;
-    for (ScopedRefPtr<Mesh>& mesh : mFlattenedMeshes) {
-        const ScopedRefPtr<Material> material = mesh->GetMaterial();
         MaterialProxy proxy{
             .albedo = material->GetAlbedo(),
             .roughness = material->GetRoughness(),
             .metallic = material->GetMetallic(),
-            .albedoTextureIndex = -1,
-            .metallicRoughnessTextureIndex = -1,
-            .normalTextureIndex = -1,
+            .albedoTextureIndex = unpackedMaterial.albedoTextureIndex,
+            .metallicRoughnessTextureIndex = unpackedMaterial.metallicRoughnessTextureIndex,
+            .normalTextureIndex = unpackedMaterial.normalTextureIndex,
         };
-        {
-            const ScopedRefPtr<Texture> albedoTexture = material->GetAlbedoTexture();
-            auto albedoIt = std::find_if(
-                textureIndices.begin(),
-                textureIndices.end(),
-                [&albedoTexture](const auto& entry) { return entry.first == albedoTexture; });
-            if (albedoIt != textureIndices.end()) {
-                proxy.albedoTextureIndex = albedoIt->second;
-            }
-        }
-        {
-            const ScopedRefPtr<Texture> roughnessTexture = material->GetMetallicRoughnessTexture();
-            auto roughnessIt = std::find_if(
-                textureIndices.begin(),
-                textureIndices.end(),
-                [&roughnessTexture](const auto& entry) { return entry.first == roughnessTexture; });
-            if (roughnessIt != textureIndices.end()) {
-                proxy.metallicRoughnessTextureIndex = roughnessIt->second;
-            }
-        }
-        {
-            const ScopedRefPtr<Texture> normalTexture = material->GetNormalTexture();
-            auto normalIt = std::find_if(
-                textureIndices.begin(),
-                textureIndices.end(),
-                [&normalTexture](const auto& entry) { return entry.first == normalTexture; });
-            if (normalIt != textureIndices.end()) {
-                proxy.normalTextureIndex = normalIt->second;
-            }
-        }
-        material->SetMaterialId(materials.size());
-        materials.push_back(proxy);
+
+        mSceneMaterials.materials.push_back(proxy);
     }
 
-    std::vector<ScopedRefPtr<Texture>> textures;
-    for (const auto& entry : textureIndices) {
-        textures.push_back(entry.first);
+    for (const VKRTBaker::Mesh& unpackedMesh : fileIn.meshes) {
+        std::vector<Meshlet> meshlets;
+        for (const uint32_t& unpackedMeshletIndex : unpackedMesh.meshlets) {
+            VKRTBaker::Meshlet unpackedMeshlet = fileIn.meshlets[unpackedMeshletIndex];
+            meshlets.push_back({
+                .vertexOffset = unpackedMeshlet.vertexOffset,
+                .indexOffset = unpackedMeshlet.indexOffset,
+                .indexCount = unpackedMeshlet.indexCount,
+                .minBounds = toVec3(unpackedMeshlet.minBounds),
+                .maxBounds = toVec3(unpackedMeshlet.maxBounds),
+                .coneApex = toVec3(unpackedMeshlet.coneApex),
+                .coneAxis = toVec3(unpackedMeshlet.coneAxis),
+                .coneCutoff = unpackedMeshlet.coneCutoff,
+            });
+        }
+        ScopedRefPtr<Mesh> mesh = new Mesh(mMaterials[unpackedMesh.material], meshlets);
+        mMeshes.push_back(mesh);
     }
 
-    mCachedMaterialProxies = SceneMaterials{
-        .materials = materials,
-        .textures = textures,
-    };
+    for (const VKRTBaker::Object& unpackedObject : fileIn.objects) {
+        ScopedRefPtr<Object> object = new Object();
+        mFlatObjects.push_back(object);
+
+        glm::vec3 translation(
+            unpackedObject.translation.x,
+            unpackedObject.translation.y,
+            unpackedObject.translation.z);
+        object->SetTranslation(translation);
+
+        glm::vec3 scale(unpackedObject.scale.x, unpackedObject.scale.y, unpackedObject.scale.z);
+        object->SetScale(scale);
+
+        glm::quat rotation(
+            unpackedObject.rotation.w,
+            unpackedObject.rotation.x,
+            unpackedObject.rotation.y,
+            unpackedObject.rotation.z);
+        object->SetRotation(rotation);
+
+        for (const uint32_t meshIndex : unpackedObject.meshes) {
+            object->AddMesh(mMeshes[meshIndex]);
+        }
+    }
+
+    uint32_t objectIndex = 0;
+    mObjects.push_back(mFlatObjects[0]);
+    for (ScopedRefPtr<Object>& object : mFlatObjects) {
+        for (const uint32_t childIndex : fileIn.objects[objectIndex].children) {
+            object->AddChild(mFlatObjects[childIndex]);
+        }
+        ++objectIndex;
+    }
+
+    // Upload geometry buffer to GPU
+    const std::vector<VKRTBaker::Vec3>& vertices = fileIn.unifiedGeometryBuffer.positions;
+    const std::vector<uint32_t>& texCoord = fileIn.unifiedGeometryBuffer.textureCoords;
+    const std::vector<uint32_t>& normals = fileIn.unifiedGeometryBuffer.normals;
+    const std::vector<uint32_t>& tangents = fileIn.unifiedGeometryBuffer.tangents;
+    const std::vector<uint32_t>& indices = fileIn.unifiedGeometryBuffer.indices;
+    GetMeshSystem()->Upload(vertices, texCoord, normals, tangents, indices);
 }
 
 void Scene::Update() {
     for (ScopedRefPtr<Object> object : mObjects) {
         object->UpdateTransforms(glm::mat4(1.0f));
     }
+    PackDrawData();
 }
 
 void Scene::PackDrawData() {
     // Flatten scene into a single list
-    std::function<void(const ScopedRefPtr<Object>&, std::vector<DrawData>&)> loadSubtree =
-        [&](const ScopedRefPtr<Object>& object, std::vector<DrawData>& flattened) -> void {
-        for (const ScopedRefPtr<Object>& child : object->GetChildren()) {
-            std::vector<ScopedRefPtr<Mesh>> meshes = child->GetMeshes();
-            for (ScopedRefPtr<Mesh>& mesh : meshes) {
+    mPackedDrawData.clear();
+
+    for (const ScopedRefPtr<Object>& object : mFlatObjects) {
+        std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
+        for (ScopedRefPtr<Mesh>& mesh : meshes) {
+            for (Meshlet& meshlet : mesh->mMeshlets) {
                 DrawData meshParameters{
-                    .indexCount = mesh->GetIndexCount(),
-                    .firstIndex = mesh->GetFirstIndex(),
-                    .vertexOffset = static_cast<int32_t>(mesh->GetVertexOffset()),
-                    .transform = child->GetAbsoluteTransform(),
+                    .indexCount = meshlet.indexCount,
+                    .firstIndex = meshlet.indexOffset,
+                    .vertexOffset = static_cast<int32_t>(meshlet.vertexOffset),
+                    .transform = object->GetAbsoluteTransform(),
                     .materialId = mesh->GetMaterial()->GetMaterialId(),
                     .normalTransform = glm::mat4(
-                        glm::transpose(glm::inverse(glm::mat3(child->GetAbsoluteTransform())))),
+                        glm::transpose(glm::inverse(glm::mat3(object->GetAbsoluteTransform())))),
                     .alphaMode = static_cast<uint32_t>(mesh->GetMaterial()->GetAlphaMode()),
-                    .aabb = {
-                        .minBounds = mesh->GetAABB().GetMin(),
-                        .maxBounds = mesh->GetAABB().GetMax()}};
-                flattened.push_back(meshParameters);
-                mFlattenedMeshes.push_back(mesh);
+                    .minBounds = meshlet.minBounds,
+                    .maxBounds = meshlet.maxBounds,
+                    .coneApex = meshlet.coneApex,
+                    .coneAxis = meshlet.coneAxis,
+                    .coneCutoff = meshlet.coneCutoff};
+                mPackedDrawData.push_back(meshParameters);
             }
-            loadSubtree(child, flattened);
         }
-    };
-
-    mPackedDrawData.clear();
-    mFlattenedMeshes.clear();
-    for (ScopedRefPtr<Object> object : mObjects) {
-        loadSubtree(object, mPackedDrawData);
     }
 
     // Split per-material type

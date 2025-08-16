@@ -4,7 +4,9 @@
 
 #include "definitions.glsl"
 
-layout(binding = 0, set = UPDATE_PER_FRAME) uniform TCullingData {
+layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCullingData {
+    uint ortho;
+    vec3 viewDirectionOrCameraPos;
     vec4 frustumPlanes[6];
     uint globalDrawOffset;
     uint maxDrawCount;
@@ -28,7 +30,7 @@ layout(binding = 4, set = UPDATE_PER_FRAME, std430) buffer writeonly OutDrawData
 
 layout(local_size_x = 64) in;
 
-bool Test(const vec3 min, const vec3 max, const mat4 objectTransform) {
+bool TestAABB(mat4 model, const vec3 min, const vec3 max) {
     vec3 boxPoints[8] = vec3[](
         vec3(min.x, min.y, min.z),
         vec3(max.x, min.y, min.z),
@@ -41,7 +43,7 @@ bool Test(const vec3 min, const vec3 max, const mat4 objectTransform) {
     );
 
     for (uint cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
-        boxPoints[cornerIndex] = vec3(objectTransform * vec4(boxPoints[cornerIndex], 1.0f));
+        boxPoints[cornerIndex] = vec3(model * vec4(boxPoints[cornerIndex], 1.0f));
     }
 
     for (uint planeIndex = 0; planeIndex < 6; ++planeIndex) {
@@ -60,13 +62,21 @@ bool Test(const vec3 min, const vec3 max, const mat4 objectTransform) {
     return true;
 }
 
+bool TestCone(mat3 normal, mat4 model, vec3 coneDir, vec3 coneApex, float coneCutoff) {
+    vec3 axis = normalize(normal * coneDir);
+    vec3 apex = vec3(model * vec4(coneApex, 1.0)).xyz;
+    vec3 view = ortho == 0 ? normalize(apex - viewDirectionOrCameraPos) : viewDirectionOrCameraPos;
+    return dot(view, axis) < coneCutoff;
+}
+
 void main() {
     uint localDrawID = gl_GlobalInvocationID.x;
     if (localDrawID < maxDrawCount) {
         uint globalDrawID = globalDrawOffset + localDrawID;
         DrawData perDrawData = SceneData.perDrawData[globalDrawID];
 
-        bool isVisible = Test(perDrawData.aabb.minBounds, perDrawData.aabb.maxBounds, perDrawData.modelMatrix);
+        bool isVisible = TestAABB(perDrawData.modelMatrix, perDrawData.minBounds, perDrawData.maxBounds)
+            && TestCone(perDrawData.normalTransform, perDrawData.modelMatrix, perDrawData.coneAxis, perDrawData.coneApex, perDrawData.coneCutoff);
 
         VkDrawIndexedIndirectCommand command;
         command.indexCount = perDrawData.indexCount;

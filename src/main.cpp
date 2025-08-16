@@ -20,43 +20,6 @@ struct Timer {
     std::chrono::steady_clock::time_point beginTime;
 };
 
-void LoadBasicScene(
-    VKRT::ScopedRefPtr<VKRT::Context> context,
-    VKRT::ScopedRefPtr<VKRT::Scene> scene) {
-    using namespace VKRT;
-
-    {
-        ScopedRefPtr<Object> dragon =
-            Object::Load(context, scene, "./assets/DragonAttenuation.glb");
-        dragon->SetTranslation(glm::vec3(0.0f, 0.0f, 0.5f));
-        dragon->SetScale(glm::vec3(6.0f, 7.5f, 4.0f));
-        dragon->Rotate(glm::vec3(0.0f, 90.0f, 0.0f));
-    }
-
-    {
-        ScopedRefPtr<Object> object = Object::Load(context, scene, "./assets/venus.gltf");
-        object->SetTranslation(glm::vec3(10.0f, 3.5f, 15.0f));
-        object->SetScale(glm::vec3(10.0f));
-        object->Rotate(glm::vec3(0.0f, 90.0f, 0.0f));
-        object->GetChildren().front()->GetMeshes().front()->GetMaterial()->SetAlphaMode(
-            Material::AlphaMode::Blended);
-    }
-
-    {
-        ScopedRefPtr<Object> teapot = Object::Load(context, scene, "./assets/utahTeapot.glb");
-        teapot->SetTranslation(glm::vec3(10.0f, 2.5f, -15.5f));
-        teapot->SetScale(glm::vec3(1.025f));
-        teapot->Rotate(glm::vec3(0.0f, -90.0f, 0.0f));
-    }
-}
-
-void LoadBistro(VKRT::ScopedRefPtr<VKRT::Context> context, VKRT::ScopedRefPtr<VKRT::Scene> scene) {
-    using namespace VKRT;
-    ScopedRefPtr<Object> bistro = Object::Load(context, scene, "./assets/Bistro.glb");
-    bistro->SetTranslation(glm::vec3(0.0f, 0.0f, 0.0f));
-    bistro->SetScale(glm::vec3(1.0f));
-}
-
 // From chatgpt
 struct SunLight {
     glm::vec3 direction;  // Unit vector pointing from scene origin toward the sun
@@ -108,11 +71,7 @@ int main() {
         if (contextResult == Result::Success) {
             ScopedRefPtr<Scene> scene = new Scene(context);
 
-#ifdef VKRT_DEBUG
-            LoadBasicScene(context, scene);
-#else
-            LoadBistro(context, scene);
-#endif
+            scene->Load("./assets/testScene.vkrt");
 
             ScopedRefPtr<Camera> camera = new Camera(window);
             camera->SetTranslation(glm::vec3(-14.0f, 5.0f, -1.0f));

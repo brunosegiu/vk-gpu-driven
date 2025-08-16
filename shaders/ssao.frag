@@ -106,7 +106,7 @@ void main() {
     float power = 2.0;
 
     float occlusion = 0.0;
-    uint kernelSize = 8;
+    uint kernelSize = 32;
     for (uint sampleIndex = 0; sampleIndex < kernelSize; ++sampleIndex) {
         // Sample more directions toward origin: https://john-chapman-graphics.blogspot.com/2013/01/ssao-tutorial.html
         vec2 xi = hammersley(sampleIndex, kernelSize);

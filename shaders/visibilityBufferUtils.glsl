@@ -1,13 +1,14 @@
 #ifndef VISIBILITY_BUFFER_UTILS_GLSL
 #define VISIBILITY_BUFFER_UTILS_GLSL
 
-uint encodeVBData(uint drawId, uint primitiveId)
-{
-    return (drawId << 17) | (primitiveId & 0x3FFFF);
+#define DRAW_ID_BITS 24
+
+uint encodeVBData(uint drawId, uint primitiveId) {
+    return primitiveId << DRAW_ID_BITS | drawId;
 }
 
 uvec2 decodeVBData(uint encoded) {
-    return uvec2(encoded >> 17, encoded & 0x1FFFF);
+    return uvec2(encoded & ((1 << DRAW_ID_BITS) - 1), encoded >> DRAW_ID_BITS);
 }
 
 // Barycentric coordinate and derivatives computation from: https://github.com/expenses/lighthugger

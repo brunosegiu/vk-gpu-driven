@@ -13,11 +13,6 @@ class Scene;
 
 class Object : public RefCountPtr {
 public:
-    static ScopedRefPtr<Object> Load(
-        ScopedRefPtr<Context> context,
-        ScopedRefPtr<Scene> scene,
-        const std::string& path);
-
     Object();
 
     const std::vector<ScopedRefPtr<Mesh>>& GetMeshes() const { return mMeshes; }

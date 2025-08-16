@@ -18,9 +18,9 @@ class Scene : public RefCountPtr {
 public:
     Scene(ScopedRefPtr<Context> context);
 
-    void AddObject(ScopedRefPtr<Object> object);
+    void Load(std::string path);
 
-    void Lock();
+    void Update();
 
     struct MaterialProxy {
         glm::vec3 albedo;
@@ -43,14 +43,15 @@ public:
         uint32_t materialId;
         glm::mat3 normalTransform;
         uint32_t alphaMode;
-        struct {
-            glm::vec3 minBounds;
-            glm::vec3 maxBounds;
-        } aabb;
+        glm::vec3 minBounds;
+        glm::vec3 maxBounds;
+        glm::vec3 coneApex;
+        glm::vec3 coneAxis;
+        float coneCutoff;
     };
 
     const std::vector<DrawData>& GetPackedDrawData() const { return mPackedDrawData; }
-    const SceneMaterials& GetMaterialProxies() const { return mCachedMaterialProxies; }
+    const SceneMaterials& GetMaterialProxies() const { return mSceneMaterials; }
     ScopedRefPtr<MeshSystem> GetMeshSystem() { return mMeshSystem; }
     const uint32_t GetDrawCallCount(Material::AlphaMode alphaMode) {
         return mRenderPassResources[alphaMode].cachedDrawCallCount;
@@ -59,25 +60,24 @@ public:
         return mRenderPassResources[alphaMode].cachedDrawOffset;
     }
     DirectionalLight& GetLight() { return mLight; }
-    void Update();
 
     ~Scene();
 
 private:
     void PackDrawData();
-    void GenerateMaterialProxies();
 
     ScopedRefPtr<Context> mContext;
-    bool mLocked;
     std::vector<ScopedRefPtr<Object>> mObjects;
+    std::vector<ScopedRefPtr<Object>> mFlatObjects;
     DirectionalLight mLight;
 
     ScopedRefPtr<Texture> mDummyTexture;
 
     ScopedRefPtr<MeshSystem> mMeshSystem;
     std::vector<DrawData> mPackedDrawData;
-    std::vector<ScopedRefPtr<Mesh>> mFlattenedMeshes;
-    SceneMaterials mCachedMaterialProxies;
+    std::vector<ScopedRefPtr<Material>> mMaterials;
+    std::vector<ScopedRefPtr<Mesh>> mMeshes;
+    SceneMaterials mSceneMaterials;
     struct RenderPassResources {
         uint32_t cachedDrawOffset;
         uint32_t cachedDrawCallCount;
