@@ -20,10 +20,8 @@ layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
 };
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    vec3 radiance;
-    vec3 direction;
-    mat4 viewProjection;
-} LightParameters;
+    LightData LightParameters;
+};
 
 layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
@@ -75,7 +73,7 @@ void main() {
 	vec4 shadowCoord = inShadowCoord / inShadowCoord.w;
     float shadowTerm = 0.0f;
     {
-		shadowTerm = filterPCF(shadowCoord, textureSampler, shadowMap);
+		shadowTerm = filterPCF(shadowCoord, LightParameters.shadowTaps, textureSampler, shadowMap);
 	    shadowTerm = clamp(shadowTerm, 0.0f, 1.0f);
     }
 

@@ -19,6 +19,7 @@ struct LightData {
     glm::vec3 radiance;
     glm::vec3 direction;
     glm::mat4 viewProjection;
+    uint32_t shadowTaps;
 };
 
 struct CullData {
@@ -500,8 +501,19 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::DescriptorType::eSampledImage,
             vk::ShaderStageFlagBits::eFragment);
 
+        mSSAOControlParameter = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eUniformBuffer,
+            ShaderParameter::UpdateFrequency::PerFrame,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex,
+            sizeof(SSAOControlData),
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
         mSSAOParameters = new ShaderParameterCollection(mContext);
         mSSAOParameters->AddParameter(mCameraUniform);
+        mSSAOParameters->AddParameter(mSSAOControlParameter);
         mSSAOParameters->AddParameter(mFrameBufferSampler);
         mSSAOParameters->AddParameter(mDepthBufferParameter);
         mSSAOPipeline = new GraphicsPipeline(
@@ -528,6 +540,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mSSAOBlurParameters = new ShaderParameterCollection(mContext);
         mSSAOBlurParameters->AddParameter(mCameraUniform);
         mSSAOBlurParameters->AddParameter(mFrameBufferSampler);
+        mSSAOBlurParameters->AddParameter(mSSAOControlParameter);
         mSSAOBlurParameters->AddParameter(mDepthBufferParameter);
         mSSAOBlurParameters->AddParameter(mSSAOBufferParameter);
         mSSAOBlurPipeline = new GraphicsPipeline(
@@ -538,7 +551,6 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             std::vector<GeometryLayout>{},
             {.enableDepthTest = false});
     }
-
 
     mUIRenderer = new UIRenderer(mContext, mMainRenderTarget);
 }
@@ -650,7 +662,8 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
         LightData cameraMatrices{
             .radiance = light.GetRadiance(),
             .direction = light.GetDirection(),
-            .viewProjection = shadowMatrix};
+            .viewProjection = shadowMatrix,
+            .shadowTaps = mUIRenderer->GetShadowTaps()};
         mShadowCameraUniform->Write(
             imageIndex,
             reinterpret_cast<uint8_t*>(&cameraMatrices),
@@ -707,6 +720,15 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
     mDepthBufferParameter->Bind(mDepthBuffer);
     mSSAOBufferParameter->Bind(mSSAOBuffer);
     mSSAOTextureParameter->Bind(mSSAOBlurredBuffer);
+
+    // SSAO control
+    {
+        SSAOControlData ssaoControl = mUIRenderer->GetSSAOControlData();
+        mSSAOControlParameter->Write(
+            imageIndex,
+            reinterpret_cast<uint8_t*>(&ssaoControl),
+            sizeof(SSAOControlData));
+    }
 }
 
 void Renderer::BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name) {
@@ -742,6 +764,7 @@ void Renderer::Render(Camera* camera) {
     mContext->GetSwapchain()->AcquireNextImage(mCurrentFrameIndex);
 
     mScene->Update();
+    mUIRenderer->Update();
 
     UpdateUniforms(camera, mCurrentFrameIndex);
 

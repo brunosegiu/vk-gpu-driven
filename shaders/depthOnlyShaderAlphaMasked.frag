@@ -9,10 +9,8 @@ layout(location = 0) in vec2 inTexCoord;
 layout(location = 1) in flat uint inDrawID;
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    vec3 radiance;
-    vec3 direction;
-    mat4 viewProjection;
-} LightParameters;
+    LightData LightParameters;
+};
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];

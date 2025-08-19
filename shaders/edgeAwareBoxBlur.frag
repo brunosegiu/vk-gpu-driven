@@ -15,6 +15,10 @@ layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
     CameraData CameraParameters;
 };
 
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TSSAOControlData {
+    SSAOControlData ControlData;
+};
+
 layout(binding = 0, set = UPDATE_ONCE) uniform sampler frameBufferTextureSampler;
 layout(binding = 1, set = UPDATE_ONCE) uniform texture2D depthBuffer;
 layout(binding = 2, set = UPDATE_ONCE) uniform texture2D ssaoBuffer;
@@ -28,7 +32,7 @@ void main() {
 
     float centerDepth = texture(sampler2D(depthBuffer, frameBufferTextureSampler), inTexCoord).r;
 
-    int radius = 2;
+    const int radius = ControlData.blurRadius;
     float depthTreshold = 0.01;
     float invSampleWeight = 0.0;
     for (int dy = -radius; dy <= radius; ++dy) {

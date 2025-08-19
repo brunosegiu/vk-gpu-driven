@@ -15,6 +15,10 @@ layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
     CameraData CameraParameters;
 };
 
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TSSAOControlData {
+    SSAOControlData ControlData;
+};
+
 layout(binding = 0, set = UPDATE_ONCE) uniform sampler frameBufferTextureSampler;
 layout(binding = 1, set = UPDATE_ONCE) uniform texture2D depthBuffer;
 
@@ -102,11 +106,11 @@ void main() {
 
     mat3 TBN = mat3(viewSpaceTangent, viewSpaceBitangent, viewSpaceNormal);
 
-    float radius = 0.5;
-    float power = 2.0;
+    const float radius = ControlData.radius;
+    const float power = ControlData.power;
+    const uint kernelSize = ControlData.kernelSize;
 
     float occlusion = 0.0;
-    uint kernelSize = 32;
     for (uint sampleIndex = 0; sampleIndex < kernelSize; ++sampleIndex) {
         // Sample more directions toward origin: https://john-chapman-graphics.blogspot.com/2013/01/ssao-tutorial.html
         vec2 xi = hammersley(sampleIndex, kernelSize);

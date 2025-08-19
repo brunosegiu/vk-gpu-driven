@@ -16,10 +16,8 @@ layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
 };
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    vec3 radiance;
-    vec3 direction;
-    mat4 viewProjection;
-} LightParameters;
+    LightData LightParameters;
+};
 
 layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
     DrawData perDrawData[];
@@ -58,8 +56,7 @@ vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
             uv.ddy);
 }
 
-vec3 viewDirFromViewProjection(mat4 invViewProj, vec2 ndc)
-{
+vec3 viewDirFromViewProjection(mat4 invViewProj, vec2 ndc) {
     vec4 nearClip = vec4(ndc, 0.0, 1.0);
     vec4 farClip  = vec4(ndc, 1.0, 1.0);
     vec4 nearWS = invViewProj * nearClip;
@@ -168,7 +165,7 @@ void main() {
 	shadowCoord = shadowCoord / shadowCoord.w;
     float shadowTerm = 0.0f;
     {
-		shadowTerm = filterPCF(shadowCoord, materialTextureSampler, shadowMap);
+		shadowTerm = filterPCF(shadowCoord, LightParameters.shadowTaps, materialTextureSampler, shadowMap);
 	    shadowTerm = clamp(shadowTerm, 0.0f, 1.0f);
     }
 

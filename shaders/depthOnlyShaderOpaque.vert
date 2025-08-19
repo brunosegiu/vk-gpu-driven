@@ -5,9 +5,7 @@
 #include "definitions.glsl"
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    vec3 radiance;
-    vec3 direction;
-    mat4 viewProjection;
+    LightData LightParameters;
 };
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
@@ -23,5 +21,5 @@ layout(location = 0) in vec3 inPosition;
 void main() {
     uint globalDrawIndex = drawData[gl_DrawID];
     DrawData perDrawData = SceneData.perDrawData[globalDrawIndex];
-    gl_Position = viewProjection * perDrawData.modelMatrix * vec4(inPosition, 1.0);
+    gl_Position = LightParameters.viewProjection * perDrawData.modelMatrix * vec4(inPosition, 1.0);
 }

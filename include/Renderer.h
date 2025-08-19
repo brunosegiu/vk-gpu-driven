@@ -103,6 +103,7 @@ private:
     ScopedRefPtr<RenderPass> mSSAOPass;
     ScopedRefPtr<ShaderParameterCollection> mSSAOParameters;
     ScopedRefPtr<ShaderParameterImage> mDepthBufferParameter;
+    ScopedRefPtr<ShaderParameterBuffer> mSSAOControlParameter;
     ScopedRefPtr<GraphicsPipeline> mSSAOPipeline;
     ScopedRefPtr<Texture> mSSAOBuffer;
     ScopedRefPtr<RenderTarget> mSSAORenderTarget;

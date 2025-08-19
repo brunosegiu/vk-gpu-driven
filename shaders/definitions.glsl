@@ -47,4 +47,18 @@ struct CameraData {
     vec4 cameraPos;
 };
 
+struct SSAOControlData {
+    float radius;
+    float power;
+    uint kernelSize;
+    int blurRadius;
+};
+
+struct LightData {
+    vec3 radiance;
+    vec3 direction;
+    mat4 viewProjection;
+    uint shadowTaps;
+};
+
 #endif

@@ -150,16 +150,21 @@ void Scene::Update() {
     for (ScopedRefPtr<Object> object : mObjects) {
         object->UpdateTransforms(glm::mat4(1.0f));
     }
-    PackDrawData();
+    // TODO: Support updates
+    if (mPackedDrawData.empty()) {
+        PackDrawData();
+    }
 }
 
 void Scene::PackDrawData() {
     // Flatten scene into a single list
     mPackedDrawData.clear();
-
+    mPackedDrawData.reserve(mFlatObjects.size() * 20);
     for (const ScopedRefPtr<Object>& object : mFlatObjects) {
-        std::vector<ScopedRefPtr<Mesh>> meshes = object->GetMeshes();
-        for (ScopedRefPtr<Mesh>& mesh : meshes) {
+        const glm::mat4 normalTransform =
+            glm::mat4(glm::transpose(glm::inverse(glm::mat3(object->GetAbsoluteTransform()))));
+        const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
+        for (const ScopedRefPtr<Mesh>& mesh : meshes) {
             for (Meshlet& meshlet : mesh->mMeshlets) {
                 DrawData meshParameters{
                     .indexCount = meshlet.indexCount,
@@ -167,8 +172,7 @@ void Scene::PackDrawData() {
                     .vertexOffset = static_cast<int32_t>(meshlet.vertexOffset),
                     .transform = object->GetAbsoluteTransform(),
                     .materialId = mesh->GetMaterial()->GetMaterialId(),
-                    .normalTransform = glm::mat4(
-                        glm::transpose(glm::inverse(glm::mat3(object->GetAbsoluteTransform())))),
+                    .normalTransform = normalTransform,
                     .alphaMode = static_cast<uint32_t>(mesh->GetMaterial()->GetAlphaMode()),
                     .minBounds = meshlet.minBounds,
                     .maxBounds = meshlet.maxBounds,
