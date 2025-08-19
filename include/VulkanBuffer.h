@@ -19,6 +19,10 @@ public:
     const vk::DeviceSize& GetBufferSize() const { return mSize; }
     const vk::Buffer& GetBufferHandle() const { return mBufferHandle; }
     const vk::DescriptorBufferInfo& GetDescriptorInfo() const { return mDescriptorInfo; }
+    static std::vector<vk::BufferMemoryBarrier> GetBarriers(
+        std::vector<ScopedRefPtr<VulkanBuffer>> buffers,
+        vk::PipelineStageFlags srcStageMask,
+        vk::PipelineStageFlags dstStageMask);
     vk::BufferMemoryBarrier GetBufferBarrierInfo(
         vk::PipelineStageFlags srcStageMask,
         vk::PipelineStageFlags dstStageMask);

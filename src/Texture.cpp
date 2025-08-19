@@ -160,6 +160,33 @@ Texture::Texture(
     mContext->GetDevice()->DestroyCommand(commandBuffer);
 }
 
+static vk::AccessFlags GetAccessForLayout(vk::ImageLayout layout) {
+    switch (layout) {
+        case vk::ImageLayout::eUndefined:
+            return {};
+        case vk::ImageLayout::eGeneral:
+            return vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite;
+        case vk::ImageLayout::eTransferSrcOptimal:
+            return vk::AccessFlagBits::eTransferRead;
+        case vk::ImageLayout::eTransferDstOptimal:
+            return vk::AccessFlagBits::eTransferWrite;
+        case vk::ImageLayout::eShaderReadOnlyOptimal:
+            return vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eInputAttachmentRead;
+        case vk::ImageLayout::eColorAttachmentOptimal:
+            return vk::AccessFlagBits::eColorAttachmentRead |
+                   vk::AccessFlagBits::eColorAttachmentWrite;
+        case vk::ImageLayout::eDepthStencilAttachmentOptimal:
+            return vk::AccessFlagBits::eDepthStencilAttachmentRead |
+                   vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+        case vk::ImageLayout::eDepthStencilReadOnlyOptimal:
+            return vk::AccessFlagBits::eDepthStencilAttachmentRead;
+        case vk::ImageLayout::ePresentSrcKHR:
+            return {};
+        default:
+            return vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite;
+    }
+}
+
 void Texture::SetImageLayout(
     vk::CommandBuffer& commandBuffer,
     vk::ImageLayout oldLayout,
@@ -174,40 +201,36 @@ void Texture::SetImageLayout(
                                               .setImage(mImage)
                                               .setSubresourceRange(subresourceRange);
 
-    switch (oldLayout) {
-        case vk::ImageLayout::eUndefined:
-            imageBarrier.setSrcAccessMask(vk::AccessFlags{});
-            break;
-        case vk::ImageLayout::ePreinitialized:
-            imageBarrier.setSrcAccessMask(vk::AccessFlagBits::eHostWrite);
-            break;
-        case vk::ImageLayout::eColorAttachmentOptimal:
-            imageBarrier.setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite);
-            break;
-        case vk::ImageLayout::eTransferSrcOptimal:
-            imageBarrier.setSrcAccessMask(vk::AccessFlagBits::eTransferRead);
-            break;
-        case vk::ImageLayout::eTransferDstOptimal:
-            imageBarrier.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite);
-            break;
-    }
-
-    switch (newLayout) {
-        case vk::ImageLayout::eTransferDstOptimal:
-            imageBarrier.setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
-            break;
-        case vk::ImageLayout::eTransferSrcOptimal:
-            imageBarrier.setDstAccessMask(vk::AccessFlagBits::eTransferRead);
-            break;
-        case vk::ImageLayout::eColorAttachmentOptimal:
-            imageBarrier.setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite);
-            break;
-        case vk::ImageLayout::eShaderReadOnlyOptimal:
-            imageBarrier.setDstAccessMask(vk::AccessFlagBits::eUniformRead);
-            break;
-    }
+    imageBarrier.setSrcAccessMask(GetAccessForLayout(oldLayout));
+    imageBarrier.setDstAccessMask(GetAccessForLayout(newLayout));
 
     commandBuffer.pipelineBarrier(srcStageMask, dstStageMask, {}, {}, {}, imageBarrier);
+}
+
+std::vector<vk::ImageMemoryBarrier> Texture::GetBarriers(
+    std::vector<ImageBarrierInfo> textures) {
+    std::vector<vk::ImageMemoryBarrier> barriers;
+    barriers.reserve(textures.size());
+    for (const ImageBarrierInfo& textureInfo : textures) {
+        barriers.push_back(
+            textureInfo.texture->GetImageBarrierInfo(textureInfo.srcLayout, textureInfo.dstLayout));
+    }
+    return barriers;
+}
+
+vk::ImageMemoryBarrier Texture::GetImageBarrierInfo(
+    vk::ImageLayout srcLayout,
+    vk::ImageLayout dstLayout) {
+    return vk::ImageMemoryBarrier()
+        .setImage(GetImage())
+        .setOldLayout(srcLayout)
+        .setNewLayout(dstLayout)
+        .setSrcAccessMask(GetAccessForLayout(srcLayout))
+        .setDstAccessMask(GetAccessForLayout(dstLayout))
+        .setSubresourceRange(vk::ImageSubresourceRange{}
+                                 .setAspectMask(mImageAspect)
+                                 .setLevelCount(1)
+                                 .setLayerCount(1));
 }
 
 Texture::~Texture() {

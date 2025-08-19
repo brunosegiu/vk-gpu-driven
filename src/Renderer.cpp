@@ -761,11 +761,10 @@ void Renderer::Render(Camera* camera) {
                 resources.additionalDrawDataBuffers[mCurrentFrameIndex];
             // Write 0 in drawCallCountBuffer
             {
-                std::vector<vk::BufferMemoryBarrier> bufferBarriers{
-                    drawCallCountBuffer->GetBufferBarrierInfo(
-                        vk::PipelineStageFlagBits::eDrawIndirect,
-                        vk::PipelineStageFlagBits::eTransfer),
-                };
+                std::vector<vk::BufferMemoryBarrier> bufferBarriers = VulkanBuffer::GetBarriers(
+                    {drawCallCountBuffer},
+                    vk::PipelineStageFlagBits::eDrawIndirect,
+                    vk::PipelineStageFlagBits::eTransfer);
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eDrawIndirect,
@@ -780,10 +779,10 @@ void Renderer::Render(Camera* camera) {
             }
 
             {
-                std::vector<vk::BufferMemoryBarrier> bufferBarriers{
-                    drawCallCountBuffer->GetBufferBarrierInfo(
-                        vk::PipelineStageFlagBits::eTransfer,
-                        vk::PipelineStageFlagBits::eComputeShader)};
+                std::vector<vk::BufferMemoryBarrier> bufferBarriers = VulkanBuffer::GetBarriers(
+                    {drawCallCountBuffer},
+                    vk::PipelineStageFlagBits::eTransfer,
+                    vk::PipelineStageFlagBits::eComputeShader);
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eTransfer,
@@ -795,14 +794,10 @@ void Renderer::Render(Camera* camera) {
             }
 
             {
-                std::vector<vk::BufferMemoryBarrier> bufferBarriers{
-                    indirectDrawBuffer->GetBufferBarrierInfo(
-                        vk::PipelineStageFlagBits::eDrawIndirect,
-                        vk::PipelineStageFlagBits::eComputeShader),
-                    additionalDrawDataBuffer->GetBufferBarrierInfo(
-                        vk::PipelineStageFlagBits::eDrawIndirect,
-                        vk::PipelineStageFlagBits::eComputeShader),
-                };
+                std::vector<vk::BufferMemoryBarrier> bufferBarriers = VulkanBuffer::GetBarriers(
+                    {indirectDrawBuffer, additionalDrawDataBuffer},
+                    vk::PipelineStageFlagBits::eDrawIndirect,
+                    vk::PipelineStageFlagBits::eComputeShader);
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eDrawIndirect,
@@ -831,16 +826,10 @@ void Renderer::Render(Camera* camera) {
 
             // TODO: Wait until before actual draws are dispatched, this is too early
             {
-                std::vector<vk::BufferMemoryBarrier> bufferBarriers{
-                    indirectDrawBuffer->GetBufferBarrierInfo(
-                        vk::PipelineStageFlagBits::eComputeShader,
-                        vk::PipelineStageFlagBits::eAllGraphics),
-                    additionalDrawDataBuffer->GetBufferBarrierInfo(
-                        vk::PipelineStageFlagBits::eComputeShader,
-                        vk::PipelineStageFlagBits::eAllGraphics),
-                    drawCallCountBuffer->GetBufferBarrierInfo(
-                        vk::PipelineStageFlagBits::eComputeShader,
-                        vk::PipelineStageFlagBits::eAllGraphics)};
+                std::vector<vk::BufferMemoryBarrier> bufferBarriers = VulkanBuffer::GetBarriers(
+                    {indirectDrawBuffer, additionalDrawDataBuffer, drawCallCountBuffer},
+                    vk::PipelineStageFlagBits::eComputeShader,
+                    vk::PipelineStageFlagBits::eComputeShader);
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eComputeShader,
@@ -876,17 +865,10 @@ void Renderer::Render(Camera* camera) {
             BeginMarker(command.buffer, "Shadowmap Rendering");
             {
                 // Transition shadow map to depth attachment
-                vk::ImageMemoryBarrier imageBarrier =
-                    vk::ImageMemoryBarrier()
-                        .setImage(mShadowMap->GetImage())
-                        .setOldLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                        .setNewLayout(vk::ImageLayout::eDepthAttachmentOptimal)
-                        .setSrcAccessMask(vk::AccessFlagBits::eUniformRead)
-                        .setDstAccessMask(vk::AccessFlagBits::eShaderWrite)
-                        .setSubresourceRange(vk::ImageSubresourceRange{}
-                                                 .setAspectMask(vk::ImageAspectFlagBits::eDepth)
-                                                 .setLevelCount(1)
-                                                 .setLayerCount(1));
+                std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    {{mShadowMap,
+                      vk::ImageLayout::eShaderReadOnlyOptimal,
+                      vk::ImageLayout::eDepthAttachmentOptimal}});
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eFragmentShader,
@@ -894,7 +876,7 @@ void Renderer::Render(Camera* camera) {
                     vk::DependencyFlags{},
                     {},
                     {},
-                    imageBarrier);
+                    imageBarriers);
             }
 
             const std::vector<vk::ClearValue> clearValues{
@@ -982,22 +964,14 @@ void Renderer::Render(Camera* camera) {
             BeginMarker(command.buffer, "Base pass");
 
             {
-                std::vector<vk::ImageMemoryBarrier> imageBarriers{
-                    vk::ImageMemoryBarrier()
-                        .setImage(mVisibilityBuffer->GetImage())
-                        .setOldLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                        .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
-                        .setSrcAccessMask(vk::AccessFlagBits::eUniformRead)
-                        .setDstAccessMask(vk::AccessFlagBits::eShaderWrite)
-                        .setSubresourceRange(vk::ImageSubresourceRange{}
-                                                 .setAspectMask(vk::ImageAspectFlagBits::eColor)
-                                                 .setLevelCount(1)
-                                                 .setLayerCount(1)),
-                };
+                std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    {{mVisibilityBuffer,
+                      vk::ImageLayout::eShaderReadOnlyOptimal,
+                      vk::ImageLayout::eColorAttachmentOptimal}});
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eFragmentShader,
-                    vk::PipelineStageFlagBits::eVertexShader,
+                    vk::PipelineStageFlagBits::eColorAttachmentOutput,
                     vk::DependencyFlags{},
                     {},
                     {},
@@ -1088,18 +1062,10 @@ void Renderer::Render(Camera* camera) {
             {
                 BeginMarker(command.buffer, "SSAO draw");
                 {
-                    std::vector<vk::ImageMemoryBarrier> imageBarriers{
-                        vk::ImageMemoryBarrier()
-                            .setImage(mDepthBuffer->GetImage())
-                            .setOldLayout(vk::ImageLayout::eDepthAttachmentOptimal)
-                            .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                            .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
-                            .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
-                            .setSubresourceRange(vk::ImageSubresourceRange{}
-                                                     .setAspectMask(vk::ImageAspectFlagBits::eDepth)
-                                                     .setLevelCount(1)
-                                                     .setLayerCount(1)),
-                    };
+                    std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                        {{mDepthBuffer,
+                          vk::ImageLayout::eDepthAttachmentOptimal,
+                          vk::ImageLayout::eShaderReadOnlyOptimal}});
 
                     command.buffer.pipelineBarrier(
                         vk::PipelineStageFlagBits::eColorAttachmentOutput,
@@ -1158,7 +1124,6 @@ void Renderer::Render(Camera* camera) {
 
             BeginMarker(command.buffer, "SSAO blur");
             {
-
                 const std::vector<vk::ClearValue> clearValues{
                     vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
                 };
@@ -1212,28 +1177,13 @@ void Renderer::Render(Camera* camera) {
             BeginMarker(command.buffer, "Shade pass");
 
             {
-                std::vector<vk::ImageMemoryBarrier> imageBarriers{
-                    vk::ImageMemoryBarrier()
-                        .setImage(mShadowMap->GetImage())
-                        .setOldLayout(vk::ImageLayout::eDepthAttachmentOptimal)
-                        .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                        .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
-                        .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
-                        .setSubresourceRange(vk::ImageSubresourceRange{}
-                                                 .setAspectMask(vk::ImageAspectFlagBits::eDepth)
-                                                 .setLevelCount(1)
-                                                 .setLayerCount(1)),
-                    vk::ImageMemoryBarrier()
-                        .setImage(mVisibilityBuffer->GetImage())
-                        .setOldLayout(vk::ImageLayout::eColorAttachmentOptimal)
-                        .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                        .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
-                        .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
-                        .setSubresourceRange(vk::ImageSubresourceRange{}
-                                                 .setAspectMask(vk::ImageAspectFlagBits::eColor)
-                                                 .setLevelCount(1)
-                                                 .setLayerCount(1)),
-                };
+                std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    {{mShadowMap,
+                      vk::ImageLayout::eDepthAttachmentOptimal,
+                      vk::ImageLayout::eShaderReadOnlyOptimal},
+                     {mVisibilityBuffer,
+                      vk::ImageLayout::eColorAttachmentOptimal,
+                      vk::ImageLayout::eShaderReadOnlyOptimal}});
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eColorAttachmentOutput,
@@ -1295,22 +1245,14 @@ void Renderer::Render(Camera* camera) {
             BeginMarker(command.buffer, "Transparent pass");
 
             {
-                std::vector<vk::ImageMemoryBarrier> imageBarriers{
-                    vk::ImageMemoryBarrier()
-                        .setImage(mDepthBuffer->GetImage())
-                        .setOldLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                        .setNewLayout(vk::ImageLayout::eDepthAttachmentOptimal)
-                        .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
-                        .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
-                        .setSubresourceRange(vk::ImageSubresourceRange{}
-                                                 .setAspectMask(vk::ImageAspectFlagBits::eDepth)
-                                                 .setLevelCount(1)
-                                                 .setLayerCount(1)),
-                };
+                std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    {{mDepthBuffer,
+                      vk::ImageLayout::eShaderReadOnlyOptimal,
+                      vk::ImageLayout::eDepthAttachmentOptimal}});
 
                 command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eColorAttachmentOutput,
                     vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::PipelineStageFlagBits::eEarlyFragmentTests,
                     vk::DependencyFlags{},
                     {},
                     {},

@@ -44,6 +44,18 @@ public:
     const uint32_t& GetHeight() const { return mHeight; }
     vk::Extent2D GetExtent() { return vk::Extent2D{mWidth, mHeight}; }
 
+    struct ImageBarrierInfo {
+        ScopedRefPtr<Texture> texture;
+        vk::ImageLayout srcLayout;
+        vk::ImageLayout dstLayout;
+    };
+    static std::vector<vk::ImageMemoryBarrier> GetBarriers(
+        std::vector<ImageBarrierInfo> textures);
+
+    vk::ImageMemoryBarrier GetImageBarrierInfo(
+        vk::ImageLayout srcLayout,
+        vk::ImageLayout dstLayout);
+
     void SetImageLayout(
         vk::CommandBuffer& commandBuffer,
         vk::ImageLayout oldLayout,

@@ -51,6 +51,18 @@ VulkanBuffer::VulkanBuffer(
       mAllocation(allocation),
       mDescriptorInfo(descriptorInfo) {}
 
+std::vector<vk::BufferMemoryBarrier> VulkanBuffer::GetBarriers(
+    std::vector<ScopedRefPtr<VulkanBuffer>> buffers,
+    vk::PipelineStageFlags srcStageMask,
+    vk::PipelineStageFlags dstStageMask) {
+    std::vector<vk::BufferMemoryBarrier> barriers;
+    barriers.reserve(buffers.size());
+    for (const ScopedRefPtr<VulkanBuffer>& buffer : buffers) {
+        barriers.push_back(buffer->GetBufferBarrierInfo(srcStageMask, dstStageMask));
+    }
+    return barriers;
+}
+
 vk::BufferMemoryBarrier VulkanBuffer::GetBufferBarrierInfo(
     vk::PipelineStageFlags srcStageMask,
     vk::PipelineStageFlags dstStageMask) {
