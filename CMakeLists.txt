@@ -3,11 +3,8 @@ cmake_minimum_required(VERSION 3.24 FATAL_ERROR)
 set(VERSION 1.0)
 set(PROJECT_NAME VK-RT)
 
-set(VCPKG_TARGET_ARCHITECTURE "x64")
-set(VCPKG_CRT_LINKAGE "static")
-set(VCPKG_LIBRARY_LINKAGE "static")
-
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/vcpkg/scripts/buildsystems/vcpkg.cmake")
+set(VCPKG_TARGET_TRIPLET "x64-windows-static-md" CACHE STRING "")
 set(VCPKG_FEATURE_FLAGS manifests)
 
 project(${PROJECT_NAME} VERSION ${VERSION} LANGUAGES CXX)
@@ -46,6 +43,7 @@ set(HEADERS
     include/ComputePipeline.h
     include/DirectionalLight.h
     include/VulkanHelpers.h
+    include/UIRenderer.h
 )
 
 set(SOURCE
@@ -79,6 +77,7 @@ set(SOURCE
     src/ComputePipeline.cpp
     src/DirectionalLight.cpp
     src/VulkanHelpers.cpp
+    src/UIRenderer.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
@@ -177,6 +176,10 @@ target_link_libraries(${PROJECT_NAME}
 # Find and link VMA
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+# Find and link ImGUI
+find_package(imgui CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE imgui::imgui)
 
 if(UNIX)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/incbin)

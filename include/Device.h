@@ -50,6 +50,8 @@ public:
     void DestroyFence(vk::Fence& fence);
 
     vk::Device& GetLogicalDevice() { return mLogicalDevice; }
+    vk::PhysicalDevice& GetPhysicalDevice() { return mPhysicalDevice; }
+    const uint32_t& GetQueueFamilyIndex() { return mQueueFamilyIndex; }
     vk::detail::DispatchLoaderDynamic& GetDispatcher() { return mDispatcher; }
     const vk::Queue& GetQueue() { return mGraphicsQueue; }
 
@@ -74,6 +76,7 @@ private:
     vk::Queue mGraphicsQueue;
     vk::CommandPool mCommandPool;
     vk::detail::DispatchLoaderDynamic mDispatcher;
+    uint32_t mQueueFamilyIndex;
     VmaAllocator mAllocator;
 };
 

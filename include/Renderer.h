@@ -8,6 +8,7 @@
 #include "RefCountPtr.h"
 #include "RenderPass.h"
 #include "Scene.h"
+#include "UIRenderer.h"
 
 namespace VKRT {
 class Renderer : public RefCountPtr, public InputEventListener {
@@ -115,6 +116,9 @@ private:
     ScopedRefPtr<RenderTarget> mSSAOBlurredRenderTarget;
 
     bool mFreezeCulling;
+
+    // UI rendering
+    ScopedRefPtr<UIRenderer> mUIRenderer;
 
     void BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name);
     void EndMarker(const vk::CommandBuffer& commandBuffer);

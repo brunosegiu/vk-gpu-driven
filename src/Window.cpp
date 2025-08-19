@@ -1,6 +1,7 @@
 #include "Window.h"
 
 #include <GLFW/glfw3.h>
+#include <imgui_impl_glfw.h>
 
 #include "Context.h"
 #include "Device.h"
@@ -17,7 +18,14 @@ Window::Window(uint32_t width, uint32_t height) : mNativeHandle(nullptr), mConte
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     mNativeHandle = glfwCreateWindow(width, height, "VKRT", nullptr, nullptr);
+
     mInputManager = new InputManager(this);
+
+    {
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGui_ImplGlfw_InitForOther(mNativeHandle, true);
+    }
 }
 
 bool Window::Update() {
@@ -69,6 +77,10 @@ void Window::DestroyContext() {
 }
 
 Window::~Window() {
+    {
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+    }
     if (mNativeHandle != nullptr) {
         glfwDestroyWindow(mNativeHandle);
     }

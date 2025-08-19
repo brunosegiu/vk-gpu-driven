@@ -119,18 +119,18 @@ void Camera::OnMouseMoved(glm::vec2 newPos) {
     mCurrentMousePos = newPos;
 }
 
-void Camera::OnLeftMouseButtonPressed() {
+void Camera::OnRightMouseButtonPressed() {
     mActive = !mActive;
     InputManager* inputManager = mWindow->GetInputManager();
     inputManager->SetCursorMode(
         mActive ? InputManager::CursorMode::Disabled : InputManager::CursorMode::Normal);
 }
 
+void Camera::OnRightMouseButtonReleased() {}
+
 void Camera::OnLeftMouseButtonReleased() {}
 
-void Camera::OnRightMouseButtonPressed() {}
-
-void Camera::OnRightMouseButtonReleased() {}
+void Camera::OnLeftMouseButtonPressed() {}
 
 Camera::~Camera() {
     InputManager* inputManager = mWindow->GetInputManager();

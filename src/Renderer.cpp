@@ -98,7 +98,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
              .loadOp = vk::AttachmentLoadOp::eLoad,
              .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
              .storeOp = vk::AttachmentStoreOp::eStore,
-             .finalLayout = vk::ImageLayout::ePresentSrcKHR},
+             .finalLayout = vk::ImageLayout::eColorAttachmentOptimal},
             {.renderTarget = mDepthRenderTarget,
              .loadOp = vk::AttachmentLoadOp::eLoad,
              .initialLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
@@ -538,6 +538,9 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             std::vector<GeometryLayout>{},
             {.enableDepthTest = false});
     }
+
+
+    mUIRenderer = new UIRenderer(mContext, mMainRenderTarget);
 }
 
 void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
@@ -1331,6 +1334,12 @@ void Renderer::Render(Camera* camera) {
                 }
             }
             command.buffer.endRenderPass();
+            EndMarker(command.buffer);
+        }
+
+        {
+            BeginMarker(command.buffer, "Render UI");
+            mUIRenderer->Render(command.buffer);
             EndMarker(command.buffer);
         }
 

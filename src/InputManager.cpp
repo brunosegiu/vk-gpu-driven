@@ -2,6 +2,8 @@
 
 #include <functional>
 
+#include <imgui.h>
+
 #include "Window.h"
 
 namespace VKRT {

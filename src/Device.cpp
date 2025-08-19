@@ -31,19 +31,19 @@ Device::Device(
     : mContext(nullptr), mPhysicalDevice(physicalDevice) {
     const std::vector<vk::QueueFamilyProperties> queueFamiliesProperties =
         mPhysicalDevice.getQueueFamilyProperties();
-    uint32_t queueFamilyIndex = 0;
+    mQueueFamilyIndex = 0;
     for (const auto& properties : queueFamiliesProperties) {
         if (properties.queueFlags & vk::QueueFlagBits::eGraphics) {
-            if (VKRT_ASSERT_VK(physicalDevice.getSurfaceSupportKHR(queueFamilyIndex, surface))) {
+            if (VKRT_ASSERT_VK(physicalDevice.getSurfaceSupportKHR(mQueueFamilyIndex, surface))) {
                 break;
             }
         }
-        ++queueFamilyIndex;
+        ++mQueueFamilyIndex;
     }
-    VKRT_ASSERT(queueFamilyIndex < static_cast<uint32_t>(queueFamiliesProperties.size()));
+    VKRT_ASSERT(mQueueFamilyIndex < static_cast<uint32_t>(queueFamiliesProperties.size()));
     const std::vector<float> queuePriorities{1.0f};
     vk::DeviceQueueCreateInfo queueCreateInfo = vk::DeviceQueueCreateInfo()
-                                                    .setQueueFamilyIndex(queueFamilyIndex)
+                                                    .setQueueFamilyIndex(mQueueFamilyIndex)
                                                     .setQueuePriorities(queuePriorities);
 
     vk::PhysicalDeviceFeatures enabledFeatures = vk::PhysicalDeviceFeatures()
@@ -74,10 +74,10 @@ Device::Device(
             .setPNext(&enabledFeatures11);
     mLogicalDevice = VKRT_ASSERT_VK(mPhysicalDevice.createDevice(deviceCreateInfo));
 
-    mGraphicsQueue = mLogicalDevice.getQueue(queueFamilyIndex, 0);
+    mGraphicsQueue = mLogicalDevice.getQueue(mQueueFamilyIndex, 0);
     const vk::CommandPoolCreateInfo commandPoolCreateInfo =
         vk::CommandPoolCreateInfo()
-            .setQueueFamilyIndex(queueFamilyIndex)
+            .setQueueFamilyIndex(mQueueFamilyIndex)
             .setFlags(vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
     mCommandPool = VKRT_ASSERT_VK(mLogicalDevice.createCommandPool(commandPoolCreateInfo));
 

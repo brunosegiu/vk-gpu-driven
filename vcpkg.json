@@ -8,6 +8,10 @@
         "nlohmann-json",
         "sdl2",
         "vulkan-memory-allocator",
-        "meshoptimizer"
+        "meshoptimizer",
+        {
+            "name": "imgui",
+            "features": ["vulkan-binding", "glfw-binding"]
+        }
     ]
 }
