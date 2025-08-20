@@ -553,6 +553,24 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
     }
 
     mUIRenderer = new UIRenderer(mContext, mMainRenderTarget);
+
+    // Raytracing resources
+    mASParamater = new ShaderParameterAccelerationStructure(mContext,
+        vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eClosestHitKHR);
+
+    const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>> raytracingStages{
+        {vk::ShaderStageFlagBits::eRaygenKHR, {Resource::Id::RaytraceProbeGenShader}},
+        {vk::ShaderStageFlagBits::eClosestHitKHR, {Resource::Id::RaytraceProbeHitShader}},
+        {vk::ShaderStageFlagBits::eMissKHR,
+         std::vector<Resource::Id>{
+             Resource::Id::RaytraceProbeMissShader,
+             Resource::Id::RaytraceProbeShadowMissShader}}};
+
+    mProbeRaytracingParameters = new ShaderParameterCollection(mContext);
+    mProbeRaytracingParameters->AddParameter(mCameraUniform);
+    mProbeRaytracingParameters->AddParameter(mASParamater);
+    mProbeRaytracingPipeline =
+        new RaytracingPipeline(mContext, mProbeRaytracingParameters, raytracingStages);
 }
 
 void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {

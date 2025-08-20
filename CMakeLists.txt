@@ -44,6 +44,7 @@ set(HEADERS
     include/DirectionalLight.h
     include/VulkanHelpers.h
     include/UIRenderer.h
+    include/RaytracingPipeline.h
 )
 
 set(SOURCE
@@ -78,6 +79,7 @@ set(SOURCE
     src/DirectionalLight.cpp
     src/VulkanHelpers.cpp
     src/UIRenderer.cpp
+    src/RaytracingPipeline.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
@@ -86,6 +88,7 @@ set(SHADER_HEADERS
     definitions.glsl
     shading.glsl
     visibilityBufferUtils.glsl
+    utils.glsl
 )
 
 set(SHADERS
@@ -106,6 +109,10 @@ set(SHADERS
     ssao.frag
     edgeAwareBoxBlur.vert
     edgeAwareBoxBlur.frag
+    raytraceProbe.rgen
+    raytraceProbe.rchit
+    raytraceProbe.rmiss
+    raytraceProbeShadow.rmiss
 )
 
 if(WIN32)

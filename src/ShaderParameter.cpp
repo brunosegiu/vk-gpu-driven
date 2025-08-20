@@ -25,8 +25,7 @@ ShaderParameterBuffer::ShaderParameterBuffer(
     const vk::ShaderStageFlags& stageFlags,
     const vk::DeviceSize& size,
     const vk::BufferUsageFlags& usageFlags,
-    const VmaAllocationCreateFlags& memoryFlags,
-    const vk::MemoryAllocateFlags& memoryAllocateFlags)
+    const VmaAllocationCreateFlags& memoryFlags)
     : ShaderParameter(context, type, updateFrequency, stageFlags, 1, false) {
     VKRT_ASSERT(
         type == vk::DescriptorType::eUniformBuffer || type == vk::DescriptorType::eStorageBuffer);
@@ -38,7 +37,7 @@ ShaderParameterBuffer::ShaderParameterBuffer(
 
     for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
         ScopedRefPtr<VulkanBuffer> buffer =
-            mContext->GetDevice()->CreateBuffer(size, usageFlags, memoryFlags, memoryAllocateFlags);
+            mContext->GetDevice()->CreateBuffer(size, usageFlags, memoryFlags);
         mBuffers.emplace_back(buffer);
     }
 }
@@ -148,6 +147,27 @@ ShaderParameterPushConstant::ShaderParameterPushConstant(
           false),
       mSize(size),
       mOffset(0) {}
+
+ShaderParameterAccelerationStructure::ShaderParameterAccelerationStructure(
+    ScopedRefPtr<Context> context,
+    const vk::ShaderStageFlags& stageFlags)
+    : ShaderParameter(
+          context, vk::DescriptorType::eAccelerationStructureKHR,
+          ShaderParameter::UpdateFrequency::Once,
+          stageFlags,
+          1,
+          false) {
+}
+
+void ShaderParameterAccelerationStructure::Bind(vk::AccelerationStructureKHR accelerationStructure) {
+    mAccelerationStructureInfo =
+        vk::WriteDescriptorSetAccelerationStructureKHR().setAccelerationStructures(
+            accelerationStructure);
+}
+
+ShaderParameterAccelerationStructure::~ShaderParameterAccelerationStructure() {
+
+}
 
 ShaderParameter::~ShaderParameter() {}
 

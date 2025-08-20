@@ -66,6 +66,16 @@ Device::Device(
             .setShaderSampledImageArrayNonUniformIndexing(true);
     enabledFeatures11.setPNext(&enabledFeatures12);
 
+    vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures =
+        vk::PhysicalDeviceRayTracingPipelineFeaturesKHR().setRayTracingPipeline(true);
+
+    vk::PhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures =
+        vk::PhysicalDeviceAccelerationStructureFeaturesKHR()
+            .setAccelerationStructure(true)
+            .setPNext(&rayTracingFeatures);
+
+    enabledFeatures12.setPNext(&accelerationStructureFeatures);
+
     const vk::DeviceCreateInfo deviceCreateInfo =
         vk::DeviceCreateInfo()
             .setQueueCreateInfos(queueCreateInfo)
@@ -97,6 +107,7 @@ Device::Device(
     allocatorInfo.device = mLogicalDevice;
     allocatorInfo.instance = instance->GetHandle();
     allocatorInfo.pVulkanFunctions = &vulkanFunctions;
+    allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     vmaCreateAllocator(&allocatorInfo, &mAllocator);
 }
 
@@ -107,23 +118,21 @@ void Device::SetContext(ScopedRefPtr<Context> context) {
 ScopedRefPtr<VulkanBuffer> Device::CreateBuffer(
     const vk::DeviceSize& size,
     const vk::BufferUsageFlags& usageFlags,
-    const VmaAllocationCreateFlags& memoryFlags,
-    const vk::MemoryAllocateFlags& memoryAllocateFlags) {
+    const VmaAllocationCreateFlags& memoryFlags) {
     VKRT_ASSERT(mContext != nullptr);
-    return VulkanBuffer::Create(mContext, size, usageFlags, memoryFlags, memoryAllocateFlags);
+    return VulkanBuffer::Create(mContext, size, usageFlags, memoryFlags);
 }
 
 std::vector<ScopedRefPtr<VulkanBuffer>> Device::CreateBuffers(
     const size_t& count,
     const vk::DeviceSize& size,
     const vk::BufferUsageFlags& usageFlags,
-    const VmaAllocationCreateFlags& memoryFlags,
-    const vk::MemoryAllocateFlags& memoryAllocateFlags) {
+    const VmaAllocationCreateFlags& memoryFlags) {
     VKRT_ASSERT(mContext != nullptr);
     std::vector<ScopedRefPtr<VulkanBuffer>> buffers;
     for (uint32_t bufferIndex = 0; bufferIndex < count; ++bufferIndex) {
         ScopedRefPtr<VulkanBuffer> buffer =
-            VulkanBuffer::Create(mContext, size, usageFlags, memoryFlags, memoryAllocateFlags);
+            VulkanBuffer::Create(mContext, size, usageFlags, memoryFlags);
         buffers.push_back(buffer);
     }
     return buffers;

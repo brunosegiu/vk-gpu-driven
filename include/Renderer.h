@@ -5,10 +5,12 @@
 #include "ComputePipeline.h"
 #include "Context.h"
 #include "GraphicsPipeline.h"
+#include "RaytracingPipeline.h"
 #include "RefCountPtr.h"
 #include "RenderPass.h"
 #include "Scene.h"
 #include "UIRenderer.h"
+
 
 namespace VKRT {
 class Renderer : public RefCountPtr, public InputEventListener {
@@ -120,6 +122,11 @@ private:
 
     // UI rendering
     ScopedRefPtr<UIRenderer> mUIRenderer;
+
+    // Probe rendering
+    ScopedRefPtr<RaytracingPipeline> mProbeRaytracingPipeline;
+    ScopedRefPtr<ShaderParameterAccelerationStructure> mASParamater;
+    ScopedRefPtr<ShaderParameterCollection> mProbeRaytracingParameters;
 
     void BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name);
     void EndMarker(const vk::CommandBuffer& commandBuffer);

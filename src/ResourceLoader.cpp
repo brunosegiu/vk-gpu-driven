@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <string>
+#include <unordered_map>
 
 #ifdef VKRT_PLATFORM_WINDOWS
 #include <Windows.h>
@@ -23,69 +24,48 @@ namespace VKRT {
 
 #ifdef VKRT_PLATFORM_WINDOWS
 Resource ResourceLoader::Load(const Resource::Id& resourceId) {
-    uint32_t actualId = 0;
-    switch (resourceId) {
-        case Resource::Id::CullingShader:
-            actualId = VKRT_RESOURCE_CULLING_SHADER;
-            break;
-        case Resource::Id::GeometryPassOpaqueVertexShader:
-            actualId = VKRT_RESOURCE_GEOMETRY_PASS_OPAQUE_VERTEX;
-            break;
-        case Resource::Id::GeometryPassOpaqueFragmentShader:
-            actualId = VKRT_RESOURCE_GEOMETRY_PASS_OPAQUE_FRAGMENT;
-            break;
-        case Resource::Id::GeometryPassAlphaMaskedVertexShader:
-            actualId = VKRT_RESOURCE_GEOMETRY_PASS_ALPHA_MASKED_VERTEX;
-            break;
-        case Resource::Id::GeometryPassAlphaMaskedFragmentShader:
-            actualId = VKRT_RESOURCE_GEOMETRY_PASS_ALPHA_MASKED_FRAGMENT;
-            break;
-        case Resource::Id::TransparentPassVertexShader:
-            actualId = VKRT_RESOURCE_TRANSPARENT_VERTEX;
-            break;
-        case Resource::Id::TransparentPassFragmentShader:
-            actualId = VKRT_RESOURCE_TRANSPARENT_FRAGMENT;
-            break;
-        case Resource::Id::DepthOnlyOpaqueVertexShader:
-            actualId = VKRT_RESOURCE_DEPTH_ONLY_OPAQUE_VERTEX_SHADER;
-            break;
-        case Resource::Id::DepthOnlyOpaqueFragmentShader:
-            actualId = VKRT_RESOURCE_DEPTH_ONLY_OPAQUE_FRAGMENT_SHADER;
-            break;
-        case Resource::Id::DepthOnlyAlphaMaskedVertexShader:
-            actualId = VKRT_RESOURCE_DEPTH_ONLY_ALPHA_MASKED_VERTEX_SHADER;
-            break;
-        case Resource::Id::DepthOnlyAlphaMaskedFragmentShader:
-            actualId = VKRT_RESOURCE_DEPTH_ONLY_ALPHA_MASKED_FRAGMENT_SHADER;
-            break;
-        case Resource::Id::VisibilityBufferShadeVertexShader:
-            actualId = VKRT_RESOURCE_VISIBILITY_BUFFER_SHADE_VERTEX_SHADER;
-            break;
-        case Resource::Id::VisibilityBufferShadeFragmentShader:
-            actualId = VKRT_RESOURCE_VISIBILITY_BUFFER_SHADE_FRAGMENT_SHADER;
-            break;
-        case Resource::Id::SSAOVertexShader:
-            actualId = VKRT_RESOURCE_SSAO_VERTEX_SHADER;
-            break;
-        case Resource::Id::SSAOFragmentShader:
-            actualId = VKRT_RESOURCE_SSAO_FRAGMENT_SHADER;
-            break;
-        case Resource::Id::EdgeAwareBoxBlurVertexShader:
-            actualId = VKRT_RESOURCE_EDGE_AWARE_BOX_BLUR_VERTEX_SHADER;
-            break;
-        case Resource::Id::EdgeAwareBoxBlurFragmentShader:
-            actualId = VKRT_RESOURCE_EDGE_AWARE_BOX_BLUR_FRAGMENT_SHADER;
-            break;
-        default:
-            return {nullptr, 0};
-    }
+    static const std::unordered_map<Resource::Id, uint32_t> resourceTranslateTable{
+        {Resource::Id::CullingShader, VKRT_RESOURCE_CULLING_SHADER},
+        {Resource::Id::GeometryPassOpaqueVertexShader, VKRT_RESOURCE_GEOMETRY_PASS_OPAQUE_VERTEX},
+        {Resource::Id::GeometryPassOpaqueFragmentShader,
+         VKRT_RESOURCE_GEOMETRY_PASS_OPAQUE_FRAGMENT},
+        {Resource::Id::GeometryPassAlphaMaskedVertexShader,
+         VKRT_RESOURCE_GEOMETRY_PASS_ALPHA_MASKED_VERTEX},
+        {Resource::Id::GeometryPassAlphaMaskedFragmentShader,
+         VKRT_RESOURCE_GEOMETRY_PASS_ALPHA_MASKED_FRAGMENT},
+        {Resource::Id::TransparentPassVertexShader, VKRT_RESOURCE_TRANSPARENT_VERTEX},
+        {Resource::Id::TransparentPassFragmentShader, VKRT_RESOURCE_TRANSPARENT_FRAGMENT},
+        {Resource::Id::DepthOnlyOpaqueVertexShader, VKRT_RESOURCE_DEPTH_ONLY_OPAQUE_VERTEX_SHADER},
+        {Resource::Id::DepthOnlyOpaqueFragmentShader,
+         VKRT_RESOURCE_DEPTH_ONLY_OPAQUE_FRAGMENT_SHADER},
+        {Resource::Id::DepthOnlyAlphaMaskedVertexShader,
+         VKRT_RESOURCE_DEPTH_ONLY_ALPHA_MASKED_VERTEX_SHADER},
+        {Resource::Id::DepthOnlyAlphaMaskedFragmentShader,
+         VKRT_RESOURCE_DEPTH_ONLY_ALPHA_MASKED_FRAGMENT_SHADER},
+        {Resource::Id::VisibilityBufferShadeVertexShader,
+         VKRT_RESOURCE_VISIBILITY_BUFFER_SHADE_VERTEX_SHADER},
+        {Resource::Id::VisibilityBufferShadeFragmentShader,
+         VKRT_RESOURCE_VISIBILITY_BUFFER_SHADE_FRAGMENT_SHADER},
+        {Resource::Id::SSAOVertexShader, VKRT_RESOURCE_SSAO_VERTEX_SHADER},
+        {Resource::Id::SSAOFragmentShader, VKRT_RESOURCE_SSAO_FRAGMENT_SHADER},
+        {Resource::Id::EdgeAwareBoxBlurVertexShader,
+         VKRT_RESOURCE_EDGE_AWARE_BOX_BLUR_VERTEX_SHADER},
+        {Resource::Id::EdgeAwareBoxBlurFragmentShader,
+         VKRT_RESOURCE_EDGE_AWARE_BOX_BLUR_FRAGMENT_SHADER},
+        {Resource::Id::RaytraceProbeGenShader, VKRT_RESOURCE_RAYTRACE_PROBE_GEN_SHADER},
+        {Resource::Id::RaytraceProbeHitShader, VKRT_RESOURCE_RAYTRACE_PROBE_HIT_SHADER},
+        {Resource::Id::RaytraceProbeMissShader, VKRT_RESOURCE_RAYTRACE_PROBE_MISS_SHADER},
+        {Resource::Id::RaytraceProbeShadowMissShader,
+         VKRT_RESOURCE_RAYTRACE_PROBE_SHADOW_MISS_SHADER},
+    };
 
     HMODULE module = nullptr;
     GetModuleHandleExA(
         GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
         (LPCSTR)&ResourceLoader::Load,
         &module);
-    HRSRC resource = FindResource(module, MAKEINTRESOURCE(actualId), RT_RCDATA);
+    uint32_t actualResourceId = resourceTranslateTable.at(resourceId);
+    HRSRC resource = FindResource(module, MAKEINTRESOURCE(actualResourceId), RT_RCDATA);
     if (resource != nullptr) {
         size_t bufferSize = SizeofResource(module, resource);
         HGLOBAL data = LoadResource(module, resource);

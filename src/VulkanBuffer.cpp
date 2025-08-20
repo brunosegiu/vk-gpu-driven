@@ -10,8 +10,7 @@ ScopedRefPtr<VulkanBuffer> VulkanBuffer::Create(
     ScopedRefPtr<Context> context,
     const vk::DeviceSize& size,
     const vk::BufferUsageFlags& usageFlags,
-    const VmaAllocationCreateFlags& memoryFlags,
-    const vk::MemoryAllocateFlags& memoryAllocateFlags) {
+    const VmaAllocationCreateFlags& memoryFlags) {
     const vk::BufferCreateInfo bufferCreateInfo = vk::BufferCreateInfo()
                                                       .setSize(size)
                                                       .setUsage(usageFlags)

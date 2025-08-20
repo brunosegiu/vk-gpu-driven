@@ -292,8 +292,7 @@ vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 
         vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
         
         vec3 kS = F;
-        vec3 kD = vec3(1.0) - kS;
-        kD *= (1.0 - metallic);	  
+        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
         
         vec3 numerator    = NDF * G * F;
         float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
@@ -304,14 +303,14 @@ vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 
         Lo = (kD * albedo.rgb / PI + specular) * NdotL * radiance * shadowTerm;
     }
     
-    vec3 ambient = radiance * vec3(0.1) * albedo.rgb;
+    vec3 ambient = radiance * vec3(0.1) * albedo.rgb * visibility;
 
     // Hack to get some reflections on metallic materials while there are no reflection probes
     ProceduralSkyShaderParameters params = initSkyShaderParameters(L);
     params.lightColor = normalize(radiance);
     vec3 skySpecular = fakeSkyReflectionFast(N, V, roughness, F0, params);
 
-    return ambient * visibility + Lo + skySpecular;
+    return ambient + Lo + skySpecular;
 }
 
 vec3 gammaCorrection(vec3 color) {

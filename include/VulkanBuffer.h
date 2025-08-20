@@ -13,8 +13,7 @@ public:
         ScopedRefPtr<Context> context,
         const vk::DeviceSize& size,
         const vk::BufferUsageFlags& usageFlags,
-        const VmaAllocationCreateFlags& memoryFlags,
-        const vk::MemoryAllocateFlags& memoryAllocateFlags = {});
+        const VmaAllocationCreateFlags& memoryFlags);
 
     const vk::DeviceSize& GetBufferSize() const { return mSize; }
     const vk::Buffer& GetBufferHandle() const { return mBufferHandle; }

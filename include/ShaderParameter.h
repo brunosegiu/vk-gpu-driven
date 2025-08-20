@@ -36,6 +36,11 @@ public:
         return sDummyDescriptorInfo;
     };
 
+    virtual const vk::WriteDescriptorSetAccelerationStructureKHR& GetAccelerationStructureInfo() {
+        static const vk::WriteDescriptorSetAccelerationStructureKHR dummyInfo;
+        return dummyInfo;
+    }
+
     ~ShaderParameter();
 
 protected:
@@ -58,8 +63,7 @@ public:
         const vk::ShaderStageFlags& stageFlags,
         const vk::DeviceSize& size,
         const vk::BufferUsageFlags& usageFlags,
-        const VmaAllocationCreateFlags& memoryFlags,
-        const vk::MemoryAllocateFlags& memoryAllocateFlags = {});
+        const VmaAllocationCreateFlags& memoryFlags);
 
     ShaderParameterBuffer(
         ScopedRefPtr<Context> context,
@@ -133,6 +137,24 @@ public:
 private:
     vk::DeviceSize mSize;
     vk::DeviceSize mOffset;
+};
+
+class ShaderParameterAccelerationStructure : public ShaderParameter {
+public:
+    ShaderParameterAccelerationStructure(
+        ScopedRefPtr<Context> context,
+        const vk::ShaderStageFlags& stageFlags);
+
+    void Bind(vk::AccelerationStructureKHR accelerationStructure);
+
+    const vk::WriteDescriptorSetAccelerationStructureKHR& GetAccelerationStructureInfo() override {
+        return mAccelerationStructureInfo;
+    };
+
+    virtual ~ShaderParameterAccelerationStructure();
+
+private:
+    vk::WriteDescriptorSetAccelerationStructureKHR mAccelerationStructureInfo;
 };
 
 }  // namespace VKRT

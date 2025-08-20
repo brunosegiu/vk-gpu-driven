@@ -29,6 +29,10 @@ struct Resource {
         SSAOFragmentShader,
         EdgeAwareBoxBlurVertexShader,
         EdgeAwareBoxBlurFragmentShader,
+        RaytraceProbeGenShader,
+        RaytraceProbeHitShader,
+        RaytraceProbeMissShader,
+        RaytraceProbeShadowMissShader,
     };
 };
 

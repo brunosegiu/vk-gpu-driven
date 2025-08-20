@@ -177,6 +177,9 @@ void ShaderParameterCollection::UpdateDescriptors(uint32_t frameIndex) {
                 case vk::DescriptorType::eSampledImage: {
                     descriptorUpdate.setImageInfo(parameter->GetImageInfos());
                 } break;
+                case vk::DescriptorType::eAccelerationStructureKHR: {
+                    descriptorUpdate.setPNext(&parameter->GetAccelerationStructureInfo());
+                } break;
             }
 
             writeDescriptorSets.emplace_back(descriptorUpdate);

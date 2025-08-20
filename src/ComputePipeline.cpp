@@ -13,9 +13,8 @@ ComputePipeline::ComputePipeline(
     : Pipeline(context) {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
 
-    mShaders = std::unordered_map<vk::ShaderStageFlagBits, vk::ShaderModule>{};
     const vk::ShaderModule shaderModule = LoadShader(shaderResourcesMap.second);
-    mShaders.emplace(shaderResourcesMap.first, shaderModule);
+    mShaders.emplace(shaderResourcesMap.first, std::vector<vk::ShaderModule>{shaderModule});
     const vk::PipelineShaderStageCreateInfo stageCreateInfo =
         vk::PipelineShaderStageCreateInfo()
             .setStage(shaderResourcesMap.first)
@@ -38,7 +37,9 @@ ComputePipeline::ComputePipeline(
 ComputePipeline::~ComputePipeline() {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
     for (auto& entry : mShaders) {
-        logicalDevice.destroyShaderModule(entry.second);
+        for (vk::ShaderModule& module : entry.second) {
+            logicalDevice.destroyShaderModule(module);
+        }
     }
     logicalDevice.destroyPipeline(mPipeline);
     logicalDevice.destroyPipelineLayout(mLayout);

@@ -2,6 +2,7 @@
 #define DEFINITIONS_GLSL
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
+#extension GL_EXT_scalar_block_layout : enable
 
 #define UPDATE_PER_FRAME 0
 #define UPDATE_ONCE 1
@@ -59,6 +60,25 @@ struct LightData {
     vec3 direction;
     mat4 viewProjection;
     uint shadowTaps;
+};
+
+const int ColorPayloadIndex = 0;
+const int ShadowPayloadIndex = 1;
+
+const int ColorMissIndex = 0;
+const int ShadowMissIndex = 1;
+
+const float TMin = 0.001f;
+const float TMax = 1000.0f;
+const float Infinity = TMax * 100.0f;
+const uint DefaultSBTOffset = 0;
+const uint DefaultSBTStride = 0;
+const uint MaxRecursionLevel = 4;
+const uint AllMask = 0xFF;
+
+struct RayPayload {
+    vec3 color;
+    uint depth;
 };
 
 #endif

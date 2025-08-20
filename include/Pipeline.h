@@ -29,6 +29,6 @@ protected:
     ScopedRefPtr<Context> mContext;
     vk::PipelineLayout mLayout;
     vk::Pipeline mPipeline;
-    std::unordered_map<vk::ShaderStageFlagBits, vk::ShaderModule> mShaders;
+    std::unordered_map<vk::ShaderStageFlagBits, std::vector<vk::ShaderModule>> mShaders;
 };
 }  // namespace VKRT

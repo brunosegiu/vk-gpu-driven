@@ -43,14 +43,13 @@ GraphicsPipeline::GraphicsPipeline(
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
 
     std::vector<vk::PipelineShaderStageCreateInfo> stageCreateInfos;
-    mShaders = std::unordered_map<vk::ShaderStageFlagBits, vk::ShaderModule>{};
     for (const auto& entry : shaderResourcesMap) {
-        const vk::ShaderModule shaderModule = LoadShader(entry.second);
-        mShaders.emplace(entry.first, shaderModule);
+        const std::vector<vk::ShaderModule> shaderModules{LoadShader(entry.second)};
+        mShaders.emplace(entry.first, shaderModules);
         const vk::PipelineShaderStageCreateInfo stageCreateInfo =
             vk::PipelineShaderStageCreateInfo()
                 .setStage(entry.first)
-                .setModule(shaderModule)
+                .setModule(shaderModules.front())
                 .setPName("main");
         stageCreateInfos.emplace_back(stageCreateInfo);
     }
@@ -69,7 +68,8 @@ GraphicsPipeline::GraphicsPipeline(
             .setRasterizerDiscardEnable(false)
             .setPolygonMode(vk::PolygonMode::eFill)
             .setLineWidth(1.0f)
-            .setCullMode(optionals.enableCulling ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone)
+            .setCullMode(
+                optionals.enableCulling ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone)
             .setFrontFace(vk::FrontFace::eCounterClockwise)
             .setDepthBiasEnable(optionals.enableDepthBias)
             .setDepthBiasConstantFactor(optionals.depthBias)
@@ -155,7 +155,9 @@ GraphicsPipeline::GraphicsPipeline(
 GraphicsPipeline::~GraphicsPipeline() {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
     for (auto& entry : mShaders) {
-        logicalDevice.destroyShaderModule(entry.second);
+        for (vk::ShaderModule& module : entry.second) {
+            logicalDevice.destroyShaderModule(module);
+        }
     }
     logicalDevice.destroyPipeline(mPipeline);
     logicalDevice.destroyPipelineLayout(mLayout);
