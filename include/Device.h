@@ -62,6 +62,7 @@ public:
 
     vk::PhysicalDeviceProperties GetDeviceProperties();
     vk::PhysicalDeviceRayTracingPipelinePropertiesKHR GetRayTracingProperties();
+    vk::PhysicalDeviceAccelerationStructurePropertiesKHR GetAccelerationStructure();
 
     VmaAllocator& GetAllocator() { return mAllocator; }
 

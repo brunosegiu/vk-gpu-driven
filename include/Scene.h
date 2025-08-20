@@ -83,5 +83,14 @@ private:
         uint32_t cachedDrawCallCount;
     };
     std::unordered_map<Material::AlphaMode, RenderPassResources> mRenderPassResources;
+    
+    struct BlasResources {
+        vk::AccelerationStructureKHR mBLAS;
+        vk::DeviceAddress mBLASAddress;
+    };
+    struct RaytracingScene {
+        std::vector<BlasResources> blasResources;
+        ScopedRefPtr<VulkanBuffer> mBLASBuffer;
+    } mRaytracingScene;
 };
 }  // namespace VKRT

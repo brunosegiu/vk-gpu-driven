@@ -199,6 +199,13 @@ vk::PhysicalDeviceRayTracingPipelinePropertiesKHR Device::GetRayTracingPropertie
     return result.get<vk::PhysicalDeviceRayTracingPipelinePropertiesKHR>();
 }
 
+vk::PhysicalDeviceAccelerationStructurePropertiesKHR Device::GetAccelerationStructure() {
+    auto result = mPhysicalDevice.getProperties2<
+        vk::PhysicalDeviceProperties2,
+        vk::PhysicalDeviceAccelerationStructurePropertiesKHR>();
+    return result.get<vk::PhysicalDeviceAccelerationStructurePropertiesKHR>();
+}
+
 Device::~Device() {
     vmaDestroyAllocator(mAllocator);
     mLogicalDevice.destroyCommandPool(mCommandPool);

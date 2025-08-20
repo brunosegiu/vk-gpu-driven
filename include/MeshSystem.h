@@ -36,6 +36,9 @@ public:
     const ScopedRefPtr<VulkanBuffer>& GetNormalBuffer() const { return mUnifiedNormalBuffer; }
     const ScopedRefPtr<VulkanBuffer>& GetTangentBuffer() const { return mUnifiedTangentBuffer; }
 
+    uint32_t GetVertexCount() { return mVertexCount; }
+    uint32_t GetPrimitiveCount() { return mPrimitiveCount; }
+
     void Upload(
         const std::vector<VKRTBaker::Vec3>& vertices,
         const std::vector<uint32_t>& texCoord,
@@ -52,6 +55,8 @@ private:
     ScopedRefPtr<VulkanBuffer> mUnifiedTexCoordBuffer;
     ScopedRefPtr<VulkanBuffer> mUnifiedNormalBuffer;
     ScopedRefPtr<VulkanBuffer> mUnifiedTangentBuffer;
+    uint32_t mVertexCount;
+    uint32_t mPrimitiveCount;
 };
 
 }  // namespace VKRT

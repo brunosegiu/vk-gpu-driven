@@ -1,7 +1,7 @@
 #include "MeshSystem.h"
 
-#include "DebugUtils.h"
 #include "../baker/include/BakedSceneSerialization.h"
+#include "DebugUtils.h"
 
 namespace VKRT {
 
@@ -56,8 +56,14 @@ void UploadBuffer(
         switch (type) {
             case VertexAttributeFlag::Index: {
                 usageFlags |= vk::BufferUsageFlagBits::eIndexBuffer;
+                usageFlags |= vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR;
+                usageFlags |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
             } break;
-            case VertexAttributeFlag::Position:
+            case VertexAttributeFlag::Position: {
+                usageFlags |= vk::BufferUsageFlagBits::eVertexBuffer;
+                usageFlags |= vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR;
+                usageFlags |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
+            } break;
             case VertexAttributeFlag::TexCoord:
             case VertexAttributeFlag::Normal:
             case VertexAttributeFlag::Tangent: {
@@ -98,6 +104,9 @@ void MeshSystem::Upload(
     UploadBuffer(mContext, mUnifiedNormalBuffer, normals, VertexAttributeFlag::Normal);
     UploadBuffer(mContext, mUnifiedTangentBuffer, tangents, VertexAttributeFlag::Tangent);
     UploadBuffer(mContext, mUnifiedIndexBuffer, indices, VertexAttributeFlag::Index);
+
+    mVertexCount = vertices.size();
+    mPrimitiveCount = indices.size() / 3;
 }
 
 void MeshSystem::BindBuffers(vk::CommandBuffer& commandBuffer, VertexAttributeFlag attributeFlags) {
