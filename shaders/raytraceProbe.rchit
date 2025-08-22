@@ -12,44 +12,45 @@ layout(location = ShadowPayloadIndex) rayPayloadEXT float shadowAttenuation;
 hitAttributeEXT vec2 hitAttributes;
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    CameraData CameraParameters;
+    CameraData uCameraParameters;
 };
-
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    LightData LightParameters;
+    LightData uLightParameters;
+};
+layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
+    MeshData uMeshData[];
 };
 
-layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
-    DrawData perDrawData[];
-} SceneData;
-
-layout(binding = 0, set = UPDATE_ONCE) uniform accelerationStructureEXT topLevelAS;
-layout(binding = 1, set = UPDATE_ONCE, rgba8) uniform image2D image;
-layout(binding = 2, set = UPDATE_ONCE) uniform sampler materialTextureSampler;
-layout(binding = 3, set = UPDATE_ONCE) uniform sampler frameBufferTextureSampler;
-layout(binding = 4, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
-    Material Materials[];
+layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
+    DrawData uPersistentSceneData[];
 };
-layout(binding = 5, set = UPDATE_ONCE, scalar) readonly buffer Index {
-    uint indices[];
+layout(binding = 1, set = UPDATE_ONCE) uniform accelerationStructureEXT uTopLevelAS;
+layout(binding = 2, set = UPDATE_ONCE, rgba8) uniform image2D uImage;
+layout(binding = 3, set = UPDATE_ONCE) uniform sampler uMaterialTextureSampler;
+layout(binding = 4, set = UPDATE_ONCE) uniform sampler uFrameBufferTextureSampler;
+layout(binding = 5, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
+    Material uMaterials[];
 };
-layout(binding = 6, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
-    vec3 positions[];
+layout(binding = 6, set = UPDATE_ONCE, scalar) readonly buffer Index {
+    uint uIndices[];
 };
-layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
-    uint packedTexCoord[];
+layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
+    vec3 uPositions[];
 };
-layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
-    uint packedNormal[];
+layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
+    uint uPackedTexCoord[];
 };
-layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
-    uint packedTangent[];
+layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
+    uint uPackedNormal[];
 };
-layout(binding = 10, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
+layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
+    uint uPackedTangent[];
+};
+layout(binding = 11, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
 
 vec4 sampleTexture(int index, vec2 uv) {
     return texture(
-            sampler2D(sceneTextures[nonuniformEXT(index)], materialTextureSampler),
+            sampler2D(uSceneTextures[nonuniformEXT(index)], uMaterialTextureSampler),
             uv);
 }
 
@@ -71,7 +72,7 @@ vec4 interpolate(vec4 a, vec4 b, vec4 c, vec3 barycentricCoords) {
 float traceShadowRay(const vec3 origin, const vec3 direction, float distance) {
     shadowAttenuation = 0.0f;
     traceRayEXT(
-        topLevelAS,
+        uTopLevelAS,
         gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT |
             gl_RayFlagsSkipClosestHitShaderEXT,
         0xFF,
@@ -95,24 +96,25 @@ void main() {
     const vec3 barycentricCoords = vec3(1.0f - hitAttributes.x - hitAttributes.y, hitAttributes.x, hitAttributes.y);
 
     uint drawId = gl_InstanceCustomIndexEXT;
-    DrawData drawData = SceneData.perDrawData[drawId];
+    const DrawData drawData = uPersistentSceneData[drawId];
+    const MeshData meshData = uMeshData[drawData.meshIndex];
 
     uint triangleIndex = gl_PrimitiveID * 3 + drawData.firstIndex;
 
-    uint vertexIndexA = indices[triangleIndex] + drawData.vertexOffset;
-    uint vertexIndexB = indices[triangleIndex + 1] + drawData.vertexOffset;
-    uint vertexIndexC = indices[triangleIndex + 2] + drawData.vertexOffset;
+    uint vertexIndexA = uIndices[triangleIndex] + drawData.vertexOffset;
+    uint vertexIndexB = uIndices[triangleIndex + 1] + drawData.vertexOffset;
+    uint vertexIndexC = uIndices[triangleIndex + 2] + drawData.vertexOffset;
 
-    vec3 posA = positions[vertexIndexA];
-    vec3 posB = positions[vertexIndexB];
-    vec3 posC = positions[vertexIndexC];
+    vec3 posA = uPositions[vertexIndexA];
+    vec3 posB = uPositions[vertexIndexB];
+    vec3 posC = uPositions[vertexIndexC];
 
     const vec3 position = interpolate(posA, posB, posC, barycentricCoords);
     const vec3 worldSpacePosition = vec3(gl_ObjectToWorldEXT * vec4(position, 1.0));
 
-    vec2 texCoordA = unpackHalf2x16(packedTexCoord[vertexIndexA]);
-    vec2 texCoordB = unpackHalf2x16(packedTexCoord[vertexIndexB]);
-    vec2 texCoordC = unpackHalf2x16(packedTexCoord[vertexIndexC]);
+    vec2 texCoordA = unpackHalf2x16(uPackedTexCoord[vertexIndexA]);
+    vec2 texCoordB = unpackHalf2x16(uPackedTexCoord[vertexIndexB]);
+    vec2 texCoordC = unpackHalf2x16(uPackedTexCoord[vertexIndexC]);
     vec2 uv = interpolate(
         texCoordA,
         texCoordB,
@@ -120,24 +122,24 @@ void main() {
         barycentricCoords
     );
 
-    vec3 unpackedNormalA = normalize(unpackSnorm4x8(packedNormal[vertexIndexA]).xyz);
-    vec3 unpackedNormalB = normalize(unpackSnorm4x8(packedNormal[vertexIndexB]).xyz);
-    vec3 unpackedNormalC = normalize(unpackSnorm4x8(packedNormal[vertexIndexC]).xyz);
+    vec3 unpackedNormalA = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexA]).xyz);
+    vec3 unpackedNormalB = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexB]).xyz);
+    vec3 unpackedNormalC = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexC]).xyz);
 
-    vec3 normal = normalize(drawData.normalTransform * interpolate(unpackedNormalA, unpackedNormalB, unpackedNormalC, barycentricCoords));
+    vec3 normal = normalize(meshData.normalTransform * interpolate(unpackedNormalA, unpackedNormalB, unpackedNormalC, barycentricCoords));
     
-    vec4 unpackedTangentA = normalize(unpackSnorm4x8(packedTangent[vertexIndexA]));
-    vec4 unpackedTangentB = normalize(unpackSnorm4x8(packedTangent[vertexIndexB]));
-    vec4 unpackedTangentC = normalize(unpackSnorm4x8(packedTangent[vertexIndexC]));
+    vec4 unpackedTangentA = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexA]));
+    vec4 unpackedTangentB = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexB]));
+    vec4 unpackedTangentC = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexC]));
 
     vec4 tangent = interpolate(unpackedTangentA, unpackedTangentB, unpackedTangentC, barycentricCoords);
-    vec3 normalizedTangent = normalize(drawData.normalTransform * tangent.xyz);
+    vec3 normalizedTangent = normalize(meshData.normalTransform * tangent.xyz);
     vec3 bitangent = normalize(cross(normal, normalizedTangent) * tangent.w);
 
     mat3 TBN = mat3(normalizedTangent, bitangent, normal);
 
-    uint materialId = drawData.materialId;
-    Material material = Materials[materialId];
+    const uint materialId = meshData.materialId;
+    const Material material = uMaterials[materialId];
 
     if (material.normalTextureIndex > 0) {
         vec3 normalSample = sampleTexture(material.normalTextureIndex, uv).xyz;
@@ -158,11 +160,11 @@ void main() {
         metallic = metallicRoughness.g;
     }
 
-    const float shadowTerm = traceShadowRay(worldSpacePosition, -LightParameters.direction, TMax);
+    const float shadowTerm = traceShadowRay(worldSpacePosition, -uLightParameters.direction, TMax);
 
-    vec3 viewVector = normalize(CameraParameters.cameraPos.xyz - worldSpacePosition);
+    vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - worldSpacePosition);
 
-    vec3 color = evalLighting(normal, viewVector, -LightParameters.direction, LightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0f);
+    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0f);
 
     rayPayload.depth += 1;
     rayPayload.color += color;

@@ -13,35 +13,35 @@ layout(location = 1) in flat uint inDrawID;
 layout(location = 0) out uint outVisibilityData;
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    CameraData CameraParameters;
+    CameraData uCameraParameters;
 };
-
-layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
-    DrawData perDrawData[];
-} SceneData;
-
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
+    MeshData uMeshData[];
+};
 layout(binding = 2, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
-	uint drawData[];
+	uint uDrawData[];
 };
 
-layout(binding = 0, set = UPDATE_ONCE) uniform sampler textureSampler;
-
-layout(binding = 1, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
-    Material Materials[];
+layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
+    DrawData uPersistentSceneData[];
 };
-
-layout(binding = 2, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
+layout(binding = 1, set = UPDATE_ONCE) uniform sampler uTextureSampler;
+layout(binding = 2, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
+    Material uMaterials[];
+};
+layout(binding = 3, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
 
 void main() {
-    DrawData perDrawData = SceneData.perDrawData[inDrawID];
+    const DrawData drawData = uPersistentSceneData[inDrawID];
+    const MeshData meshData = uMeshData[drawData.meshIndex];
 
-    uint materialId = perDrawData.materialId;
-    Material material = Materials[materialId];
+    uint materialId = meshData.materialId;
+    Material material = uMaterials[materialId];
 
     vec3 albedo = material.albedo.rgb;
     if (material.albedoTextureIndex >= 0) {
         vec4 albedoAlpha =
-            texture(sampler2D(sceneTextures[material.albedoTextureIndex], textureSampler), inTexCoord)
+            texture(sampler2D(uSceneTextures[material.albedoTextureIndex], uTextureSampler), inTexCoord)
                 .rgba;
         albedo =  albedoAlpha.rgb;
         if (albedoAlpha.a - 0.5f < 0.0f) {

@@ -9,46 +9,43 @@
 layout(location = 0) in vec3 inWorldSpacePos;
 layout(location = 1) in vec2 inTexCoord;
 layout(location = 2) in vec3 inNormal;
-layout(location = 3) in flat uint inDrawID;
-layout(location = 4) in vec4 inShadowCoord;
-layout(location = 5) in mat3 inTBN;
+layout(location = 3) in flat Material inMaterial; // uses 3..8
+layout(location = 9) in vec4 inShadowCoord;
+layout(location = 10) in mat3 inTBN;
 
 layout(location = 0) out vec4 outColor;
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    CameraData CameraParameters;
+    CameraData uCameraParameters;
 };
-
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    LightData LightParameters;
+    LightData uLightParameters;
 };
-
-layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
-    DrawData perDrawData[];
-} SceneData;
-
+layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
+    MeshData uMeshData[];
+};
 layout(binding = 3, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
-	uint drawData[];
+	uint uDrawData[];
 };
 
-layout(binding = 0, set = UPDATE_ONCE) uniform sampler textureSampler;
-layout(binding = 1, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
-    Material Materials[];
+layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
+    DrawData uPersistentSceneData[];
 };
-layout(binding = 2, set = UPDATE_ONCE) uniform texture2D shadowMap;
-layout(binding = 3, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
+layout(binding = 1, set = UPDATE_ONCE) uniform sampler uTextureSampler;
+layout(binding = 2, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
+    Material uMaterials[];
+};
+layout(binding = 3, set = UPDATE_ONCE) uniform texture2D uShadowMap;
+layout(binding = 4, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
 
 vec4 sampleTexture(int index, vec2 uv) {
     return texture(
-            sampler2D(sceneTextures[nonuniformEXT(index)], textureSampler),
+            sampler2D(uSceneTextures[nonuniformEXT(index)], uTextureSampler),
             uv);
 }
 
 void main() {
-    DrawData drawData = SceneData.perDrawData[inDrawID];
-
-    uint materialId = drawData.materialId;
-    Material material = Materials[materialId];
+    const Material material = inMaterial;
 
     vec4 albedo = vec4(material.albedo.rgb, 0.5f);
     if (material.albedoTextureIndex >= 0) {
@@ -73,13 +70,13 @@ void main() {
 	vec4 shadowCoord = inShadowCoord / inShadowCoord.w;
     float shadowTerm = 0.0f;
     {
-		shadowTerm = filterPCF(shadowCoord, LightParameters.shadowTaps, textureSampler, shadowMap);
+		shadowTerm = filterPCF(shadowCoord, uLightParameters.shadowTaps, uTextureSampler, uShadowMap);
 	    shadowTerm = clamp(shadowTerm, 0.0f, 1.0f);
     }
 
-    vec3 viewVector = normalize(CameraParameters.cameraPos.xyz - inWorldSpacePos);
+    vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - inWorldSpacePos);
 
-    vec3 color = evalLighting(normal, viewVector, -LightParameters.direction, LightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0);
+    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0);
 
     outColor = vec4(gammaCorrection(color), albedo.a);
 }

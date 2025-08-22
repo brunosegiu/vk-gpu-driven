@@ -50,18 +50,22 @@ public:
         vk::ImageLayout dstLayout;
     };
     static std::vector<vk::ImageMemoryBarrier> GetBarriers(
+        vk::PipelineStageFlags srcStage,
+        vk::PipelineStageFlags dstStage,
         std::vector<ImageBarrierInfo> textures);
 
     vk::ImageMemoryBarrier GetImageBarrierInfo(
         vk::ImageLayout srcLayout,
-        vk::ImageLayout dstLayout);
+        vk::ImageLayout dstLayout,
+        vk::PipelineStageFlags srcStage,
+        vk::PipelineStageFlags dstStage);
 
     void SetImageLayout(
         vk::CommandBuffer& commandBuffer,
         vk::ImageLayout oldLayout,
         vk::ImageLayout newLayout,
-        vk::PipelineStageFlags srcStageMask,
-        vk::PipelineStageFlags dstStageMask);
+        vk::PipelineStageFlags srcStage,
+        vk::PipelineStageFlags dstStage);
 
     ~Texture();
 

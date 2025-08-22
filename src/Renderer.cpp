@@ -36,7 +36,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
       mScene(scene),
       mCurrentFrameIndex(0),
       mMaterialsBuffer(nullptr),
-      mPerDrawBuffers(),
+      mScenePersistentDataBuffer(),
       mFreezeCulling(false) {
     ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
     inputManager->Subscribe(this);
@@ -162,7 +162,15 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
 
     // Global resources
     {
-        mPerDrawParameters = new ShaderParameterBuffer(
+        mScenePersistentDataParameter = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eStorageBuffer,
+            ShaderParameter::UpdateFrequency::Once,
+            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment |
+                vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
+
+        mPerMeshParameters = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::PerFrame,
@@ -206,10 +214,11 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
                 vk::ShaderStageFlagBits::eCompute);
 
             resources.cullingParameters->AddParameter(resources.cullingDataUniform);
-            resources.cullingParameters->AddParameter(mPerDrawParameters);
+            resources.cullingParameters->AddParameter(mPerMeshParameters);
             resources.cullingParameters->AddParameter(resources.indirectDrawBufferParameter);
             resources.cullingParameters->AddParameter(resources.drawCallCountBufferParameter);
             resources.cullingParameters->AddParameter(resources.additionalDrawDataBufferParameter);
+            resources.cullingParameters->AddParameter(mScenePersistentDataParameter);
 
             resources.cullingPipeline = new ComputePipeline(
                 context,
@@ -285,8 +294,9 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             mContext,
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex |
+                vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eClosestHitKHR |
+                vk::ShaderStageFlagBits::eMissKHR);
 
         mMaterialsTextures = new ShaderParameterImage(
             mContext,
@@ -323,9 +333,10 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
 
                 parameters = new ShaderParameterCollection(mContext);
                 parameters->AddParameter(mShadowCameraUniform);
-                parameters->AddParameter(mPerDrawParameters);
+                parameters->AddParameter(mPerMeshParameters);
                 parameters->AddParameter(
                     mShadowPassCulling[alphaMode].additionalDrawDataBufferParameter);
+                parameters->AddParameter(mScenePersistentDataParameter);
                 parameters->AddParameter(mMaterialSampler);
                 parameters->AddParameter(mMaterialsUniform);
                 parameters->AddParameter(mMaterialsTextures);
@@ -410,8 +421,9 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             if (isTransparentPass) {
                 parameters->AddParameter(mShadowCameraUniform);
             }
-            parameters->AddParameter(mPerDrawParameters);
+            parameters->AddParameter(mPerMeshParameters);
             parameters->AddParameter(mBasePassCulling[alphaMode].additionalDrawDataBufferParameter);
+            parameters->AddParameter(mScenePersistentDataParameter);
             if (isTransparentPass || isAlphaMaskedPass) {
                 parameters->AddParameter(mMaterialSampler);
                 parameters->AddParameter(mMaterialsUniform);
@@ -497,7 +509,8 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mShadePassParameters = new ShaderParameterCollection(mContext);
         mShadePassParameters->AddParameter(mCameraUniform);
         mShadePassParameters->AddParameter(mShadowCameraUniform);
-        mShadePassParameters->AddParameter(mPerDrawParameters);
+        mShadePassParameters->AddParameter(mPerMeshParameters);
+        mShadePassParameters->AddParameter(mScenePersistentDataParameter);
         mShadePassParameters->AddParameter(mMaterialSampler);
         mShadePassParameters->AddParameter(mFrameBufferSampler);
         mShadePassParameters->AddParameter(mMaterialsUniform);
@@ -603,14 +616,12 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
              Resource::Id::RaytraceProbeMissShader,
              Resource::Id::RaytraceProbeShadowMissShader}}};
 
-
-
-
     mProbeRaytracingParameters = new ShaderParameterCollection(mContext);
     mProbeRaytracingParameters->AddParameter(mCameraUniform);
     mProbeRaytracingParameters->AddParameter(mShadowCameraUniform);
-    mProbeRaytracingParameters->AddParameter(mPerDrawParameters);
+    mProbeRaytracingParameters->AddParameter(mPerMeshParameters);
 
+    mProbeRaytracingParameters->AddParameter(mScenePersistentDataParameter);
     mProbeRaytracingParameters->AddParameter(mASParamater);
     mProbeRaytracingParameters->AddParameter(mRaytracingTargetParameter);
     mProbeRaytracingParameters->AddParameter(mMaterialSampler);
@@ -629,35 +640,62 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
 
 void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
     // Create and update per-draw parameters
-    if (mPerDrawBuffers.empty()) {
+    if (mScenePersistentDataBuffer == nullptr) {
         uint32_t descriptorCount = 0;
-        const std::vector<Scene::DrawData>& drawData = mScene->GetPackedDrawData();
-        const size_t perDrawBufferSize = drawData.size() * sizeof(Scene::DrawData);
+        const Scene::PackedDrawData& drawData = mScene->GetPackedDrawData();
+        {
+            const size_t perDrawBufferSize =
+                drawData.persistentDrawData.size() * sizeof(Scene::PersistentDrawData);
 
-        const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
-        VKRT_ASSERT(perDrawBufferSize > 0);
-        for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
+            VKRT_ASSERT(perDrawBufferSize > 0);
             ScopedRefPtr<VulkanBuffer> perDrawBuffer = mContext->GetDevice()->CreateBuffer(
                 perDrawBufferSize,
                 vk::BufferUsageFlagBits::eStorageBuffer,
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                     VMA_ALLOCATION_CREATE_MAPPED_BIT);
-            mPerDrawBuffers.push_back(perDrawBuffer);
-        }
+            mScenePersistentDataBuffer = perDrawBuffer;
 
-        mPerDrawParameters->BindBuffers(mPerDrawBuffers);
+            {
+                uint8_t* buffer = perDrawBuffer->MapBuffer();
+                std::copy_n(
+                    reinterpret_cast<const uint8_t*>(drawData.persistentDrawData.data()),
+                    drawData.persistentDrawData.size() * sizeof(Scene::PersistentDrawData),
+                    buffer);
+                perDrawBuffer->UnmapBuffer();
+            }
+
+            mScenePersistentDataParameter->BindBuffer(mScenePersistentDataBuffer);
+        }
+        {
+            const size_t perMeshBufferSize = drawData.perMeshData.size() * sizeof(Scene::MeshData);
+
+            const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
+            VKRT_ASSERT(perMeshBufferSize > 0);
+            for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
+                ScopedRefPtr<VulkanBuffer> perMeshBuffer = mContext->GetDevice()->CreateBuffer(
+                    perMeshBufferSize,
+                    vk::BufferUsageFlagBits::eStorageBuffer,
+                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                        VMA_ALLOCATION_CREATE_MAPPED_BIT);
+                mPerMeshBuffers.push_back(perMeshBuffer);
+            }
+
+            mPerMeshParameters->BindBuffers(mPerMeshBuffers);
+        }
     }
 
     // Update content of per-draw parameters
     {
-        ScopedRefPtr<VulkanBuffer> currentBuffer = mPerDrawBuffers[imageIndex];
-        const std::vector<Scene::DrawData>& drawData = mScene->GetPackedDrawData();
-        uint8_t* buffer = currentBuffer->MapBuffer();
-        std::copy_n(
-            reinterpret_cast<const uint8_t*>(drawData.data()),
-            drawData.size() * sizeof(Scene::DrawData),
-            buffer);
-        currentBuffer->UnmapBuffer();
+        const Scene::PackedDrawData& drawData = mScene->GetPackedDrawData();
+        {
+            ScopedRefPtr<VulkanBuffer> currentBuffer = mPerMeshBuffers[imageIndex];
+            uint8_t* buffer = currentBuffer->MapBuffer();
+            std::copy_n(
+                reinterpret_cast<const uint8_t*>(drawData.perMeshData.data()),
+                drawData.perMeshData.size() * sizeof(Scene::MeshData),
+                buffer);
+            currentBuffer->UnmapBuffer();
+        }
     }
 
     // Update culling parameters
@@ -950,7 +988,10 @@ void Renderer::Render(Camera* camera) {
         {
             {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
-                    {{mRaytracingTarget, vk::ImageLayout::eGeneral,
+                    vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::PipelineStageFlagBits::eRayTracingShaderKHR,
+                    {{mRaytracingTarget,
+                      vk::ImageLayout::eShaderReadOnlyOptimal,
                       vk::ImageLayout::eGeneral}});
 
                 command.buffer.pipelineBarrier(
@@ -988,8 +1029,11 @@ void Renderer::Render(Camera* camera) {
 
             {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    vk::PipelineStageFlagBits::eRayTracingShaderKHR,
+                    vk::PipelineStageFlagBits::eFragmentShader,
                     {{mRaytracingTarget,
-                      vk::ImageLayout::eGeneral, vk::ImageLayout::eGeneral}});
+                      vk::ImageLayout::eGeneral,
+                      vk::ImageLayout::eShaderReadOnlyOptimal}});
 
                 command.buffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eRayTracingShaderKHR,
@@ -1026,6 +1070,8 @@ void Renderer::Render(Camera* camera) {
             {
                 // Transition shadow map to depth attachment
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::PipelineStageFlagBits::eVertexShader,
                     {{mShadowMap,
                       vk::ImageLayout::eShaderReadOnlyOptimal,
                       vk::ImageLayout::eDepthAttachmentOptimal}});
@@ -1125,6 +1171,8 @@ void Renderer::Render(Camera* camera) {
 
             {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::PipelineStageFlagBits::eColorAttachmentOutput,
                     {{mVisibilityBuffer,
                       vk::ImageLayout::eShaderReadOnlyOptimal,
                       vk::ImageLayout::eColorAttachmentOptimal}});
@@ -1223,6 +1271,8 @@ void Renderer::Render(Camera* camera) {
                 BeginMarker(command.buffer, "SSAO draw");
                 {
                     std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                        vk::PipelineStageFlagBits::eFragmentShader,
                         {{mDepthBuffer,
                           vk::ImageLayout::eDepthAttachmentOptimal,
                           vk::ImageLayout::eShaderReadOnlyOptimal}});
@@ -1338,6 +1388,8 @@ void Renderer::Render(Camera* camera) {
 
             {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                    vk::PipelineStageFlagBits::eFragmentShader,
                     {{mShadowMap,
                       vk::ImageLayout::eDepthAttachmentOptimal,
                       vk::ImageLayout::eShaderReadOnlyOptimal},
@@ -1406,6 +1458,8 @@ void Renderer::Render(Camera* camera) {
 
             {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::PipelineStageFlagBits::eEarlyFragmentTests,
                     {{mDepthBuffer,
                       vk::ImageLayout::eShaderReadOnlyOptimal,
                       vk::ImageLayout::eDepthAttachmentOptimal}});

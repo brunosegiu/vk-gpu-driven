@@ -151,44 +151,53 @@ void Scene::Update() {
         object->UpdateTransforms(glm::mat4(1.0f));
     }
     // TODO: Support updates
-    if (mPackedDrawData.empty()) {
+    if (mPackedDrawData.persistentDrawData.empty()) {
         PackDrawData();
     }
 }
 
 void Scene::PackDrawData() {
     // Flatten scene into a single list
-    mPackedDrawData.clear();
-    mPackedDrawData.reserve(mFlatObjects.size() * 20);
+    mPackedDrawData = {};
+    mPackedDrawData.perMeshData.reserve(mFlatObjects.size() * 4);
+    mPackedDrawData.persistentDrawData.reserve(mFlatObjects.size() * 200);
+
+    uint32_t meshIndex = 0;
     for (const ScopedRefPtr<Object>& object : mFlatObjects) {
         const glm::mat4 normalTransform =
             glm::mat4(glm::transpose(glm::inverse(glm::mat3(object->GetAbsoluteTransform()))));
         const std::vector<ScopedRefPtr<Mesh>>& meshes = object->GetMeshes();
         for (const ScopedRefPtr<Mesh>& mesh : meshes) {
+            MeshData meshData{
+                .transform = object->GetAbsoluteTransform(),
+                .materialId = mesh->GetMaterial()->GetMaterialId(),
+                .normalTransform = normalTransform,
+            };
+            mPackedDrawData.perMeshData.push_back(meshData);
             for (Meshlet& meshlet : mesh->mMeshlets) {
-                DrawData meshParameters{
+                PersistentDrawData meshParameters{
+                    .meshIndex = meshIndex,
                     .indexCount = meshlet.indexCount,
                     .firstIndex = meshlet.indexOffset,
                     .vertexOffset = static_cast<int32_t>(meshlet.vertexOffset),
-                    .transform = object->GetAbsoluteTransform(),
-                    .materialId = mesh->GetMaterial()->GetMaterialId(),
-                    .normalTransform = normalTransform,
                     .alphaMode = static_cast<uint32_t>(mesh->GetMaterial()->GetAlphaMode()),
                     .minBounds = meshlet.minBounds,
                     .maxBounds = meshlet.maxBounds,
                     .coneApex = meshlet.coneApex,
                     .coneAxis = meshlet.coneAxis,
-                    .coneCutoff = meshlet.coneCutoff};
-                mPackedDrawData.push_back(meshParameters);
+                    .coneCutoff = meshlet.coneCutoff,
+                };
+                mPackedDrawData.persistentDrawData.push_back(meshParameters);
             }
+            meshIndex++;
         }
     }
 
     // Split per-material type
     std::sort(
-        mPackedDrawData.begin(),
-        mPackedDrawData.end(),
-        [](const DrawData& a, const DrawData& b) {
+        mPackedDrawData.persistentDrawData.begin(),
+        mPackedDrawData.persistentDrawData.end(),
+        [](const PersistentDrawData& a, const PersistentDrawData& b) {
             return static_cast<int>(a.alphaMode) < static_cast<int>(b.alphaMode);
         });
 
@@ -197,7 +206,7 @@ void Scene::PackDrawData() {
         mRenderPassResources[alphaMode].cachedDrawOffset = 0;
     }
 
-    for (const DrawData& drawData : mPackedDrawData) {
+    for (const PersistentDrawData& drawData : mPackedDrawData.persistentDrawData) {
         mRenderPassResources[static_cast<Material::AlphaMode>(drawData.alphaMode)]
             .cachedDrawCallCount += 1;
     }
@@ -228,16 +237,17 @@ void Scene::PackDrawData() {
                     accelerationStructureBuildGeometryInfo;
                 vk::AccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo;
             };
-            std::vector<TemporaryBlasBuildData> blasBuildData(mPackedDrawData.size());
-            mRaytracingScene.blasResources = std::vector<BlasResources>(mPackedDrawData.size());
+            std::vector<TemporaryBlasBuildData> blasBuildData(mPackedDrawData.persistentDrawData.size());
+            mRaytracingScene.blasResources =
+                std::vector<BlasResources>(mPackedDrawData.persistentDrawData.size());
 
             size_t blasBufferSize = 0;
             vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
             VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
-            for (uint32_t index = 0; index < mPackedDrawData.size(); ++index) {
+            for (uint32_t index = 0; index < mPackedDrawData.persistentDrawData.size(); ++index) {
                 BlasResources& blasResources = mRaytracingScene.blasResources[index];
                 TemporaryBlasBuildData& tempBlasData = blasBuildData[index];
-                const DrawData& drawData = mPackedDrawData[index];
+                const PersistentDrawData& drawData = mPackedDrawData.persistentDrawData[index];
 
                 if (drawData.alphaMode == static_cast<uint32_t>(Material::AlphaMode::Blended)) {
                     continue;
@@ -292,13 +302,13 @@ void Scene::PackDrawData() {
 
             std::vector<vk::AccelerationStructureBuildGeometryInfoKHR>
                 accelerationBuildGeometryInfos;
-            accelerationBuildGeometryInfos.reserve(mPackedDrawData.size());
+            accelerationBuildGeometryInfos.reserve(mPackedDrawData.persistentDrawData.size());
             std::vector<vk::AccelerationStructureBuildRangeInfoKHR*>
                 accelerationStructureBuildRangeInfos;
 
-            for (uint32_t index = 0; index < mPackedDrawData.size(); ++index) {
+            for (uint32_t index = 0; index < mPackedDrawData.persistentDrawData.size(); ++index) {
                 BlasResources& blasResources = mRaytracingScene.blasResources[index];
-                const DrawData& drawData = mPackedDrawData[index];
+                const PersistentDrawData& drawData = mPackedDrawData.persistentDrawData[index];
                 TemporaryBlasBuildData& tempBlasData = blasBuildData[index];
                 if (drawData.alphaMode == static_cast<uint32_t>(Material::AlphaMode::Blended)) {
                     continue;
@@ -357,10 +367,11 @@ void Scene::PackDrawData() {
             VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
 
             std::vector<vk::AccelerationStructureInstanceKHR> instances;
-            instances.reserve(mPackedDrawData.size());
-            for (uint32_t index = 0; index < mPackedDrawData.size(); ++index) {
+            instances.reserve(mPackedDrawData.persistentDrawData.size());
+            for (uint32_t index = 0; index < mPackedDrawData.persistentDrawData.size(); ++index) {
                 BlasResources& blasResources = mRaytracingScene.blasResources[index];
-                const DrawData& drawData = mPackedDrawData[index];
+                const PersistentDrawData& drawData = mPackedDrawData.persistentDrawData[index];
+                const MeshData& meshData = mPackedDrawData.perMeshData[drawData.meshIndex];
                 if (drawData.alphaMode == static_cast<uint32_t>(Material::AlphaMode::Blended)) {
                     continue;
                 }
@@ -372,7 +383,7 @@ void Scene::PackDrawData() {
                     accelerationDeviceAddressInfo,
                     mContext->GetDevice()->GetDispatcher());
 
-                const glm::mat4& transform = glm::transpose(drawData.transform);
+                const glm::mat4& transform = glm::transpose(meshData.transform);
                 VkTransformMatrixKHR transformMatrix =
                     *(reinterpret_cast<const VkTransformMatrixKHR*>(&transform));
                 instances.emplace_back(

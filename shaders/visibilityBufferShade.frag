@@ -12,66 +12,67 @@ layout(location = 0) in vec2 inTexCoord;
 layout(location = 0) out vec4 outColor;
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    CameraData CameraParameters;
+    CameraData uCameraParameters;
 };
-
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    LightData LightParameters;
+    LightData uLightParameters;
+};
+layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
+    MeshData uMeshData[];
 };
 
-layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
-    DrawData perDrawData[];
-} SceneData;
-
-layout(binding = 0, set = UPDATE_ONCE) uniform sampler materialTextureSampler;
-layout(binding = 1, set = UPDATE_ONCE) uniform sampler frameBufferTextureSampler;
-layout(binding = 2, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
-    Material Materials[];
+layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
+    DrawData uPersistentSceneData[];
 };
-layout(binding = 3, set = UPDATE_ONCE) uniform texture2D shadowMap;
-layout(binding = 4, set = UPDATE_ONCE) uniform utexture2D visibilityBuffer;
-layout(binding = 5, set = UPDATE_ONCE) uniform texture2D ssaoBuffer;
-layout(binding = 6, set = UPDATE_ONCE) uniform texture2D rtTemp;
-layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer Index {
-    uint indices[];
+layout(binding = 1, set = UPDATE_ONCE) uniform sampler uMaterialTextureSampler;
+layout(binding = 2, set = UPDATE_ONCE) uniform sampler uFrameBufferTextureSampler;
+layout(binding = 3, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
+    Material uMaterials[];
 };
-layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
-    vec3 positions[];
+layout(binding = 4, set = UPDATE_ONCE) uniform texture2D uShadowMap;
+layout(binding = 5, set = UPDATE_ONCE) uniform utexture2D uVisibilityBuffer;
+layout(binding = 6, set = UPDATE_ONCE) uniform texture2D uSSAOBuffer;
+layout(binding = 7, set = UPDATE_ONCE) uniform texture2D uRTTemp;
+layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer Index {
+    uint uIndices[];
 };
-layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
-    uint packedTexCoord[];
+layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
+    vec3 uPositions[];
 };
-layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
-    uint packedNormal[];
+layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
+    uint uPackedTexCoord[];
 };
-layout(binding = 11, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
-    uint packedTangent[];
+layout(binding = 11, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
+    uint uPackedNormal[];
 };
-layout(binding = 12, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
+layout(binding = 12, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
+    uint uPackedTangent[];
+};
+layout(binding = 13, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
 
 vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
     return textureGrad(
-            sampler2D(sceneTextures[nonuniformEXT(index)], materialTextureSampler),
+            sampler2D(uSceneTextures[nonuniformEXT(index)], uMaterialTextureSampler),
             uv.value,
             uv.ddx,
             uv.ddy);
 }
 
 void main() {
-    //outColor = texture(sampler2D(rtTemp, frameBufferTextureSampler), inTexCoord);
+    //outColor = texture(sampler2D(uRTTemp, frameBufferTextureSampler), inTexCoord);
     //return;
-    ivec2 vbSize = textureSize(usampler2D(visibilityBuffer, frameBufferTextureSampler), 0);
+    ivec2 vbSize = textureSize(usampler2D(uVisibilityBuffer, uFrameBufferTextureSampler), 0);
     uint encodedVbData = texelFetch(
-            usampler2D(visibilityBuffer, frameBufferTextureSampler),
+            usampler2D(uVisibilityBuffer, uFrameBufferTextureSampler),
             ivec2(inTexCoord * vbSize),
             0).x;
 
     vec2 ndc = inTexCoord * 2.0 - 1.0;
 
     if (encodedVbData == PRIMITIVE_ID_NONE) {
-        ProceduralSkyShaderParameters params = initSkyShaderParameters(-LightParameters.direction);
-        params.lightColor = normalize(LightParameters.radiance);
-        vec3 viewDir = viewDirFromViewProjection(CameraParameters.invViewProjection, ndc);
+        ProceduralSkyShaderParameters params = initSkyShaderParameters(-uLightParameters.direction);
+        params.lightColor = normalize(uLightParameters.radiance);
+        vec3 viewDir = viewDirFromViewProjection(uCameraParameters.invViewProjection, ndc);
         outColor = vec4(getProceduralSkyColor(params, viewDir, 0), 1.0);
         return;
     }
@@ -79,35 +80,36 @@ void main() {
     uvec2 decodedVertexData = decodeVBData(encodedVbData);
 
     uint drawId = decodedVertexData.x;
-    DrawData drawData = SceneData.perDrawData[drawId];
+    const DrawData drawData = uPersistentSceneData[drawId];
+    const MeshData meshData = uMeshData[drawData.meshIndex];
 
     uint triangleIndex = decodedVertexData.y * 3 + drawData.firstIndex;
 
-    uint vertexIndexA = indices[triangleIndex] + drawData.vertexOffset;
-    uint vertexIndexB = indices[triangleIndex + 1] + drawData.vertexOffset;
-    uint vertexIndexC = indices[triangleIndex + 2] + drawData.vertexOffset;
+    uint vertexIndexA = uIndices[triangleIndex] + drawData.vertexOffset;
+    uint vertexIndexB = uIndices[triangleIndex + 1] + drawData.vertexOffset;
+    uint vertexIndexC = uIndices[triangleIndex + 2] + drawData.vertexOffset;
 
-    vec3 posA = positions[vertexIndexA];
-    vec3 posB = positions[vertexIndexB];
-    vec3 posC = positions[vertexIndexC];
+    vec3 posA = uPositions[vertexIndexA];
+    vec3 posB = uPositions[vertexIndexB];
+    vec3 posC = uPositions[vertexIndexC];
 
-    posA = (drawData.modelMatrix * vec4(posA, 1.0)).xyz;
-    posB = (drawData.modelMatrix * vec4(posB, 1.0)).xyz;
-    posC = (drawData.modelMatrix * vec4(posC, 1.0)).xyz;
+    posA = (meshData.modelMatrix * vec4(posA, 1.0)).xyz;
+    posB = (meshData.modelMatrix * vec4(posB, 1.0)).xyz;
+    posC = (meshData.modelMatrix * vec4(posC, 1.0)).xyz;
 
     BarycentricDeriv bary = CalcFullBary(
-        CameraParameters.viewProjection * vec4(posA, 1.0),
-        CameraParameters.viewProjection * vec4(posB, 1.0),
-        CameraParameters.viewProjection * vec4(posC, 1.0),
+        uCameraParameters.viewProjection * vec4(posA, 1.0),
+        uCameraParameters.viewProjection * vec4(posB, 1.0),
+        uCameraParameters.viewProjection * vec4(posC, 1.0),
         ndc,
         vbSize
     );
 
     vec3 worldPos = interpolate(bary, posA, posB, posC);
 
-    vec2 texCoordA = unpackHalf2x16(packedTexCoord[vertexIndexA]);
-    vec2 texCoordB = unpackHalf2x16(packedTexCoord[vertexIndexB]);
-    vec2 texCoordC = unpackHalf2x16(packedTexCoord[vertexIndexC]);
+    vec2 texCoordA = unpackHalf2x16(uPackedTexCoord[vertexIndexA]);
+    vec2 texCoordB = unpackHalf2x16(uPackedTexCoord[vertexIndexB]);
+    vec2 texCoordC = unpackHalf2x16(uPackedTexCoord[vertexIndexC]);
     InterpolatedWithDerivsVec2 uvWithDerivs = interpolateWithDerivs(
         bary,
         texCoordA,
@@ -116,24 +118,24 @@ void main() {
     );
     vec2 uv = uvWithDerivs.value;
 
-    vec3 unpackedNormalA = normalize(unpackSnorm4x8(packedNormal[vertexIndexA]).xyz);
-    vec3 unpackedNormalB = normalize(unpackSnorm4x8(packedNormal[vertexIndexB]).xyz);
-    vec3 unpackedNormalC = normalize(unpackSnorm4x8(packedNormal[vertexIndexC]).xyz);
+    vec3 unpackedNormalA = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexA]).xyz);
+    vec3 unpackedNormalB = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexB]).xyz);
+    vec3 unpackedNormalC = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexC]).xyz);
 
-    vec3 normal = normalize(drawData.normalTransform * interpolate(bary, unpackedNormalA, unpackedNormalB, unpackedNormalC));
+    vec3 normal = normalize(meshData.normalTransform * interpolate(bary, unpackedNormalA, unpackedNormalB, unpackedNormalC));
     
-    vec4 unpackedTangentA = normalize(unpackSnorm4x8(packedTangent[vertexIndexA]));
-    vec4 unpackedTangentB = normalize(unpackSnorm4x8(packedTangent[vertexIndexB]));
-    vec4 unpackedTangentC = normalize(unpackSnorm4x8(packedTangent[vertexIndexC]));
+    vec4 unpackedTangentA = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexA]));
+    vec4 unpackedTangentB = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexB]));
+    vec4 unpackedTangentC = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexC]));
 
     vec4 tangent = interpolate(bary, unpackedTangentA, unpackedTangentB, unpackedTangentC);
-    vec3 normalizedTangent = normalize(drawData.normalTransform * tangent.xyz);
+    vec3 normalizedTangent = normalize(meshData.normalTransform * tangent.xyz);
     vec3 bitangent = normalize(cross(normal, normalizedTangent) * tangent.w);
 
     mat3 TBN = mat3(normalizedTangent, bitangent, normal);
 
-    uint materialId = drawData.materialId;
-    Material material = Materials[materialId];
+    uint materialId = meshData.materialId;
+    Material material = uMaterials[materialId];
 
     if (material.normalTextureIndex > 0) {
         vec3 normalSample = sampleTexture(material.normalTextureIndex, uvWithDerivs).xyz;
@@ -154,19 +156,19 @@ void main() {
         metallic = metallicRoughness.g;
     }
 
-    vec4 shadowCoord = (ShadowBiasMat * LightParameters.viewProjection) * vec4(worldPos, 1.0f);
+    vec4 shadowCoord = (ShadowBiasMat * uLightParameters.viewProjection) * vec4(worldPos, 1.0f);
 	shadowCoord = shadowCoord / shadowCoord.w;
     float shadowTerm = 0.0f;
     {
-		shadowTerm = filterPCF(shadowCoord, LightParameters.shadowTaps, materialTextureSampler, shadowMap);
+		shadowTerm = filterPCF(shadowCoord, uLightParameters.shadowTaps, uFrameBufferTextureSampler, uShadowMap);
 	    shadowTerm = clamp(shadowTerm, 0.0f, 1.0f);
     }
 
-    vec3 viewVector = normalize(CameraParameters.cameraPos.xyz - worldPos);
+    vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - worldPos);
 
-    float visibility = texture(sampler2D(ssaoBuffer, frameBufferTextureSampler), inTexCoord).r;
+    float visibility = texture(sampler2D(uSSAOBuffer, uFrameBufferTextureSampler), inTexCoord).r;
 
-    vec3 color = evalLighting(normal, viewVector, -LightParameters.direction, LightParameters.radiance, shadowTerm, albedo, metallic, roughness, visibility);
+    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, visibility);
 
     outColor = vec4(gammaCorrection(color), 1.0);
 }

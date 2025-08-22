@@ -73,14 +73,16 @@ private:
     // Base pass resources
     std::unordered_map<Material::AlphaMode, MaterialDomainPipeline> mGeometryPassPipeline;
     ScopedRefPtr<VulkanBuffer> mMaterialsBuffer;
-    std::vector<ScopedRefPtr<VulkanBuffer>> mPerDrawBuffers;
+    ScopedRefPtr<VulkanBuffer> mScenePersistentDataBuffer;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mPerMeshBuffers;
     ScopedRefPtr<ShaderParameterBuffer> mCameraUniform;
     ScopedRefPtr<ShaderParameterBuffer> mMaterialsUniform;
     ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
     ScopedRefPtr<ShaderParameterSampler> mFrameBufferSampler;
     ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
     ScopedRefPtr<ShaderParameterImage> mShadowMapUniform;
-    ScopedRefPtr<ShaderParameterBuffer> mPerDrawParameters;
+    ScopedRefPtr<ShaderParameterBuffer> mScenePersistentDataParameter;
+    ScopedRefPtr<ShaderParameterBuffer> mPerMeshParameters;
     ScopedRefPtr<RenderTarget> mMainRenderTarget;
     ScopedRefPtr<Texture> mDepthBuffer;
     ScopedRefPtr<RenderTarget> mDepthRenderTarget;

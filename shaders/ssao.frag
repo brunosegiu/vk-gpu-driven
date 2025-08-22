@@ -12,11 +12,11 @@ layout(location = 0) in vec2 inTexCoord;
 layout(location = 0) out float outVisibilityFactor;
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    CameraData CameraParameters;
+    CameraData uCameraParameters;
 };
 
 layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TSSAOControlData {
-    SSAOControlData ControlData;
+    SSAOControlData uControlData;
 };
 
 layout(binding = 0, set = UPDATE_ONCE) uniform sampler frameBufferTextureSampler;
@@ -43,7 +43,7 @@ vec2 getRandomHemisphereRotation() {
 
 vec3 reconstructViewSpacePos(vec2 inTexCoord, float deviceDepth) {
     vec4 ndc = vec4(inTexCoord * 2.0 - 1.0, deviceDepth * 2.0 - 1.0, 1.0);
-    vec4 viewSpacePosPersp = CameraParameters.invProjection * ndc;
+    vec4 viewSpacePosPersp = uCameraParameters.invProjection * ndc;
     return viewSpacePosPersp.xyz / viewSpacePosPersp.w;
 }
 
@@ -106,9 +106,9 @@ void main() {
 
     mat3 TBN = mat3(viewSpaceTangent, viewSpaceBitangent, viewSpaceNormal);
 
-    const float radius = ControlData.radius;
-    const float power = ControlData.power;
-    const uint kernelSize = ControlData.kernelSize;
+    const float radius = uControlData.radius;
+    const float power = uControlData.power;
+    const uint kernelSize = uControlData.kernelSize;
 
     float occlusion = 0.0;
     for (uint sampleIndex = 0; sampleIndex < kernelSize; ++sampleIndex) {
@@ -119,7 +119,7 @@ void main() {
         vec3 hemisphereDir = hemisphereSampleCosine(xi) * dirBias;
 
         vec3 samplePos = viewSpacePos + TBN * hemisphereDir * radius;
-        vec4 clipSpacePos = CameraParameters.projection * vec4(samplePos, 1.0);
+        vec4 clipSpacePos = uCameraParameters.projection * vec4(samplePos, 1.0);
         vec2 projectedSampleUV = (clipSpacePos.xy / clipSpacePos.w) * 0.5 + 0.5;
         if (any(lessThan(projectedSampleUV, vec2(0.0))) || any(greaterThan(projectedSampleUV, vec2(1.0)))) continue;
         float sampleDeviceDepth = texture(sampler2D(depthBuffer, frameBufferTextureSampler), projectedSampleUV).r;

@@ -17,18 +17,22 @@ struct VkDrawIndexedIndirectCommand {
 };
 
 struct DrawData {
+    uint meshIndex;
 	uint indexCount;
 	uint firstIndex;
-	int  vertexOffset;
-	mat4 modelMatrix;
-    uint materialId;
-    mat3 normalTransform;
-	uint alphaMode;    
+	int vertexOffset;
+    uint alphaMode;
 	vec3 minBounds;
 	vec3 maxBounds;
     vec3 coneApex;
     vec3 coneAxis;
     float coneCutoff;
+};
+
+struct MeshData {
+	mat4 modelMatrix;
+    uint materialId;
+    mat3 normalTransform;
 };
 
 struct Material {

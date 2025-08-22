@@ -35,13 +35,11 @@ public:
         std::vector<ScopedRefPtr<Texture>> textures;
     };
 
-    struct DrawData {
+    struct PersistentDrawData {
+        uint32_t meshIndex;
         uint32_t indexCount;
         uint32_t firstIndex;
         int32_t vertexOffset;
-        glm::mat4 transform;
-        uint32_t materialId;
-        glm::mat3 normalTransform;
         uint32_t alphaMode;
         glm::vec3 minBounds;
         glm::vec3 maxBounds;
@@ -50,7 +48,17 @@ public:
         float coneCutoff;
     };
 
-    const std::vector<DrawData>& GetPackedDrawData() const { return mPackedDrawData; }
+    struct MeshData {
+        glm::mat4 transform;
+        uint32_t materialId;
+        glm::mat3 normalTransform;
+    };
+
+    struct PackedDrawData {
+        std::vector<PersistentDrawData> persistentDrawData;
+        std::vector<MeshData> perMeshData;
+    };
+    const PackedDrawData& GetPackedDrawData() const { return mPackedDrawData; }
     const SceneMaterials& GetMaterialProxies() const { return mSceneMaterials; }
     ScopedRefPtr<MeshSystem> GetMeshSystem() { return mMeshSystem; }
     const uint32_t GetDrawCallCount(Material::AlphaMode alphaMode) {
@@ -76,7 +84,7 @@ private:
     ScopedRefPtr<Texture> mDummyTexture;
 
     ScopedRefPtr<MeshSystem> mMeshSystem;
-    std::vector<DrawData> mPackedDrawData;
+    PackedDrawData mPackedDrawData;
     std::vector<ScopedRefPtr<Material>> mMaterials;
     std::vector<ScopedRefPtr<Mesh>> mMeshes;
     SceneMaterials mSceneMaterials;
@@ -85,7 +93,7 @@ private:
         uint32_t cachedDrawCallCount;
     };
     std::unordered_map<Material::AlphaMode, RenderPassResources> mRenderPassResources;
-    
+
     struct BlasResources {
         vk::AccelerationStructureKHR mBLAS;
         vk::DeviceAddress mBLASAddress;

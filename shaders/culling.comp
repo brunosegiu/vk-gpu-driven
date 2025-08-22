@@ -10,22 +10,22 @@ layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCullingData {
     vec4 frustumPlanes[6];
     uint globalDrawOffset;
     uint maxDrawCount;
+} uCullingData;
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
+    MeshData uMeshData[];
 };
-
-layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
-    DrawData perDrawData[];
-} SceneData;
-
 layout(binding = 2, set = UPDATE_PER_FRAME) buffer writeonly CommandBuffer {
-	VkDrawIndexedIndirectCommand outIndirectCommands[];
+	VkDrawIndexedIndirectCommand uOutCommands[];
 };
-
 layout(binding = 3, set = UPDATE_PER_FRAME, std430) buffer DrawCallCount {
-	uint outIndirectDrawCount;
+	uint uOutIndirectDrawCount;
+};
+layout(binding = 4, set = UPDATE_PER_FRAME, std430) buffer writeonly OutDrawData {
+	uint uOutPerDraw[];
 };
 
-layout(binding = 4, set = UPDATE_PER_FRAME, std430) buffer writeonly OutDrawData {
-	uint outDrawData[];
+layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
+    DrawData uPersistentSceneData[];
 };
 
 layout(local_size_x = 64) in;
@@ -48,7 +48,7 @@ bool TestAABB(mat4 model, const vec3 min, const vec3 max) {
 
     for (uint planeIndex = 0; planeIndex < 6; ++planeIndex) {
         bool intersects = false;
-        vec4 plane = frustumPlanes[planeIndex];
+        vec4 plane = uCullingData.frustumPlanes[planeIndex];
         for (uint cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
             if (dot(vec4(boxPoints[cornerIndex], 1.0f), plane) > 0) {
                 intersects = true;
@@ -65,18 +65,22 @@ bool TestAABB(mat4 model, const vec3 min, const vec3 max) {
 bool TestCone(mat3 normal, mat4 model, vec3 coneDir, vec3 coneApex, float coneCutoff) {
     vec3 axis = normalize(normal * coneDir);
     vec3 apex = vec3(model * vec4(coneApex, 1.0)).xyz;
-    vec3 view = ortho == 0 ? normalize(apex - viewDirectionOrCameraPos) : viewDirectionOrCameraPos;
+    vec3 view = uCullingData.ortho == 0 ? normalize(apex - uCullingData.viewDirectionOrCameraPos) : uCullingData.viewDirectionOrCameraPos;
     return dot(view, axis) < coneCutoff;
 }
 
 void main() {
     uint localDrawID = gl_GlobalInvocationID.x;
-    if (localDrawID < maxDrawCount) {
-        uint globalDrawID = globalDrawOffset + localDrawID;
-        DrawData perDrawData = SceneData.perDrawData[globalDrawID];
+    if (localDrawID < uCullingData.maxDrawCount) {
+        uint globalDrawID = uCullingData.globalDrawOffset + localDrawID;
+        const DrawData perDrawData = uPersistentSceneData[globalDrawID];
+        const MeshData perMeshData = uMeshData[perDrawData.meshIndex];
 
-        bool isVisible = TestAABB(perDrawData.modelMatrix, perDrawData.minBounds, perDrawData.maxBounds)
-            && TestCone(perDrawData.normalTransform, perDrawData.modelMatrix, perDrawData.coneAxis, perDrawData.coneApex, perDrawData.coneCutoff);
+        const mat4 modelMatrix = perMeshData.modelMatrix;
+        const mat3 normalTransform = perMeshData.normalTransform;
+
+        bool isVisible = TestAABB(modelMatrix, perDrawData.minBounds, perDrawData.maxBounds)
+            && TestCone(normalTransform, modelMatrix, perDrawData.coneAxis, perDrawData.coneApex, perDrawData.coneCutoff);
 
         VkDrawIndexedIndirectCommand command;
         command.indexCount = perDrawData.indexCount;
@@ -86,9 +90,9 @@ void main() {
         command.firstInstance = 0;
 
         if (isVisible) {
-            uint compactedIndex = atomicAdd(outIndirectDrawCount, 1);
-            outDrawData[compactedIndex] = globalDrawID;
-            outIndirectCommands[compactedIndex] = command;
+            uint compactedIndex = atomicAdd(uOutIndirectDrawCount, 1);
+            uOutPerDraw[compactedIndex] = globalDrawID;
+            uOutCommands[compactedIndex] = command;
         }
     }
 

@@ -5,21 +5,25 @@
 #include "definitions.glsl"
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    LightData LightParameters;
+    LightData uLightParameters;
 };
-
-layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TSceneData {
-    DrawData perDrawData[];
-} SceneData;
-
+layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
+    MeshData uMeshData[];
+};
 layout(binding = 2, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
 	uint drawData[];
+};
+
+layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
+    DrawData uPersistentSceneData[];
 };
 
 layout(location = 0) in vec3 inPosition;
 
 void main() {
     uint globalDrawIndex = drawData[gl_DrawID];
-    DrawData perDrawData = SceneData.perDrawData[globalDrawIndex];
-    gl_Position = LightParameters.viewProjection * perDrawData.modelMatrix * vec4(inPosition, 1.0);
+    const DrawData drawData = uPersistentSceneData[globalDrawIndex];
+    const MeshData meshData = uMeshData[drawData.meshIndex];
+
+    gl_Position = uLightParameters.viewProjection * meshData.modelMatrix * vec4(inPosition, 1.0);
 }
