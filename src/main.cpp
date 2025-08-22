@@ -49,7 +49,7 @@ SunLight GetSunDirectionAndRadiance(
     float elevation = glm::clamp(sunDir.y, 0.0f, 1.0f);
     float t_elev = elevation;
 
-    // Color gradient: warm at horizon → white at zenith
+    // Color gradient: warm at horizon white at zenith
     glm::vec3 horizonColor = glm::vec3(1.0f, 0.5f, 0.2f);  // sunrise/sunset
     glm::vec3 zenithColor = glm::vec3(1.0f, 1.0f, 0.9f);   // noon
     glm::vec3 color = glm::mix(horizonColor, zenithColor, t_elev);
@@ -71,7 +71,7 @@ int main() {
         if (contextResult == Result::Success) {
             ScopedRefPtr<Scene> scene = new Scene(context);
 
-            scene->Load("./assets/testScene.vkrt");
+            scene->Load("./assets/Bistro.vkrt");
 
             ScopedRefPtr<Camera> camera = new Camera(window);
             camera->SetTranslation(glm::vec3(-14.0f, 5.0f, -1.0f));

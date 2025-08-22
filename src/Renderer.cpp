@@ -37,96 +37,34 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
       mCurrentFrameIndex(0),
       mMaterialsBuffer(nullptr),
       mScenePersistentDataBuffer(),
-      mFreezeCulling(false) {
+      mFreezeCulling(false),
+      mHasResouces(false),
+      mHasBoundResources(false) {
     ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
     inputManager->Subscribe(this);
 
-    const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
-    mDepthBuffer = new Texture(
-        mContext,
-        imageSize.width,
-        imageSize.height,
-        vk::Format::eD32Sfloat,
-        vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled);
-    mDepthRenderTarget = new RenderTarget(mContext, mDepthBuffer);
-
-    mSSAOBuffer = new Texture(
-        mContext,
-        imageSize.width,
-        imageSize.height,
-        vk::Format::eR16Unorm,
-        vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled);
-    mSSAORenderTarget = new RenderTarget(mContext, mSSAOBuffer);
-
-    mSSAOBlurredBuffer = new Texture(
-        mContext,
-        imageSize.width,
-        imageSize.height,
-        vk::Format::eR16Unorm,
-        vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled);
-    mSSAOBlurredRenderTarget = new RenderTarget(mContext, mSSAOBlurredBuffer);
-
     mCommandRing = new CommandRing(mContext);
-    mMainRenderTarget = new RenderTarget(mContext, mContext->GetSwapchain()->GetRenderTargets());
 
-    mShadePass = new RenderPass(
-        context,
-        {{.renderTarget = mMainRenderTarget,
-          .loadOp = vk::AttachmentLoadOp::eClear,
-          .initialLayout = vk::ImageLayout::eUndefined,
-          .storeOp = vk::AttachmentStoreOp::eStore,
-          .finalLayout = vk::ImageLayout::eColorAttachmentOptimal}});
+    AddRenderTargets();
+    AddPipelines();
+}
 
-    mSSAOPass = new RenderPass(
-        context,
-        {{.renderTarget = mSSAORenderTarget,
-          .loadOp = vk::AttachmentLoadOp::eClear,
-          .initialLayout = vk::ImageLayout::eUndefined,
-          .storeOp = vk::AttachmentStoreOp::eStore,
-          .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal}});
+void Renderer::AddRenderTargets() {
+    const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
 
-    mSSAOBlurPass = new RenderPass(
-        context,
-        {{.renderTarget = mSSAOBlurredRenderTarget,
-          .loadOp = vk::AttachmentLoadOp::eClear,
-          .initialLayout = vk::ImageLayout::eUndefined,
-          .storeOp = vk::AttachmentStoreOp::eStore,
-          .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal}});
-
-    mTransparentPass = new RenderPass(
-        context,
-        {
-            {.renderTarget = mMainRenderTarget,
-             .loadOp = vk::AttachmentLoadOp::eLoad,
-             .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
-             .storeOp = vk::AttachmentStoreOp::eStore,
-             .finalLayout = vk::ImageLayout::eColorAttachmentOptimal},
-            {.renderTarget = mDepthRenderTarget,
-             .loadOp = vk::AttachmentLoadOp::eLoad,
-             .initialLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-             .storeOp = vk::AttachmentStoreOp::eStore,
-             .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal},
-        });
-
+    // Base pass resouces
     {
-        mShadowMap = new Texture(
+        mDepthBuffer = new Texture(
             mContext,
-            4096,
-            4096,
-            vk::Format::eD16Unorm,
-            vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled,
-            vk::ImageLayout::eShaderReadOnlyOptimal);
-        mDepthOnlyPassRenderTarget = new RenderTarget(mContext, mShadowMap);
-        mDepthOnlyPass = new RenderPass(
-            context,
-            {.renderTarget = mDepthOnlyPassRenderTarget,
-             .loadOp = vk::AttachmentLoadOp::eClear,
-             .initialLayout = vk::ImageLayout::eUndefined,
-             .storeOp = vk::AttachmentStoreOp::eStore,
-             .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal});
-    }
+            imageSize.width,
+            imageSize.height,
+            vk::Format::eD32Sfloat,
+            vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled);
+        mDepthRenderTarget = new RenderTarget(mContext, mDepthBuffer);
 
-    {
+        mMainRenderTarget =
+            new RenderTarget(mContext, mContext->GetSwapchain()->GetRenderTargets());
+
         mVisibilityBuffer = new Texture(
             mContext,
             imageSize.width,
@@ -137,7 +75,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mVisibilityBufferRT = new RenderTarget(mContext, mVisibilityBuffer);
 
         mGeometryPass = new RenderPass(
-            context,
+            mContext,
             {{.renderTarget = mVisibilityBufferRT,
               .loadOp = vk::AttachmentLoadOp::eClear,
               .initialLayout = vk::ImageLayout::eUndefined,
@@ -150,6 +88,87 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
               .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal}});
     }
 
+    // SSAO resources
+    {
+        mSSAOBuffer = new Texture(
+            mContext,
+            imageSize.width,
+            imageSize.height,
+            vk::Format::eR16Unorm,
+            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled);
+        mSSAORenderTarget = new RenderTarget(mContext, mSSAOBuffer);
+
+        mSSAOPass = new RenderPass(
+            mContext,
+            {{.renderTarget = mSSAORenderTarget,
+              .loadOp = vk::AttachmentLoadOp::eClear,
+              .initialLayout = vk::ImageLayout::eUndefined,
+              .storeOp = vk::AttachmentStoreOp::eStore,
+              .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal}});
+
+        mSSAOBlurredBuffer = new Texture(
+            mContext,
+            imageSize.width,
+            imageSize.height,
+            vk::Format::eR16Unorm,
+            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled);
+        mSSAOBlurredRenderTarget = new RenderTarget(mContext, mSSAOBlurredBuffer);
+
+        mSSAOBlurPass = new RenderPass(
+            mContext,
+            {{.renderTarget = mSSAOBlurredRenderTarget,
+              .loadOp = vk::AttachmentLoadOp::eClear,
+              .initialLayout = vk::ImageLayout::eUndefined,
+              .storeOp = vk::AttachmentStoreOp::eStore,
+              .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal}});
+    }
+
+    // Shading + transparent render targets
+    {
+        mShadePass = new RenderPass(
+            mContext,
+            {{.renderTarget = mMainRenderTarget,
+              .loadOp = vk::AttachmentLoadOp::eClear,
+              .initialLayout = vk::ImageLayout::eUndefined,
+              .storeOp = vk::AttachmentStoreOp::eStore,
+              .finalLayout = vk::ImageLayout::eColorAttachmentOptimal}});
+
+        mTransparentPass = new RenderPass(
+            mContext,
+            {
+                {.renderTarget = mMainRenderTarget,
+                 .loadOp = vk::AttachmentLoadOp::eLoad,
+                 .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
+                 .storeOp = vk::AttachmentStoreOp::eStore,
+                 .finalLayout = vk::ImageLayout::eColorAttachmentOptimal},
+                {.renderTarget = mDepthRenderTarget,
+                 .loadOp = vk::AttachmentLoadOp::eLoad,
+                 .initialLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+                 .storeOp = vk::AttachmentStoreOp::eStore,
+                 .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal},
+            });
+    }
+
+    // Shadow pass
+    {
+        mShadowMap = new Texture(
+            mContext,
+            4096,
+            4096,
+            vk::Format::eD16Unorm,
+            vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled,
+            vk::ImageLayout::eShaderReadOnlyOptimal);
+        mDepthOnlyPassRenderTarget = new RenderTarget(mContext, mShadowMap);
+        mDepthOnlyPass = new RenderPass(
+            mContext,
+            {.renderTarget = mDepthOnlyPassRenderTarget,
+             .loadOp = vk::AttachmentLoadOp::eClear,
+             .initialLayout = vk::ImageLayout::eUndefined,
+             .storeOp = vk::AttachmentStoreOp::eStore,
+             .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal});
+    }
+
+    // Probes
     {
         mRaytracingTarget = new Texture(
             mContext,
@@ -159,7 +178,9 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
             vk::ImageLayout::eShaderReadOnlyOptimal);
     }
+}
 
+void Renderer::AddPipelines() {
     // Global resources
     {
         mScenePersistentDataParameter = new ShaderParameterBuffer(
@@ -221,7 +242,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             resources.cullingParameters->AddParameter(mScenePersistentDataParameter);
 
             resources.cullingPipeline = new ComputePipeline(
-                context,
+                mContext,
                 resources.cullingParameters,
                 {vk::ShaderStageFlagBits::eCompute, Resource::Id::CullingShader});
         };
@@ -350,7 +371,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
                     MeshSystem::GetGeometryLayout(geometryFlags);
 
                 pipeline = new GraphicsPipeline(
-                    context,
+                    mContext,
                     parameters,
                     stages[alphaMode],
                     mDepthOnlyPass,
@@ -382,7 +403,6 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::DescriptorType::eSampledImage,
             vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
                 vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
-        mShadowMapUniform->Bind(mShadowMap);
 
         std::unordered_map<
             Material::AlphaMode,
@@ -442,7 +462,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
                 MeshSystem::GetGeometryLayout(geometryFlags);
 
             pipeline = new GraphicsPipeline(
-                context,
+                mContext,
                 parameters,
                 stages[alphaMode],
                 isTransparentPass ? mTransparentPass : mGeometryPass,
@@ -462,7 +482,6 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             mContext,
             vk::DescriptorType::eSampledImage,
             vk::ShaderStageFlagBits::eFragment);
-        mVisibilityBufferUniform->Bind(mVisibilityBuffer);
 
         mSSAOTextureParameter = new ShaderParameterImage(
             mContext,
@@ -526,7 +545,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mShadePassParameters->AddParameter(mMaterialsTextures);
 
         mShadePassPipeline = new GraphicsPipeline(
-            context,
+            mContext,
             mShadePassParameters,
             stages,
             mShadePass,
@@ -562,7 +581,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mSSAOParameters->AddParameter(mFrameBufferSampler);
         mSSAOParameters->AddParameter(mDepthBufferParameter);
         mSSAOPipeline = new GraphicsPipeline(
-            context,
+            mContext,
             mSSAOParameters,
             stages,
             mSSAOPass,
@@ -589,7 +608,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mSSAOBlurParameters->AddParameter(mDepthBufferParameter);
         mSSAOBlurParameters->AddParameter(mSSAOBufferParameter);
         mSSAOBlurPipeline = new GraphicsPipeline(
-            context,
+            mContext,
             mSSAOBlurParameters,
             stages,
             mSSAOBlurPass,
@@ -638,52 +657,175 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         new RaytracingPipeline(mContext, mProbeRaytracingParameters, raytracingStages);
 }
 
-void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
-    // Create and update per-draw parameters
-    if (mScenePersistentDataBuffer == nullptr) {
-        uint32_t descriptorCount = 0;
-        const Scene::PackedDrawData& drawData = mScene->GetPackedDrawData();
-        {
-            const size_t perDrawBufferSize =
-                drawData.persistentDrawData.size() * sizeof(Scene::PersistentDrawData);
+void Renderer::AddResources() {
+    mHasResouces = true;
 
-            VKRT_ASSERT(perDrawBufferSize > 0);
-            ScopedRefPtr<VulkanBuffer> perDrawBuffer = mContext->GetDevice()->CreateBuffer(
-                perDrawBufferSize,
+    // Persistent resouces
+    const Scene::PackedDrawData& drawData = mScene->GetPackedDrawData();
+    {
+        const size_t perDrawBufferSize =
+            drawData.persistentDrawData.size() * sizeof(Scene::PersistentDrawData);
+        VKRT_ASSERT(perDrawBufferSize > 0);
+        mScenePersistentDataBuffer = mContext->GetDevice()->CreateBuffer(
+            perDrawBufferSize,
+            vk::BufferUsageFlagBits::eStorageBuffer,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
+    }
+
+    // Update materials
+    {
+        Scene::SceneMaterials sceneMaterials = mScene->GetMaterialProxies();
+        size_t materialBufferSize = sceneMaterials.materials.size() * sizeof(Scene::MaterialProxy);
+        VKRT_ASSERT(materialBufferSize > 0);
+        mMaterialsBuffer = mContext->GetDevice()->CreateBuffer(
+            materialBufferSize,
+            vk::BufferUsageFlagBits::eStorageBuffer,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
+    }
+
+    // Per-frame resources
+    {
+        const size_t perMeshBufferSize = drawData.perMeshData.size() * sizeof(Scene::MeshData);
+
+        const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
+        VKRT_ASSERT(perMeshBufferSize > 0);
+        for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
+            ScopedRefPtr<VulkanBuffer> perMeshBuffer = mContext->GetDevice()->CreateBuffer(
+                perMeshBufferSize,
                 vk::BufferUsageFlagBits::eStorageBuffer,
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                     VMA_ALLOCATION_CREATE_MAPPED_BIT);
-            mScenePersistentDataBuffer = perDrawBuffer;
-
-            {
-                uint8_t* buffer = perDrawBuffer->MapBuffer();
-                std::copy_n(
-                    reinterpret_cast<const uint8_t*>(drawData.persistentDrawData.data()),
-                    drawData.persistentDrawData.size() * sizeof(Scene::PersistentDrawData),
-                    buffer);
-                perDrawBuffer->UnmapBuffer();
-            }
-
-            mScenePersistentDataParameter->BindBuffer(mScenePersistentDataBuffer);
+            mPerMeshBuffers.push_back(perMeshBuffer);
         }
-        {
-            const size_t perMeshBufferSize = drawData.perMeshData.size() * sizeof(Scene::MeshData);
 
-            const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
-            VKRT_ASSERT(perMeshBufferSize > 0);
-            for (uint32_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
-                ScopedRefPtr<VulkanBuffer> perMeshBuffer = mContext->GetDevice()->CreateBuffer(
-                    perMeshBufferSize,
-                    vk::BufferUsageFlagBits::eStorageBuffer,
-                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                        VMA_ALLOCATION_CREATE_MAPPED_BIT);
-                mPerMeshBuffers.push_back(perMeshBuffer);
-            }
-
-            mPerMeshParameters->BindBuffers(mPerMeshBuffers);
-        }
+        mPerMeshParameters->BindBuffers(mPerMeshBuffers);
     }
 
+    auto createCullingResources = [&](Renderer::CullingPipelineResources& resources,
+                                      Material::AlphaMode alphaMode) {
+        const uint32_t drawCallCount = mScene->GetDrawCallCount(alphaMode);
+
+        const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
+
+        resources.indirectDrawBuffers = mContext->GetDevice()->CreateBuffers(
+            bufferCount,
+            drawCallCount * sizeof(vk::DrawIndexedIndirectCommand),
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+
+        resources.additionalDrawDataBuffers = mContext->GetDevice()->CreateBuffers(
+            bufferCount,
+            drawCallCount * sizeof(uint32_t),
+            vk::BufferUsageFlagBits::eStorageBuffer,
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+
+        resources.drawCallCountBuffer = mContext->GetDevice()->CreateBuffers(
+            bufferCount,
+            sizeof(uint32_t),
+            vk::BufferUsageFlagBits::eIndirectBuffer | vk::BufferUsageFlagBits::eStorageBuffer |
+                vk::BufferUsageFlagBits::eTransferDst,
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+    };
+
+    for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
+        if (alphaMode != Material::AlphaMode::Blended) {  // Blended materials aren't shadow casters
+            createCullingResources(mShadowPassCulling[alphaMode], alphaMode);
+        }
+        createCullingResources(mBasePassCulling[alphaMode], alphaMode);
+    }
+}
+
+void Renderer::RemoveRenderTargets() {
+    mShadePass = nullptr;
+    mTransparentPass = nullptr;
+    mShadowMap = nullptr;
+    mVisibilityBuffer = nullptr;
+    mGeometryPass = nullptr;
+    mRaytracingTarget = nullptr;
+
+    mMainRenderTarget = nullptr;
+
+    mSSAOBlurPass = nullptr;
+    mSSAOBlurredRenderTarget = nullptr;
+    mSSAOBlurredBuffer = nullptr;
+
+    mSSAOPass = nullptr;
+    mSSAORenderTarget = nullptr;
+    mSSAOBuffer = nullptr;
+
+    mDepthRenderTarget = nullptr;
+    mDepthBuffer = nullptr;
+}
+
+void Renderer::RemovePipelines() {}
+
+void Renderer::RemoveResources() {}
+
+void Renderer::UpdatePersistentUniforms() {
+    mHasBoundResources = true;
+
+    const Scene::PackedDrawData& drawData = mScene->GetPackedDrawData();
+    {
+        const size_t perDrawBufferSize =
+            drawData.persistentDrawData.size() * sizeof(Scene::PersistentDrawData);
+
+        {
+            uint8_t* buffer = mScenePersistentDataBuffer->MapBuffer();
+            std::copy_n(
+                reinterpret_cast<const uint8_t*>(drawData.persistentDrawData.data()),
+                drawData.persistentDrawData.size() * sizeof(Scene::PersistentDrawData),
+                buffer);
+            mScenePersistentDataBuffer->UnmapBuffer();
+        }
+
+        mScenePersistentDataParameter->BindBuffer(mScenePersistentDataBuffer);
+    }
+
+    mShadowMapUniform->Bind(mShadowMap);
+    mVisibilityBufferUniform->Bind(mVisibilityBuffer);
+
+    // Update materials
+    {
+        uint32_t descriptorCount = 0;
+        Scene::SceneMaterials sceneMaterials = mScene->GetMaterialProxies();
+        uint8_t* buffer = mMaterialsBuffer->MapBuffer();
+        std::copy_n(
+            reinterpret_cast<const uint8_t*>(sceneMaterials.materials.data()),
+            mMaterialsBuffer->GetBufferSize(),
+            buffer);
+        mMaterialsBuffer->UnmapBuffer();
+        descriptorCount = sceneMaterials.textures.size();
+        for (const ScopedRefPtr<Texture>& materialTexture : sceneMaterials.textures) {
+            mMaterialsTextures->Bind(materialTexture);
+        }
+        mMaterialsUniform->BindBuffer(mMaterialsBuffer);
+    }
+
+    // Updte geometry buffers
+    {
+        mIndexBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetIndexBuffer());
+        mPositionBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetVertexBuffer());
+        mTexCoordBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTexCoordBuffer());
+        mNormalBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetNormalBuffer());
+        mTangentBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTangentBuffer());
+    }
+
+    // Update SSAO bindings
+    mDepthBufferParameter->Bind(mDepthBuffer);
+    mSSAOBufferParameter->Bind(mSSAOBuffer);
+    mSSAOTextureParameter->Bind(mSSAOBlurredBuffer);
+    mRTTempParam->Bind(mRaytracingTarget);
+
+    // Raytracing
+    {
+        mASParamater->Bind(mScene->GetTLAS());
+        mRaytracingTargetParameter->Bind(mRaytracingTarget);
+    }
+}
+
+void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
     // Update content of per-draw parameters
     {
         const Scene::PackedDrawData& drawData = mScene->GetPackedDrawData();
@@ -712,37 +854,10 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
                 reinterpret_cast<uint8_t*>(&cullData),
                 sizeof(CullData));
         }
-
-        const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
-
-        if (resources.indirectDrawBuffers.empty()) {
-            resources.indirectDrawBuffers = mContext->GetDevice()->CreateBuffers(
-                bufferCount,
-                drawCallCount * sizeof(vk::DrawIndexedIndirectCommand),
-                vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
-                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-            resources.indirectDrawBufferParameter->BindBuffers(resources.indirectDrawBuffers);
-        }
-
-        if (resources.additionalDrawDataBuffers.empty()) {
-            resources.additionalDrawDataBuffers = mContext->GetDevice()->CreateBuffers(
-                bufferCount,
-                drawCallCount * sizeof(uint32_t),
-                vk::BufferUsageFlagBits::eStorageBuffer,
-                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-            resources.additionalDrawDataBufferParameter->BindBuffers(
-                resources.additionalDrawDataBuffers);
-        }
-
-        if (resources.drawCallCountBuffer.empty()) {
-            resources.drawCallCountBuffer = mContext->GetDevice()->CreateBuffers(
-                bufferCount,
-                sizeof(uint32_t),
-                vk::BufferUsageFlagBits::eIndirectBuffer | vk::BufferUsageFlagBits::eStorageBuffer |
-                    vk::BufferUsageFlagBits::eTransferDst,
-                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-            resources.drawCallCountBufferParameter->BindBuffers(resources.drawCallCountBuffer);
-        }
+        resources.indirectDrawBufferParameter->BindBuffers(resources.indirectDrawBuffers);
+        resources.additionalDrawDataBufferParameter->BindBuffers(
+            resources.additionalDrawDataBuffers);
+        resources.drawCallCountBufferParameter->BindBuffers(resources.drawCallCountBuffer);
     };
 
     for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
@@ -796,56 +911,13 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
             sizeof(CameraData));
     }
 
-    // Update materials
-    if (mMaterialsBuffer == nullptr) {
-        uint32_t descriptorCount = 0;
-        Scene::SceneMaterials sceneMaterials = mScene->GetMaterialProxies();
-        size_t materialBufferSize = sceneMaterials.materials.size() * sizeof(Scene::MaterialProxy);
-        VKRT_ASSERT(materialBufferSize > 0);
-        mMaterialsBuffer = mContext->GetDevice()->CreateBuffer(
-            materialBufferSize,
-            vk::BufferUsageFlagBits::eStorageBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-        uint8_t* buffer = mMaterialsBuffer->MapBuffer();
-        std::copy_n(
-            reinterpret_cast<const uint8_t*>(sceneMaterials.materials.data()),
-            materialBufferSize,
-            buffer);
-        mMaterialsBuffer->UnmapBuffer();
-        descriptorCount = sceneMaterials.textures.size();
-        for (const ScopedRefPtr<Texture>& materialTexture : sceneMaterials.textures) {
-            mMaterialsTextures->Bind(materialTexture);
-        }
-        mMaterialsUniform->BindBuffer(mMaterialsBuffer);
-    }
-
-    {
-        mIndexBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetIndexBuffer());
-        mPositionBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetVertexBuffer());
-        mTexCoordBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTexCoordBuffer());
-        mNormalBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetNormalBuffer());
-        mTangentBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTangentBuffer());
-    }
-
     // SSAO
     {
-        mDepthBufferParameter->Bind(mDepthBuffer);
-        mSSAOBufferParameter->Bind(mSSAOBuffer);
-        mSSAOTextureParameter->Bind(mSSAOBlurredBuffer);
-        mRTTempParam->Bind(mRaytracingTarget);
-
         SSAOControlData ssaoControl = mUIRenderer->GetSSAOControlData();
         mSSAOControlParameter->Write(
             imageIndex,
             reinterpret_cast<uint8_t*>(&ssaoControl),
             sizeof(SSAOControlData));
-    }
-
-    // Raytracing
-    {
-        mASParamater->Bind(mScene->GetTLAS());
-        mRaytracingTargetParameter->Bind(mRaytracingTarget);
     }
 }
 
@@ -884,6 +956,12 @@ void Renderer::Render(Camera* camera) {
     mScene->Update();
     mUIRenderer->Update();
 
+    if (!mHasResouces) {
+        AddResources();
+    }
+    if (!mHasBoundResources) {
+        UpdatePersistentUniforms();
+    }
     UpdateUniforms(camera, mCurrentFrameIndex);
 
     {

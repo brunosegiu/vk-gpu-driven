@@ -11,7 +11,6 @@
 #include "Scene.h"
 #include "UIRenderer.h"
 
-
 namespace VKRT {
 class Renderer : public RefCountPtr, public InputEventListener {
 public:
@@ -22,7 +21,16 @@ public:
     ~Renderer();
 
 private:
+    void UpdatePersistentUniforms();
     void UpdateUniforms(Camera* camera, uint32_t imageIndex);
+
+    void AddRenderTargets();
+    void AddPipelines();
+    void AddResources();
+
+    void RemoveRenderTargets();
+    void RemovePipelines();
+    void RemoveResources();
 
     void OnKeyPressed(int key) override;
     void OnKeyReleased(int key) override;
@@ -123,6 +131,8 @@ private:
     ScopedRefPtr<RenderTarget> mSSAOBlurredRenderTarget;
 
     bool mFreezeCulling;
+    bool mHasResouces;
+    bool mHasBoundResources;
 
     // UI rendering
     ScopedRefPtr<UIRenderer> mUIRenderer;
