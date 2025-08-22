@@ -216,164 +216,288 @@ void Scene::PackDrawData() {
     // Create BLAS/TLAS
     {
         vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
+        {
+            struct TemporaryBlasBuildData {
+                ScopedRefPtr<VulkanBuffer> scratchBuffer;
+                uint64_t blasBufferSize;
+                uint64_t blasBufferOffset;
+                uint64_t scratchSize;
+                vk::AccelerationStructureGeometryTrianglesDataKHR triangleData;
+                vk::AccelerationStructureGeometryKHR accelerationStructureGeometry;
+                vk::AccelerationStructureBuildGeometryInfoKHR
+                    accelerationStructureBuildGeometryInfo;
+                vk::AccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo;
+            };
+            std::vector<TemporaryBlasBuildData> blasBuildData(mPackedDrawData.size());
+            mRaytracingScene.blasResources = std::vector<BlasResources>(mPackedDrawData.size());
 
-        struct TemporaryBlasBuildData {
-            ScopedRefPtr<VulkanBuffer> scratchBuffer;
-            uint64_t blasBufferSize;
-            uint64_t blasBufferOffset;
-            uint64_t scratchSize;
-            vk::AccelerationStructureGeometryTrianglesDataKHR triangleData;
-            vk::AccelerationStructureGeometryKHR accelerationStructureGeometry;
-            vk::AccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo;
-            vk::AccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo;
-        };
-        std::vector<TemporaryBlasBuildData> blasBuildData(mPackedDrawData.size());
-        mRaytracingScene.blasResources = std::vector<BlasResources>(mPackedDrawData.size());
+            size_t blasBufferSize = 0;
+            vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
+            VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
+            for (uint32_t index = 0; index < mPackedDrawData.size(); ++index) {
+                BlasResources& blasResources = mRaytracingScene.blasResources[index];
+                TemporaryBlasBuildData& tempBlasData = blasBuildData[index];
+                const DrawData& drawData = mPackedDrawData[index];
 
-        size_t blasBufferSize = 0;
-        vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
-        VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
-        for (uint32_t index = 0; index < mPackedDrawData.size(); ++index) {
-            BlasResources& blasResources = mRaytracingScene.blasResources[index];
-            TemporaryBlasBuildData& tempBlasData = blasBuildData[index];
-            const DrawData& drawData = mPackedDrawData[index];
+                if (drawData.alphaMode == static_cast<uint32_t>(Material::AlphaMode::Blended)) {
+                    continue;
+                }
 
-            const uint32_t primitiveCount = drawData.indexCount / 3;
+                const uint32_t primitiveCount = drawData.indexCount / 3;
 
-            vk::DeviceAddress indexAddress = mMeshSystem->GetIndexBuffer()->GetDeviceAddress() +
-                                             drawData.firstIndex * sizeof(uint32_t);
-            tempBlasData.triangleData =
-                vk::AccelerationStructureGeometryTrianglesDataKHR()
-                    .setVertexFormat(vk::Format::eR32G32B32Sfloat)
-                    .setVertexData(mMeshSystem->GetVertexBuffer()->GetDeviceAddress())
-                    .setMaxVertex(mMeshSystem->GetVertexCount() - 1)
-                    .setVertexStride(sizeof(glm::vec3))
-                    .setIndexType(vk::IndexType::eUint32)
-                    .setIndexData(indexAddress)
-                    .setTransformData(nullptr);
+                vk::DeviceAddress indexAddress = mMeshSystem->GetIndexBuffer()->GetDeviceAddress() +
+                                                 drawData.firstIndex * sizeof(uint32_t);
+                tempBlasData.triangleData =
+                    vk::AccelerationStructureGeometryTrianglesDataKHR()
+                        .setVertexFormat(vk::Format::eR32G32B32Sfloat)
+                        .setVertexData(mMeshSystem->GetVertexBuffer()->GetDeviceAddress())
+                        .setMaxVertex(mMeshSystem->GetVertexCount() - 1)
+                        .setVertexStride(sizeof(glm::vec3))
+                        .setIndexType(vk::IndexType::eUint32)
+                        .setIndexData(indexAddress)
+                        .setTransformData(nullptr);
 
-            tempBlasData.accelerationStructureGeometry =
+                tempBlasData.accelerationStructureGeometry =
+                    vk::AccelerationStructureGeometryKHR()
+                        .setFlags(vk::GeometryFlagBitsKHR::eOpaque)
+                        .setGeometryType(vk::GeometryTypeKHR::eTriangles)
+                        .setGeometry(tempBlasData.triangleData);
+
+                tempBlasData.accelerationStructureBuildGeometryInfo =
+                    vk::AccelerationStructureBuildGeometryInfoKHR()
+                        .setType(vk::AccelerationStructureTypeKHR::eBottomLevel)
+                        .setFlags(vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace)
+                        .setGeometries(tempBlasData.accelerationStructureGeometry);
+
+                vk::AccelerationStructureBuildSizesInfoKHR buildSizesInfo =
+                    logicalDevice.getAccelerationStructureBuildSizesKHR(
+                        vk::AccelerationStructureBuildTypeKHR::eDevice,
+                        tempBlasData.accelerationStructureBuildGeometryInfo,
+                        primitiveCount,
+                        mContext->GetDevice()->GetDispatcher());
+
+                const size_t handleAlignment = 256;
+                tempBlasData.blasBufferSize = buildSizesInfo.accelerationStructureSize;
+                tempBlasData.blasBufferOffset = blasBufferSize;
+                tempBlasData.scratchSize = buildSizesInfo.buildScratchSize;
+                blasBufferSize += (buildSizesInfo.accelerationStructureSize + handleAlignment - 1) &
+                                  ~(handleAlignment - 1);
+            }
+
+            mRaytracingScene.mBLASBuffer = mContext->GetDevice()->CreateBuffer(
+                blasBufferSize,
+                vk::BufferUsageFlagBits::eAccelerationStructureStorageKHR |
+                    vk::BufferUsageFlagBits::eShaderDeviceAddress,
+                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+
+            std::vector<vk::AccelerationStructureBuildGeometryInfoKHR>
+                accelerationBuildGeometryInfos;
+            accelerationBuildGeometryInfos.reserve(mPackedDrawData.size());
+            std::vector<vk::AccelerationStructureBuildRangeInfoKHR*>
+                accelerationStructureBuildRangeInfos;
+
+            for (uint32_t index = 0; index < mPackedDrawData.size(); ++index) {
+                BlasResources& blasResources = mRaytracingScene.blasResources[index];
+                const DrawData& drawData = mPackedDrawData[index];
+                TemporaryBlasBuildData& tempBlasData = blasBuildData[index];
+                if (drawData.alphaMode == static_cast<uint32_t>(Material::AlphaMode::Blended)) {
+                    continue;
+                }
+                vk::AccelerationStructureCreateInfoKHR accelerationStructureCreateInfo =
+                    vk::AccelerationStructureCreateInfoKHR()
+                        .setBuffer(mRaytracingScene.mBLASBuffer->GetBufferHandle())
+                        .setSize(tempBlasData.blasBufferSize)
+                        .setOffset(tempBlasData.blasBufferOffset)
+                        .setType(vk::AccelerationStructureTypeKHR::eBottomLevel);
+
+                blasResources.mBLAS = VKRT_ASSERT_VK(logicalDevice.createAccelerationStructureKHR(
+                    accelerationStructureCreateInfo,
+                    nullptr,
+                    mContext->GetDevice()->GetDispatcher()));
+
+                tempBlasData.scratchBuffer = mContext->GetDevice()->CreateBuffer(
+                    tempBlasData.scratchSize,
+                    vk::BufferUsageFlagBits::eStorageBuffer |
+                        vk::BufferUsageFlagBits::eShaderDeviceAddress,
+                    VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                        VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT);
+
+                accelerationBuildGeometryInfos.push_back(
+                    vk::AccelerationStructureBuildGeometryInfoKHR()
+                        .setType(vk::AccelerationStructureTypeKHR::eBottomLevel)
+                        .setFlags(vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace)
+                        .setMode(vk::BuildAccelerationStructureModeKHR::eBuild)
+                        .setDstAccelerationStructure(blasResources.mBLAS)
+                        .setGeometries(tempBlasData.accelerationStructureGeometry)
+                        .setScratchData(tempBlasData.scratchBuffer->GetDeviceAddress()));
+
+                const uint32_t primitiveCount = drawData.indexCount / 3;
+                tempBlasData.accelerationStructureBuildRangeInfo =
+                    vk::AccelerationStructureBuildRangeInfoKHR()
+                        .setPrimitiveCount(primitiveCount)
+                        .setPrimitiveOffset(0)
+                        .setFirstVertex(drawData.vertexOffset)
+                        .setTransformOffset(0);
+                accelerationStructureBuildRangeInfos.push_back(
+                    &tempBlasData.accelerationStructureBuildRangeInfo);
+            }
+
+            commandBuffer.buildAccelerationStructuresKHR(
+                accelerationBuildGeometryInfos,
+                accelerationStructureBuildRangeInfos,
+                mContext->GetDevice()->GetDispatcher());
+
+            VKRT_ASSERT_VK(commandBuffer.end());
+            mContext->GetDevice()->SubmitCommandAndFlush(commandBuffer);
+            mContext->GetDevice()->DestroyCommand(commandBuffer);
+        }
+
+        {
+            vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
+            VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
+
+            std::vector<vk::AccelerationStructureInstanceKHR> instances;
+            instances.reserve(mPackedDrawData.size());
+            for (uint32_t index = 0; index < mPackedDrawData.size(); ++index) {
+                BlasResources& blasResources = mRaytracingScene.blasResources[index];
+                const DrawData& drawData = mPackedDrawData[index];
+                if (drawData.alphaMode == static_cast<uint32_t>(Material::AlphaMode::Blended)) {
+                    continue;
+                }
+
+                vk::AccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo =
+                    vk::AccelerationStructureDeviceAddressInfoKHR().setAccelerationStructure(
+                        blasResources.mBLAS);
+                blasResources.mBLASAddress = logicalDevice.getAccelerationStructureAddressKHR(
+                    accelerationDeviceAddressInfo,
+                    mContext->GetDevice()->GetDispatcher());
+
+                const glm::mat4& transform = glm::transpose(drawData.transform);
+                VkTransformMatrixKHR transformMatrix =
+                    *(reinterpret_cast<const VkTransformMatrixKHR*>(&transform));
+                instances.emplace_back(
+                    vk::AccelerationStructureInstanceKHR()
+                        .setTransform(transformMatrix)
+                        .setInstanceCustomIndex(index)
+                        .setAccelerationStructureReference(blasResources.mBLASAddress)
+                        .setMask(0xFF)
+                        .setInstanceShaderBindingTableRecordOffset(0)
+                        .setFlags(vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable));
+            }
+
+            const size_t instanceDataSize =
+                instances.size() * sizeof(vk::AccelerationStructureInstanceKHR);
+            mRaytracingScene.mInstancesBuffer = mContext->GetDevice()->CreateBuffer(
+                instanceDataSize,
+                vk::BufferUsageFlagBits::eShaderDeviceAddress |
+                    vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR,
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                    VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                    VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT);
+            uint8_t* instanceData = mRaytracingScene.mInstancesBuffer->MapBuffer();
+            std::copy_n(
+                reinterpret_cast<uint8_t*>(instances.data()),
+                instanceDataSize,
+                instanceData);
+            mRaytracingScene.mInstancesBuffer->UnmapBuffer();
+            const vk::DeviceAddress instanceBufferAddress =
+                mRaytracingScene.mInstancesBuffer->GetDeviceAddress();
+
+            vk::AccelerationStructureGeometryInstancesDataKHR instancesData =
+                vk::AccelerationStructureGeometryInstancesDataKHR()
+                    .setArrayOfPointers(false)
+                    .setData(instanceBufferAddress);
+            vk::AccelerationStructureGeometryKHR accelerationStructureGeometry =
                 vk::AccelerationStructureGeometryKHR()
+                    .setGeometryType(vk::GeometryTypeKHR::eInstances)
                     .setFlags(vk::GeometryFlagBitsKHR::eOpaque)
-                    .setGeometryType(vk::GeometryTypeKHR::eTriangles)
-                    .setGeometry(tempBlasData.triangleData);
+                    .setGeometry(instancesData);
 
-            tempBlasData.accelerationStructureBuildGeometryInfo =
+            vk::AccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo =
                 vk::AccelerationStructureBuildGeometryInfoKHR()
-                    .setType(vk::AccelerationStructureTypeKHR::eBottomLevel)
+                    .setType(vk::AccelerationStructureTypeKHR::eTopLevel)
                     .setFlags(vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace)
-                    .setGeometries(tempBlasData.accelerationStructureGeometry);
+                    .setMode(vk::BuildAccelerationStructureModeKHR::eBuild)
+                    .setGeometries(accelerationStructureGeometry);
 
+            uint32_t instanceCount = static_cast<uint32_t>(instances.size());
+            vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
             vk::AccelerationStructureBuildSizesInfoKHR buildSizesInfo =
                 logicalDevice.getAccelerationStructureBuildSizesKHR(
                     vk::AccelerationStructureBuildTypeKHR::eDevice,
-                    tempBlasData.accelerationStructureBuildGeometryInfo,
-                    primitiveCount,
+                    accelerationStructureBuildGeometryInfo,
+                    instanceCount,
                     mContext->GetDevice()->GetDispatcher());
 
-            const size_t handleAlignment = 256;
-            tempBlasData.blasBufferSize = buildSizesInfo.accelerationStructureSize;
-            tempBlasData.blasBufferOffset = blasBufferSize;
-            tempBlasData.scratchSize = buildSizesInfo.buildScratchSize;
-            blasBufferSize += (buildSizesInfo.accelerationStructureSize + handleAlignment - 1) &
-                              ~(handleAlignment - 1);
-        }
+            {
+                mRaytracingScene.mTLASBuffer = mContext->GetDevice()->CreateBuffer(
+                    buildSizesInfo.accelerationStructureSize,
+                    vk::BufferUsageFlagBits::eAccelerationStructureStorageKHR |
+                        vk::BufferUsageFlagBits::eShaderDeviceAddress,
+                    VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                        VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT);
 
-        mRaytracingScene.mBLASBuffer = mContext->GetDevice()->CreateBuffer(
-            blasBufferSize,
-            vk::BufferUsageFlagBits::eAccelerationStructureStorageKHR |
-                vk::BufferUsageFlagBits::eShaderDeviceAddress,
-            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+                vk::AccelerationStructureCreateInfoKHR accelerationStructureCreateInfo =
+                    vk::AccelerationStructureCreateInfoKHR()
+                        .setBuffer(mRaytracingScene.mTLASBuffer->GetBufferHandle())
+                        .setSize(buildSizesInfo.accelerationStructureSize)
+                        .setType(vk::AccelerationStructureTypeKHR::eTopLevel);
+                mRaytracingScene.mTLAS =
+                    VKRT_ASSERT_VK(logicalDevice.createAccelerationStructureKHR(
+                        accelerationStructureCreateInfo,
+                        nullptr,
+                        mContext->GetDevice()->GetDispatcher()));
+            }
 
-        std::vector<vk::AccelerationStructureBuildGeometryInfoKHR> accelerationBuildGeometryInfos;
-        accelerationBuildGeometryInfos.reserve(mPackedDrawData.size());
-        std::vector<vk::AccelerationStructureBuildRangeInfoKHR*>
-            accelerationStructureBuildRangeInfos;
-
-        for (uint32_t index = 0; index < mPackedDrawData.size(); ++index) {
-            BlasResources& blasResources = mRaytracingScene.blasResources[index];
-            const DrawData& drawData = mPackedDrawData[index];
-            TemporaryBlasBuildData& tempBlasData = blasBuildData[index];
-
-            vk::AccelerationStructureCreateInfoKHR accelerationStructureCreateInfo =
-                vk::AccelerationStructureCreateInfoKHR()
-                    .setBuffer(mRaytracingScene.mBLASBuffer->GetBufferHandle())
-                    .setSize(tempBlasData.blasBufferSize)
-                    .setOffset(tempBlasData.blasBufferOffset)
-                    .setType(vk::AccelerationStructureTypeKHR::eBottomLevel);
-
-            blasResources.mBLAS = VKRT_ASSERT_VK(logicalDevice.createAccelerationStructureKHR(
-                accelerationStructureCreateInfo,
-                nullptr,
-                mContext->GetDevice()->GetDispatcher()));
-
-            tempBlasData.scratchBuffer = mContext->GetDevice()->CreateBuffer(
-                tempBlasData.scratchSize,
+            ScopedRefPtr<VulkanBuffer> scratchBuffer = mContext->GetDevice()->CreateBuffer(
+                buildSizesInfo.buildScratchSize,
                 vk::BufferUsageFlagBits::eStorageBuffer |
                     vk::BufferUsageFlagBits::eShaderDeviceAddress,
                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
                     VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT);
 
-            accelerationBuildGeometryInfos.push_back(
+            vk::AccelerationStructureBuildGeometryInfoKHR accelerationBuildGeometryInfo =
                 vk::AccelerationStructureBuildGeometryInfoKHR()
-                    .setType(vk::AccelerationStructureTypeKHR::eBottomLevel)
+                    .setType(vk::AccelerationStructureTypeKHR::eTopLevel)
                     .setFlags(vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace)
                     .setMode(vk::BuildAccelerationStructureModeKHR::eBuild)
-                    .setDstAccelerationStructure(blasResources.mBLAS)
-                    .setGeometries(tempBlasData.accelerationStructureGeometry)
-                    .setScratchData(tempBlasData.scratchBuffer->GetDeviceAddress()));
+                    .setDstAccelerationStructure(mRaytracingScene.mTLAS)
+                    .setGeometries(accelerationStructureGeometry)
+                    .setScratchData(scratchBuffer->GetDeviceAddress())
+                    .setSrcAccelerationStructure(nullptr);
 
-            const uint32_t primitiveCount = drawData.indexCount / 3;
-            tempBlasData.accelerationStructureBuildRangeInfo =
+            vk::AccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo =
                 vk::AccelerationStructureBuildRangeInfoKHR()
-                    .setPrimitiveCount(primitiveCount)
+                    .setPrimitiveCount(instanceCount)
                     .setPrimitiveOffset(0)
                     .setFirstVertex(0)
                     .setTransformOffset(0);
-            accelerationStructureBuildRangeInfos.push_back(
-                &tempBlasData.accelerationStructureBuildRangeInfo);
-        }
 
-        commandBuffer.buildAccelerationStructuresKHR(
-            accelerationBuildGeometryInfos,
-            accelerationStructureBuildRangeInfos,
-            mContext->GetDevice()->GetDispatcher());
-
-        VKRT_ASSERT_VK(commandBuffer.end());
-        mContext->GetDevice()->SubmitCommandAndFlush(commandBuffer);
-        mContext->GetDevice()->DestroyCommand(commandBuffer);
-
-        std::vector<vk::AccelerationStructureInstanceKHR> instances;
-        instances.reserve(mPackedDrawData.size());
-        for (uint32_t index = 0; index < mPackedDrawData.size(); ++index) {
-            BlasResources& blasResources = mRaytracingScene.blasResources[index];
+            commandBuffer.buildAccelerationStructuresKHR(
+                accelerationBuildGeometryInfo,
+                &accelerationStructureBuildRangeInfo,
+                mContext->GetDevice()->GetDispatcher());
 
             vk::AccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo =
                 vk::AccelerationStructureDeviceAddressInfoKHR().setAccelerationStructure(
-                    blasResources.mBLAS);
-            blasResources.mBLASAddress = logicalDevice.getAccelerationStructureAddressKHR(
+                    mRaytracingScene.mTLAS);
+            mRaytracingScene.mTLASAddress = logicalDevice.getAccelerationStructureAddressKHR(
                 accelerationDeviceAddressInfo,
                 mContext->GetDevice()->GetDispatcher());
 
-            const glm::mat4& transform = glm::transpose(mPackedDrawData[index].transform);
-            VkTransformMatrixKHR transformMatrix =
-                *(reinterpret_cast<const VkTransformMatrixKHR*>(&transform));
-            instances.emplace_back(
-                vk::AccelerationStructureInstanceKHR()
-                    .setTransform(transformMatrix)
-                    .setInstanceCustomIndex(index)
-                    .setAccelerationStructureReference(blasResources.mBLASAddress)
-                    .setMask(0xFF)
-                    .setInstanceShaderBindingTableRecordOffset(0)
-                    .setFlags(vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable));
-            ++index;
+            VKRT_ASSERT_VK(commandBuffer.end());
+            mContext->GetDevice()->SubmitCommandAndFlush(commandBuffer);
+            mContext->GetDevice()->DestroyCommand(commandBuffer);
         }
     }
 }
 
 Scene::~Scene() {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
-
+    logicalDevice.destroyAccelerationStructureKHR(
+        mRaytracingScene.mTLAS,
+        nullptr,
+        mContext->GetDevice()->GetDispatcher());
     for (BlasResources& blasResources : mRaytracingScene.blasResources) {
         logicalDevice.destroyAccelerationStructureKHR(
             blasResources.mBLAS,

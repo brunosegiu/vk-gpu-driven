@@ -99,7 +99,10 @@ const std::vector<vk::DescriptorImageInfo>& ShaderParameterImage::GetImageInfos(
     if (mImageInfos.empty()) {
         for (const ScopedRefPtr<Texture>& texture : mTextures) {
             mImageInfos.push_back(vk::DescriptorImageInfo()
-                                      .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                                      .setImageLayout(
+                                          GetDescriptorType() == vk::DescriptorType::eSampledImage
+                                              ? vk::ImageLayout::eShaderReadOnlyOptimal
+                                              : vk::ImageLayout::eGeneral)
                                       .setImageView(texture->GetImageView())
                                       .setSampler(nullptr));
         }
@@ -152,22 +155,22 @@ ShaderParameterAccelerationStructure::ShaderParameterAccelerationStructure(
     ScopedRefPtr<Context> context,
     const vk::ShaderStageFlags& stageFlags)
     : ShaderParameter(
-          context, vk::DescriptorType::eAccelerationStructureKHR,
+          context,
+          vk::DescriptorType::eAccelerationStructureKHR,
           ShaderParameter::UpdateFrequency::Once,
           stageFlags,
           1,
-          false) {
-}
+          false) {}
 
-void ShaderParameterAccelerationStructure::Bind(vk::AccelerationStructureKHR accelerationStructure) {
+void ShaderParameterAccelerationStructure::Bind(
+    vk::AccelerationStructureKHR accelerationStructure) {
+    mAccelerationStructure = accelerationStructure;
     mAccelerationStructureInfo =
         vk::WriteDescriptorSetAccelerationStructureKHR().setAccelerationStructures(
-            accelerationStructure);
+            mAccelerationStructure);
 }
 
-ShaderParameterAccelerationStructure::~ShaderParameterAccelerationStructure() {
-
-}
+ShaderParameterAccelerationStructure::~ShaderParameterAccelerationStructure() {}
 
 ShaderParameter::~ShaderParameter() {}
 

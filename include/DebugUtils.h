@@ -16,7 +16,10 @@
 #endif
 
 #if defined(VKRT_PLATFORM_WINDOWS)
-#define VKRT_DEBUG_BREAK() __debugbreak()
+#define VKRT_DEBUG_BREAK()     \
+    if (IsDebuggerPresent()) { \
+        __debugbreak();        \
+    }
 #elif defined(VKRT_PLATFORM_LINUX)
 #define VKRT_DEBUG_BREAK() __builtin_trap()
 #endif
@@ -29,8 +32,10 @@
         OutputDebugStringA(os_.str().c_str()); \
     }
 #elif defined(VKRT_PLATFORM_LINUX)
-#define VKRT_LOG(message) \
-    { std::cout << message << std::endl; }
+#define VKRT_LOG(message)                  \
+    {                                      \
+        std::cout << message << std::endl; \
+    }
 #endif
 
 #ifdef VKRT_DEBUG

@@ -83,11 +83,18 @@ RaytracingPipeline::RaytracingPipeline(
 
     vk::PhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingProperties =
         mContext->GetDevice()->GetRayTracingProperties();
-    mHandleSize = rayTracingProperties.shaderGroupHandleSize;
-    const size_t handleAlignment = rayTracingProperties.shaderGroupHandleAlignment;
-    mHandleSizeAligned = (mHandleSize + handleAlignment - 1) & ~(handleAlignment - 1);
-    const uint32_t groupCount = static_cast<uint32_t>(rayTracingGroupCreateInfos.size());
-    const size_t sbtSize = groupCount * mHandleSizeAligned;
+
+    const auto alignUp = [](uint64_t handle, uint64_t alignment) {
+        return (handle + alignment - 1) & ~(alignment - 1);
+    };
+    const uint64_t baseAlignment = rayTracingProperties.shaderGroupBaseAlignment;
+    const uint64_t handleAlignment = rayTracingProperties.shaderGroupHandleAlignment;
+
+    const uint64_t handleSize = rayTracingProperties.shaderGroupHandleSize;
+    const uint64_t handleSizeAligned = alignUp(handleSize, handleAlignment);
+
+    const uint64_t groupCount = static_cast<uint64_t>(rayTracingGroupCreateInfos.size());
+    const uint64_t sbtSize = groupCount * handleSize;
 
     std::vector<uint8_t> shaderHandleStorage =
         VKRT_ASSERT_VK(logicalDevice.getRayTracingShaderGroupHandlesKHR<uint8_t>(
@@ -96,61 +103,79 @@ RaytracingPipeline::RaytracingPipeline(
             groupCount,
             sbtSize,
             mContext->GetDevice()->GetDispatcher()));
+    
+    uint8_t* shaderHandleStoragePtr = shaderHandleStorage.data();
 
+    vk::DeviceAddress raygenAddr;
     {
         mRayGenTable = mContext->GetDevice()->CreateBuffer(
-            mHandleSize,
+            handleSize + baseAlignment - 1,
             vk::BufferUsageFlagBits::eShaderBindingTableKHR |
                 vk::BufferUsageFlagBits::eShaderDeviceAddress,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                 VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+        raygenAddr = alignUp(mRayGenTable->GetDeviceAddress(), baseAlignment);
+        uint64_t writeOffset = uint64_t(raygenAddr - mRayGenTable->GetDeviceAddress());
         uint8_t* rayGenTableData = mRayGenTable->MapBuffer();
-        std::copy_n(shaderHandleStorage.begin(), mHandleSize, rayGenTableData);
+        std::copy_n(shaderHandleStoragePtr, handleSize, rayGenTableData + writeOffset);
+        shaderHandleStoragePtr += handleSize;
         mRayGenTable->UnmapBuffer();
     }
 
+    vk::DeviceAddress rayHitAddr;
     {
         mRayHitTable = mContext->GetDevice()->CreateBuffer(
-            mHandleSize,
+            handleSize + baseAlignment - 1,
             vk::BufferUsageFlagBits::eShaderBindingTableKHR |
                 vk::BufferUsageFlagBits::eShaderDeviceAddress,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                 VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT);
+        rayHitAddr = alignUp(mRayHitTable->GetDeviceAddress(), baseAlignment);
+        uint64_t writeOffset = uint64_t(rayHitAddr - mRayHitTable->GetDeviceAddress());
         uint8_t* rayHitTableData = mRayHitTable->MapBuffer();
-        std::copy_n(shaderHandleStorage.begin() + mHandleSizeAligned, mHandleSize, rayHitTableData);
+        std::copy_n(shaderHandleStoragePtr,
+            handleSize, rayHitTableData + writeOffset);
+        shaderHandleStoragePtr += handleSize;
         mRayHitTable->UnmapBuffer();
     }
 
     uint32_t missTableCount = mShaders.at(vk::ShaderStageFlagBits::eMissKHR).size();
-
+    vk::DeviceAddress rayMissAddr;
     {
         mRayMissTable = mContext->GetDevice()->CreateBuffer(
-            mHandleSize * missTableCount,
+            handleSize * missTableCount + baseAlignment - 1,
             vk::BufferUsageFlagBits::eShaderBindingTableKHR |
                 vk::BufferUsageFlagBits::eShaderDeviceAddress,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                 VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT);
+        rayMissAddr = alignUp(mRayMissTable->GetDeviceAddress(), baseAlignment);
+        uint64_t writeOffset = uint64_t(rayMissAddr - mRayMissTable->GetDeviceAddress());
         uint8_t* rayMissTableData = mRayMissTable->MapBuffer();
-        std::copy_n(
-            shaderHandleStorage.begin() + mHandleSizeAligned * missTableCount,
-            mHandleSize * missTableCount,
-            rayMissTableData);
+
+        for (uint32_t i = 0; i < missTableCount; ++i) {
+            std::copy_n(
+                shaderHandleStoragePtr,
+                handleSize,
+                rayMissTableData + writeOffset + i * handleSizeAligned);
+            shaderHandleStoragePtr += handleSize;
+        }
+
         mRayMissTable->UnmapBuffer();
     }
 
     mTableRef = RayTracingTablesRef{
         .rayGen = vk::StridedDeviceAddressRegionKHR()
-                      .setDeviceAddress(mRayGenTable->GetDeviceAddress())
-                      .setSize(mHandleSizeAligned)
-                      .setStride(mHandleSizeAligned),
+                      .setDeviceAddress(raygenAddr)
+                      .setSize(handleSizeAligned)
+                      .setStride(handleSizeAligned),
         .rayHit = vk::StridedDeviceAddressRegionKHR()
-                      .setDeviceAddress(mRayHitTable->GetDeviceAddress())
-                      .setSize(mHandleSizeAligned)
-                      .setStride(mHandleSizeAligned),
+                      .setDeviceAddress(rayHitAddr)
+                      .setSize(handleSizeAligned)
+                      .setStride(handleSizeAligned),
         .rayMiss = vk::StridedDeviceAddressRegionKHR()
-                       .setDeviceAddress(mRayMissTable->GetDeviceAddress())
-                       .setSize(mHandleSizeAligned * missTableCount)
-                       .setStride(mHandleSizeAligned),
+                       .setDeviceAddress(rayMissAddr)
+                       .setSize(handleSizeAligned * missTableCount)
+                       .setStride(handleSizeAligned),
         .callable = vk::StridedDeviceAddressRegionKHR()};
 }
 

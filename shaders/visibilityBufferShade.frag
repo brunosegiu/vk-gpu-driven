@@ -31,22 +31,23 @@ layout(binding = 2, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
 layout(binding = 3, set = UPDATE_ONCE) uniform texture2D shadowMap;
 layout(binding = 4, set = UPDATE_ONCE) uniform utexture2D visibilityBuffer;
 layout(binding = 5, set = UPDATE_ONCE) uniform texture2D ssaoBuffer;
-layout(binding = 6, set = UPDATE_ONCE, scalar) readonly buffer Index {
+layout(binding = 6, set = UPDATE_ONCE) uniform texture2D rtTemp;
+layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer Index {
     uint indices[];
 };
-layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
+layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
     vec3 positions[];
 };
-layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
+layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
     uint packedTexCoord[];
 };
-layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
+layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
     uint packedNormal[];
 };
-layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
+layout(binding = 11, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
     uint packedTangent[];
 };
-layout(binding = 11, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
+layout(binding = 12, set = UPDATE_ONCE) uniform texture2D sceneTextures[];
 
 vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
     return textureGrad(
@@ -57,6 +58,8 @@ vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
 }
 
 void main() {
+    //outColor = texture(sampler2D(rtTemp, frameBufferTextureSampler), inTexCoord);
+    //return;
     ivec2 vbSize = textureSize(usampler2D(visibilityBuffer, frameBufferTextureSampler), 0);
     uint encodedVbData = texelFetch(
             usampler2D(visibilityBuffer, frameBufferTextureSampler),

@@ -12,6 +12,7 @@ struct CameraData {
     glm::mat4 viewProjection;
     glm::mat4 invViewProjection;
     glm::mat4 invProjection;
+    glm::mat4 invView;
     glm::vec4 cameraPos;
 };
 
@@ -149,6 +150,16 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
               .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal}});
     }
 
+    {
+        mRaytracingTarget = new Texture(
+            mContext,
+            imageSize.width,
+            imageSize.height,
+            vk::Format::eR8G8B8A8Unorm,
+            vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+            vk::ImageLayout::eShaderReadOnlyOptimal);
+    }
+
     // Global resources
     {
         mPerDrawParameters = new ShaderParameterBuffer(
@@ -156,7 +167,8 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::PerFrame,
             vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment |
-                vk::ShaderStageFlagBits::eCompute);
+                vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
     }
 
     // Culling resources
@@ -218,7 +230,9 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             mContext,
             vk::DescriptorType::eUniformBuffer,
             ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex |
+                vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eClosestHitKHR |
+                vk::ShaderStageFlagBits::eMissKHR,
             sizeof(LightData),
             vk::BufferUsageFlagBits::eUniformBuffer,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
@@ -243,7 +257,8 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
 
         mMaterialSampler = new ShaderParameterSampler(
             mContext,
-            vk::ShaderStageFlagBits::eFragment,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR,
             materialSamplerCreateInfo);
 
         vk::SamplerCreateInfo frameBufferSamplerCreateInfo =
@@ -262,19 +277,22 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
 
         mFrameBufferSampler = new ShaderParameterSampler(
             mContext,
-            vk::ShaderStageFlagBits::eFragment,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR,
             frameBufferSamplerCreateInfo);
 
         mMaterialsUniform = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment);
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
 
         mMaterialsTextures = new ShaderParameterImage(
             mContext,
             vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR,
             4096,
             true);
 
@@ -340,7 +358,9 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             mContext,
             vk::DescriptorType::eUniformBuffer,
             ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex,
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex |
+                vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eClosestHitKHR |
+                vk::ShaderStageFlagBits::eMissKHR,
             sizeof(CameraData),
             vk::BufferUsageFlagBits::eUniformBuffer,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
@@ -349,7 +369,8 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mShadowMapUniform = new ShaderParameterImage(
             mContext,
             vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment);
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
         mShadowMapUniform->Bind(mShadowMap);
 
         std::unordered_map<
@@ -436,32 +457,42 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
             vk::DescriptorType::eSampledImage,
             vk::ShaderStageFlagBits::eFragment);
 
+        mRTTempParam = new ShaderParameterImage(
+            mContext,
+            vk::DescriptorType::eSampledImage,
+            vk::ShaderStageFlagBits::eFragment);
+
         mIndexBufferUniform = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment);
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
 
         mPositionBufferUniform = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment);
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
         mTexCoordBufferUniform = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment);
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
         mNormalBufferUniform = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment);
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
         mTangentBufferUniform = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
             ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment);
+            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
+                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
 
         mShadePassParameters = new ShaderParameterCollection(mContext);
         mShadePassParameters->AddParameter(mCameraUniform);
@@ -473,6 +504,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
         mShadePassParameters->AddParameter(mShadowMapUniform);
         mShadePassParameters->AddParameter(mVisibilityBufferUniform);
         mShadePassParameters->AddParameter(mSSAOTextureParameter);
+        mShadePassParameters->AddParameter(mRTTempParam);
         mShadePassParameters->AddParameter(mIndexBufferUniform);
         mShadePassParameters->AddParameter(mPositionBufferUniform);
         mShadePassParameters->AddParameter(mTexCoordBufferUniform);
@@ -555,8 +587,13 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
     mUIRenderer = new UIRenderer(mContext, mMainRenderTarget);
 
     // Raytracing resources
-    mASParamater = new ShaderParameterAccelerationStructure(mContext,
+    mASParamater = new ShaderParameterAccelerationStructure(
+        mContext,
         vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eClosestHitKHR);
+    mRaytracingTargetParameter = new ShaderParameterImage(
+        mContext,
+        vk::DescriptorType::eStorageImage,
+        vk::ShaderStageFlagBits::eRaygenKHR);
 
     const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>> raytracingStages{
         {vk::ShaderStageFlagBits::eRaygenKHR, {Resource::Id::RaytraceProbeGenShader}},
@@ -566,9 +603,26 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
              Resource::Id::RaytraceProbeMissShader,
              Resource::Id::RaytraceProbeShadowMissShader}}};
 
+
+
+
     mProbeRaytracingParameters = new ShaderParameterCollection(mContext);
     mProbeRaytracingParameters->AddParameter(mCameraUniform);
+    mProbeRaytracingParameters->AddParameter(mShadowCameraUniform);
+    mProbeRaytracingParameters->AddParameter(mPerDrawParameters);
+
     mProbeRaytracingParameters->AddParameter(mASParamater);
+    mProbeRaytracingParameters->AddParameter(mRaytracingTargetParameter);
+    mProbeRaytracingParameters->AddParameter(mMaterialSampler);
+    mProbeRaytracingParameters->AddParameter(mFrameBufferSampler);
+    mProbeRaytracingParameters->AddParameter(mMaterialsUniform);
+    mProbeRaytracingParameters->AddParameter(mIndexBufferUniform);
+    mProbeRaytracingParameters->AddParameter(mPositionBufferUniform);
+    mProbeRaytracingParameters->AddParameter(mTexCoordBufferUniform);
+    mProbeRaytracingParameters->AddParameter(mNormalBufferUniform);
+    mProbeRaytracingParameters->AddParameter(mTangentBufferUniform);
+    mProbeRaytracingParameters->AddParameter(mMaterialsTextures);
+
     mProbeRaytracingPipeline =
         new RaytracingPipeline(mContext, mProbeRaytracingParameters, raytracingStages);
 }
@@ -696,6 +750,7 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
             .invViewProjection =
                 glm::inverse(camera->GetProjectionTransform() * camera->GetViewTransform()),
             .invProjection = glm::inverse(camera->GetProjectionTransform()),
+            .invView = glm::inverse(camera->GetViewTransform()),
             .cameraPos = glm::vec4(camera->GetPosition(), 0.0f)};
         mCameraUniform->Write(
             imageIndex,
@@ -735,17 +790,24 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
         mTangentBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTangentBuffer());
     }
 
-    mDepthBufferParameter->Bind(mDepthBuffer);
-    mSSAOBufferParameter->Bind(mSSAOBuffer);
-    mSSAOTextureParameter->Bind(mSSAOBlurredBuffer);
-
-    // SSAO control
+    // SSAO
     {
+        mDepthBufferParameter->Bind(mDepthBuffer);
+        mSSAOBufferParameter->Bind(mSSAOBuffer);
+        mSSAOTextureParameter->Bind(mSSAOBlurredBuffer);
+        mRTTempParam->Bind(mRaytracingTarget);
+
         SSAOControlData ssaoControl = mUIRenderer->GetSSAOControlData();
         mSSAOControlParameter->Write(
             imageIndex,
             reinterpret_cast<uint8_t*>(&ssaoControl),
             sizeof(SSAOControlData));
+    }
+
+    // Raytracing
+    {
+        mASParamater->Bind(mScene->GetTLAS());
+        mRaytracingTargetParameter->Bind(mRaytracingTarget);
     }
 }
 
@@ -884,6 +946,60 @@ void Renderer::Render(Camera* camera) {
                     {});
             }
         };
+
+        {
+            {
+                std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    {{mRaytracingTarget, vk::ImageLayout::eGeneral,
+                      vk::ImageLayout::eGeneral}});
+
+                command.buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::PipelineStageFlagBits::eRayTracingShaderKHR,
+                    vk::DependencyFlags{},
+                    {},
+                    {},
+                    imageBarriers);
+            }
+
+            command.buffer.bindPipeline(
+                vk::PipelineBindPoint::eRayTracingKHR,
+                mProbeRaytracingPipeline->GetPipelineHandle());
+            std::vector<vk::DescriptorSet> descriptorSets =
+                mProbeRaytracingParameters->GetDescriptorSets(mCurrentFrameIndex);
+            command.buffer.bindDescriptorSets(
+                vk::PipelineBindPoint::eRayTracingKHR,
+                mProbeRaytracingPipeline->GetPipelineLayout(),
+                0,
+                descriptorSets,
+                nullptr);
+
+            const RaytracingPipeline::RayTracingTablesRef& tableRef =
+                mProbeRaytracingPipeline->GetTablesRef();
+            command.buffer.traceRaysKHR(
+                tableRef.rayGen,
+                tableRef.rayMiss,
+                tableRef.rayHit,
+                tableRef.callable,
+                imageSize.width,
+                imageSize.height,
+                1,
+                mContext->GetDevice()->GetDispatcher());
+
+            {
+                std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                    {{mRaytracingTarget,
+                      vk::ImageLayout::eGeneral, vk::ImageLayout::eGeneral}});
+
+                command.buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eRayTracingShaderKHR,
+                    vk::PipelineStageFlagBits::eFragmentShader,
+                    vk::DependencyFlags{},
+                    {},
+                    {},
+                    imageBarriers);
+            }
+        }
 
         BeginMarker(command.buffer, "Shadow culling");
         for (const Material::AlphaMode alphaMode : Material::AlphaModes) {

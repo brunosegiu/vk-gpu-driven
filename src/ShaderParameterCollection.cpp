@@ -174,7 +174,8 @@ void ShaderParameterCollection::UpdateDescriptors(uint32_t frameIndex) {
                         parameter->GetBufferInfo(effectiveFrameIndex);
                     descriptorUpdate.setBufferInfo(bufferInfo);
                 } break;
-                case vk::DescriptorType::eSampledImage: {
+                case vk::DescriptorType::eSampledImage:
+                case vk::DescriptorType::eStorageImage: {
                     descriptorUpdate.setImageInfo(parameter->GetImageInfos());
                 } break;
                 case vk::DescriptorType::eAccelerationStructureKHR: {

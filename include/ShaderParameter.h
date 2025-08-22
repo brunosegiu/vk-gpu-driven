@@ -155,6 +155,7 @@ public:
 
 private:
     vk::WriteDescriptorSetAccelerationStructureKHR mAccelerationStructureInfo;
+    vk::AccelerationStructureKHR mAccelerationStructure;
 };
 
 }  // namespace VKRT

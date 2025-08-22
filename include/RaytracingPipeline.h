@@ -30,7 +30,6 @@ public:
     ~RaytracingPipeline();
 
 private:
-    size_t mHandleSize, mHandleSizeAligned;
     ScopedRefPtr<VulkanBuffer> mRayGenTable;
     ScopedRefPtr<VulkanBuffer> mRayHitTable;
     ScopedRefPtr<VulkanBuffer> mRayMissTable;

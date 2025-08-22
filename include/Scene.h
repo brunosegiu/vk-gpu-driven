@@ -61,6 +61,8 @@ public:
     }
     DirectionalLight& GetLight() { return mLight; }
 
+    const vk::AccelerationStructureKHR& GetTLAS() { return mRaytracingScene.mTLAS; }
+
     ~Scene();
 
 private:
@@ -91,6 +93,10 @@ private:
     struct RaytracingScene {
         std::vector<BlasResources> blasResources;
         ScopedRefPtr<VulkanBuffer> mBLASBuffer;
+        ScopedRefPtr<VulkanBuffer> mInstancesBuffer;
+        ScopedRefPtr<VulkanBuffer> mTLASBuffer;
+        vk::AccelerationStructureKHR mTLAS;
+        vk::DeviceAddress mTLASAddress;
     } mRaytracingScene;
 };
 }  // namespace VKRT

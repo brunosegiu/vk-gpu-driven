@@ -91,6 +91,8 @@ private:
     ScopedRefPtr<ShaderParameterCollection> mShadePassParameters;
     ScopedRefPtr<ShaderParameterImage> mVisibilityBufferUniform;
     ScopedRefPtr<ShaderParameterImage> mSSAOTextureParameter;
+    // TODO: Remove
+    ScopedRefPtr<ShaderParameterImage> mRTTempParam;
     ScopedRefPtr<ShaderParameterBuffer> mIndexBufferUniform;
     ScopedRefPtr<ShaderParameterBuffer> mPositionBufferUniform;
     ScopedRefPtr<ShaderParameterBuffer> mTexCoordBufferUniform;
@@ -126,7 +128,9 @@ private:
     // Probe rendering
     ScopedRefPtr<RaytracingPipeline> mProbeRaytracingPipeline;
     ScopedRefPtr<ShaderParameterAccelerationStructure> mASParamater;
+    ScopedRefPtr<ShaderParameterImage> mRaytracingTargetParameter;
     ScopedRefPtr<ShaderParameterCollection> mProbeRaytracingParameters;
+    ScopedRefPtr<Texture> mRaytracingTarget;
 
     void BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name);
     void EndMarker(const vk::CommandBuffer& commandBuffer);

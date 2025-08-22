@@ -45,6 +45,7 @@ struct CameraData {
     mat4 viewProjection;
 	mat4 invViewProjection;
 	mat4 invProjection;
+    mat4 invView;
     vec4 cameraPos;
 };
 
