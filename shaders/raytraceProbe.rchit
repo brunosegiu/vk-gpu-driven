@@ -162,7 +162,7 @@ void main() {
 
     const float shadowTerm = traceShadowRay(worldSpacePosition, -uLightParameters.direction, TMax);
 
-    vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - worldSpacePosition);
+    vec3 viewVector = normalize(gl_WorldRayOriginEXT - worldSpacePosition);
 
     vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0f);
 

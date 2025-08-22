@@ -31,6 +31,29 @@ struct CullData {
     uint32_t maxDrawCount;
 };
 
+constexpr glm::uvec3 probeGridCount(10u, 10u, 10u);
+constexpr glm::uvec2 probeResolution(128u, 128u);
+constexpr float probeSpacing = 0.5f;
+const glm::vec3 probeOrigin = glm::vec3(0.0f, 0.0f, 0.0f) - glm::vec3(probeGridCount) * probeSpacing * 0.5f;
+constexpr float probeMaxRayLength = probeSpacing * 3.0f;
+constexpr float probeMinRayLength = 0.01f;
+
+struct DDGIData {
+    glm::uvec3 probeGridCount;
+    glm::vec3 probeGridOrigin;
+    float probeSpacing;
+    float minRayLength;
+    float maxRayLength;
+};
+
+DDGIData ddgiData{
+    .probeGridCount = probeGridCount,
+    .probeGridOrigin = probeOrigin,
+    .probeSpacing = probeSpacing,
+    .minRayLength = probeMinRayLength,
+    .maxRayLength = probeMaxRayLength,
+};
+
 Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
     : mContext(context),
       mScene(scene),
@@ -47,6 +70,8 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
 
     AddRenderTargets();
     AddPipelines();
+
+    mUIRenderer = new UIRenderer(mContext, mMainRenderTarget);
 }
 
 void Renderer::AddRenderTargets() {
@@ -170,10 +195,13 @@ void Renderer::AddRenderTargets() {
 
     // Probes
     {
+        const uint32_t probeCount =
+            ddgiData.probeGridCount.x * ddgiData.probeGridCount.y * ddgiData.probeGridCount.z;
         mRaytracingTarget = new Texture(
             mContext,
-            imageSize.width,
-            imageSize.height,
+            probeResolution.x,
+            probeResolution.y,
+            probeCount,
             vk::Format::eR8G8B8A8Unorm,
             vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
             vk::ImageLayout::eShaderReadOnlyOptimal);
@@ -493,6 +521,16 @@ void Renderer::AddPipelines() {
             vk::DescriptorType::eSampledImage,
             vk::ShaderStageFlagBits::eFragment);
 
+        mDDGIProbeDataParameter = new ShaderParameterBuffer(
+            mContext,
+            vk::DescriptorType::eUniformBuffer,
+            ShaderParameter::UpdateFrequency::PerFrame,
+            vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eFragment,
+            sizeof(DDGIData),
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
         mIndexBufferUniform = new ShaderParameterBuffer(
             mContext,
             vk::DescriptorType::eStorageBuffer,
@@ -529,6 +567,7 @@ void Renderer::AddPipelines() {
         mShadePassParameters->AddParameter(mCameraUniform);
         mShadePassParameters->AddParameter(mShadowCameraUniform);
         mShadePassParameters->AddParameter(mPerMeshParameters);
+        mShadePassParameters->AddParameter(mDDGIProbeDataParameter);
         mShadePassParameters->AddParameter(mScenePersistentDataParameter);
         mShadePassParameters->AddParameter(mMaterialSampler);
         mShadePassParameters->AddParameter(mFrameBufferSampler);
@@ -616,8 +655,6 @@ void Renderer::AddPipelines() {
             {.enableDepthTest = false});
     }
 
-    mUIRenderer = new UIRenderer(mContext, mMainRenderTarget);
-
     // Raytracing resources
     mASParamater = new ShaderParameterAccelerationStructure(
         mContext,
@@ -639,6 +676,7 @@ void Renderer::AddPipelines() {
     mProbeRaytracingParameters->AddParameter(mCameraUniform);
     mProbeRaytracingParameters->AddParameter(mShadowCameraUniform);
     mProbeRaytracingParameters->AddParameter(mPerMeshParameters);
+    mProbeRaytracingParameters->AddParameter(mDDGIProbeDataParameter);
 
     mProbeRaytracingParameters->AddParameter(mScenePersistentDataParameter);
     mProbeRaytracingParameters->AddParameter(mASParamater);
@@ -919,6 +957,14 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
             reinterpret_cast<uint8_t*>(&ssaoControl),
             sizeof(SSAOControlData));
     }
+
+    // DDGI
+    {
+        mDDGIProbeDataParameter->Write(
+            imageIndex,
+            reinterpret_cast<uint8_t*>(&ddgiData),
+            sizeof(DDGIData));
+    }
 }
 
 void Renderer::BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name) {
@@ -1093,6 +1139,9 @@ void Renderer::Render(Camera* camera) {
                 descriptorSets,
                 nullptr);
 
+            uint32_t probeCount =
+                ddgiData.probeGridCount.x * ddgiData.probeGridCount.y * ddgiData.probeGridCount.z;
+
             const RaytracingPipeline::RayTracingTablesRef& tableRef =
                 mProbeRaytracingPipeline->GetTablesRef();
             command.buffer.traceRaysKHR(
@@ -1100,9 +1149,9 @@ void Renderer::Render(Camera* camera) {
                 tableRef.rayMiss,
                 tableRef.rayHit,
                 tableRef.callable,
-                imageSize.width,
-                imageSize.height,
-                1,
+                probeResolution.x,
+                probeResolution.y,
+                probeCount,
                 mContext->GetDevice()->GetDispatcher());
 
             {

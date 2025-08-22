@@ -20,6 +20,9 @@ layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
 layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
     MeshData uMeshData[];
 };
+layout(binding = 3, set = UPDATE_PER_FRAME, scalar) uniform TDDGIData {
+    DDGIData uDDGI;
+};
 
 layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
     DrawData uPersistentSceneData[];
@@ -32,7 +35,7 @@ layout(binding = 3, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
 layout(binding = 4, set = UPDATE_ONCE) uniform texture2D uShadowMap;
 layout(binding = 5, set = UPDATE_ONCE) uniform utexture2D uVisibilityBuffer;
 layout(binding = 6, set = UPDATE_ONCE) uniform texture2D uSSAOBuffer;
-layout(binding = 7, set = UPDATE_ONCE) uniform texture2D uRTTemp;
+layout(binding = 7, set = UPDATE_ONCE) uniform texture2DArray uRTTemp;
 layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer Index {
     uint uIndices[];
 };
@@ -59,7 +62,7 @@ vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
 }
 
 void main() {
-    //outColor = texture(sampler2D(uRTTemp, frameBufferTextureSampler), inTexCoord);
+    //outColor = texture(sampler2DArray(uRTTemp, uFrameBufferTextureSampler), vec3(inTexCoord, 0.0f));
     //return;
     ivec2 vbSize = textureSize(usampler2D(uVisibilityBuffer, uFrameBufferTextureSampler), 0);
     uint encodedVbData = texelFetch(

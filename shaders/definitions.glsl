@@ -86,4 +86,12 @@ struct RayPayload {
     uint depth;
 };
 
+struct DDGIData {
+    uvec3 probeGridCount;
+    vec3 probeGridOrigin;
+    float probeSpacing;
+    float minRayLength;
+    float maxRayLength;
+};
+
 #endif

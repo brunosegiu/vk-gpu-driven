@@ -89,6 +89,7 @@ set(SHADER_HEADERS
     shading.glsl
     visibilityBufferUtils.glsl
     utils.glsl
+    ddgiUtils.glsl
 )
 
 set(SHADERS

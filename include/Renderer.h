@@ -40,6 +40,11 @@ private:
     void OnRightMouseButtonPressed() override;
     void OnRightMouseButtonReleased() override;
 
+    // Renderer state flags
+    bool mFreezeCulling;
+    bool mHasResouces;
+    bool mHasBoundResources;
+
     // Shared resources
     ScopedRefPtr<Context> mContext;
     ScopedRefPtr<Scene> mScene;
@@ -101,8 +106,7 @@ private:
     ScopedRefPtr<ShaderParameterCollection> mShadePassParameters;
     ScopedRefPtr<ShaderParameterImage> mVisibilityBufferUniform;
     ScopedRefPtr<ShaderParameterImage> mSSAOTextureParameter;
-    // TODO: Remove
-    ScopedRefPtr<ShaderParameterImage> mRTTempParam;
+    ScopedRefPtr<ShaderParameterImage> mRTTempParam; // TODO: Probe sampler
     ScopedRefPtr<ShaderParameterBuffer> mIndexBufferUniform;
     ScopedRefPtr<ShaderParameterBuffer> mPositionBufferUniform;
     ScopedRefPtr<ShaderParameterBuffer> mTexCoordBufferUniform;
@@ -130,15 +134,12 @@ private:
     ScopedRefPtr<Texture> mSSAOBlurredBuffer;
     ScopedRefPtr<RenderTarget> mSSAOBlurredRenderTarget;
 
-    bool mFreezeCulling;
-    bool mHasResouces;
-    bool mHasBoundResources;
-
     // UI rendering
     ScopedRefPtr<UIRenderer> mUIRenderer;
 
     // Probe rendering
     ScopedRefPtr<RaytracingPipeline> mProbeRaytracingPipeline;
+    ScopedRefPtr<ShaderParameterBuffer> mDDGIProbeDataParameter;
     ScopedRefPtr<ShaderParameterAccelerationStructure> mASParamater;
     ScopedRefPtr<ShaderParameterImage> mRaytracingTargetParameter;
     ScopedRefPtr<ShaderParameterCollection> mProbeRaytracingParameters;
