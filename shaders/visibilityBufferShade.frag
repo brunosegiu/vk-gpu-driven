@@ -6,6 +6,7 @@
 #include "utils.glsl"
 #include "shading.glsl"
 #include "visibilityBufferUtils.glsl"
+#include "ddgiUtils.glsl"
 
 layout(location = 0) in vec2 inTexCoord;
 
@@ -29,29 +30,90 @@ layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
 };
 layout(binding = 1, set = UPDATE_ONCE) uniform sampler uMaterialTextureSampler;
 layout(binding = 2, set = UPDATE_ONCE) uniform sampler uFrameBufferTextureSampler;
-layout(binding = 3, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
+layout(binding = 3, set = UPDATE_ONCE) uniform sampler uIrradianceSampler;
+layout(binding = 4, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
     Material uMaterials[];
 };
-layout(binding = 4, set = UPDATE_ONCE) uniform texture2D uShadowMap;
-layout(binding = 5, set = UPDATE_ONCE) uniform utexture2D uVisibilityBuffer;
-layout(binding = 6, set = UPDATE_ONCE) uniform texture2D uSSAOBuffer;
-layout(binding = 7, set = UPDATE_ONCE) uniform texture2DArray uRTTemp;
-layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer Index {
+layout(binding = 5, set = UPDATE_ONCE) uniform texture2D uShadowMap;
+layout(binding = 6, set = UPDATE_ONCE) uniform utexture2D uVisibilityBuffer;
+layout(binding = 7, set = UPDATE_ONCE) uniform texture2D uSSAOBuffer;
+layout(binding = 8, set = UPDATE_ONCE) uniform texture2DArray uProbeIrradianceTargets;
+layout(binding = 9, set = UPDATE_ONCE) uniform texture2DArray uProbeDepthTargets;
+layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer Index {
     uint uIndices[];
 };
-layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
+layout(binding = 11, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
     vec3 uPositions[];
 };
-layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
+layout(binding = 12, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
     uint uPackedTexCoord[];
 };
-layout(binding = 11, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
+layout(binding = 13, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
     uint uPackedNormal[];
 };
-layout(binding = 12, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
+layout(binding = 14, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
     uint uPackedTangent[];
 };
-layout(binding = 13, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
+layout(binding = 15, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
+
+vec3 sampleProbeIrradiance(uint probeIndex, vec3 direction) {
+    vec2 uv = octEncode(normalize(direction));
+    return texture(sampler2DArray(uProbeIrradianceTargets, uIrradianceSampler), vec3(uv, float(probeIndex))).rgb;
+}
+
+vec2 sampleProbeMoments(uint probeIndex, vec3 direction) {
+    vec2 uv = octEncode(normalize(direction));
+    return texture(sampler2DArray(uProbeDepthTargets, uFrameBufferTextureSampler), vec3(uv, float(probeIndex))).rg;
+}
+
+vec3 ddgiIndirectDiffuse(vec3 worldSpacePosition, vec3 normal, vec3 viewDir, const DDGIData ddgi) {
+    ivec3 gridIndex = nearestProbeGridIndex(worldSpacePosition, ddgi);
+    vec3 gridPos = (worldSpacePosition - ddgi.probeGridOrigin) / ddgi.probeSpacing;
+    vec3 interpolators = clamp(gridPos - vec3(gridIndex), 0.0f, 1.0f);
+
+    vec3 accumulatedRadiance = vec3(0.0f);
+    float accumulatedWeight = 0.0;
+
+    uint fallbackSampleProbeIndex = gridIndexToProbeIndex(gridIndex, ddgi);
+    vec3 fallbackIrradiance = sampleProbeIrradiance(fallbackSampleProbeIndex, normal);
+
+    for (int oz = 0; oz <= 1; ++oz) {
+		for (int oy = 0; oy <= 1; ++oy) {
+            for (int ox = 0; ox <= 1; ++ox) {
+                ivec3 sampleProbeGridIndex = clamp(ivec3(gridIndex) + ivec3(ox, oy, oz), ivec3(0), ivec3(ddgi.probeGridCount) - 1);
+                uint sampleProbeIndex = gridIndexToProbeIndex(sampleProbeGridIndex, ddgi);
+                vec3 sampleProbePosition = gridIndexToWorldPos(sampleProbeGridIndex, ddgi);
+
+                vec3 bias = 0.1f * (normal + 3.0f * viewDir);
+                vec3 dir = worldSpacePosition - sampleProbePosition + bias;
+                float r = length(dir);
+                dir = normalize(dir);
+
+                vec2 moments = sampleProbeMoments(sampleProbeIndex, dir);
+                float visibility = visibilityFromMoments(r, moments, 0.02);
+
+                float backfaceTest = (dot(-dir, normal) + 1.0f) * 0.5f;
+
+                float tx = (ox == 0) ? (1.0 - interpolators.x) : interpolators.x;
+                float ty = (oy == 0) ? (1.0 - interpolators.y) : interpolators.y;
+                float tz = (oz == 0) ? (1.0 - interpolators.z) : interpolators.z;
+                float trillinearWeight = tx * ty * tz;
+
+                float weight = visibility * backfaceTest * trillinearWeight;
+
+                const float crushThreshold = 0.2f;
+                if (weight < crushThreshold)
+                    weight *= weight * weight * (1.0f / (crushThreshold * crushThreshold)); 
+
+                vec3 irradiance = sampleProbeIrradiance(sampleProbeIndex, normal);
+                accumulatedRadiance += irradiance * weight;
+                accumulatedWeight += weight;
+            }
+        }
+    }
+    vec3 irradiance = (accumulatedWeight > EPSILON) ? (accumulatedRadiance / accumulatedWeight) : vec3(0.01f);
+    return irradiance * PI * 0.5f;
+}
 
 vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
     return textureGrad(
@@ -62,8 +124,6 @@ vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
 }
 
 void main() {
-    //outColor = texture(sampler2DArray(uRTTemp, uFrameBufferTextureSampler), vec3(inTexCoord, 0.0f));
-    //return;
     ivec2 vbSize = textureSize(usampler2D(uVisibilityBuffer, uFrameBufferTextureSampler), 0);
     uint encodedVbData = texelFetch(
             usampler2D(uVisibilityBuffer, uFrameBufferTextureSampler),
@@ -127,9 +187,9 @@ void main() {
 
     vec3 normal = normalize(meshData.normalTransform * interpolate(bary, unpackedNormalA, unpackedNormalB, unpackedNormalC));
     
-    vec4 unpackedTangentA = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexA]));
-    vec4 unpackedTangentB = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexB]));
-    vec4 unpackedTangentC = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexC]));
+    vec4 unpackedTangentA = unpackSnorm4x8(uPackedTangent[vertexIndexA]);
+    vec4 unpackedTangentB = unpackSnorm4x8(uPackedTangent[vertexIndexB]);
+    vec4 unpackedTangentC = unpackSnorm4x8(uPackedTangent[vertexIndexC]);
 
     vec4 tangent = interpolate(bary, unpackedTangentA, unpackedTangentB, unpackedTangentC);
     vec3 normalizedTangent = normalize(meshData.normalTransform * tangent.xyz);
@@ -140,7 +200,7 @@ void main() {
     uint materialId = meshData.materialId;
     Material material = uMaterials[materialId];
 
-    if (material.normalTextureIndex > 0) {
+    if (material.normalTextureIndex >= 0) {
         vec3 normalSample = sampleTexture(material.normalTextureIndex, uvWithDerivs).xyz;
         vec3 normalTangentSpace = normalize(normalSample * 2.0 - 1.0);
         normal = normalize(TBN * normalTangentSpace);
@@ -163,7 +223,7 @@ void main() {
 	shadowCoord = shadowCoord / shadowCoord.w;
     float shadowTerm = 0.0f;
     {
-		shadowTerm = filterPCF(shadowCoord, uLightParameters.shadowTaps, uFrameBufferTextureSampler, uShadowMap);
+		shadowTerm = filterPCF(shadowCoord, uLightParameters.shadowTaps, uIrradianceSampler, uShadowMap);
 	    shadowTerm = clamp(shadowTerm, 0.0f, 1.0f);
     }
 
@@ -171,7 +231,9 @@ void main() {
 
     float visibility = texture(sampler2D(uSSAOBuffer, uFrameBufferTextureSampler), inTexCoord).r;
 
-    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, visibility);
+    vec3 indirect = ddgiIndirectDiffuse(worldPos, normal, viewVector, uDDGI); 
+
+    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, visibility, indirect);
 
     outColor = vec4(gammaCorrection(color), 1.0);
 }

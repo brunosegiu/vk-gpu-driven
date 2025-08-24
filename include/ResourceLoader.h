@@ -33,6 +33,7 @@ struct Resource {
         RaytraceProbeHitShader,
         RaytraceProbeMissShader,
         RaytraceProbeShadowMissShader,
+        UpdateProbesShader,
     };
 };
 

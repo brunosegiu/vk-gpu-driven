@@ -11,6 +11,7 @@ ScopedRefPtr<VulkanBuffer> VulkanBuffer::Create(
     const vk::DeviceSize& size,
     const vk::BufferUsageFlags& usageFlags,
     const VmaAllocationCreateFlags& memoryFlags) {
+    VKRT_ASSERT_MSG(size > 0, "Creating a buffer of size 0");
     const vk::BufferCreateInfo bufferCreateInfo = vk::BufferCreateInfo()
                                                       .setSize(size)
                                                       .setUsage(usageFlags)
@@ -93,7 +94,9 @@ vk::DeviceAddress VulkanBuffer::GetDeviceAddress() {
 
 VulkanBuffer::~VulkanBuffer() {
     VmaAllocator allocator = mContext->GetDevice()->GetAllocator();
-    vmaDestroyBuffer(allocator, mBufferHandle, mAllocation);
+    if (mBufferHandle != nullptr) {
+        vmaDestroyBuffer(allocator, mBufferHandle, mAllocation);
+    }
 }
 
 }  // namespace VKRT

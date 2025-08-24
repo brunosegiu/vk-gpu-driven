@@ -61,7 +61,7 @@ void main() {
     }
 
     vec3 normal = normalize(inNormal);
-    if (material.normalTextureIndex > 0) {
+    if (material.normalTextureIndex >= 0) {
         vec3 normalSample = sampleTexture(material.normalTextureIndex, inTexCoord).xyz;
         vec3 normalTangentSpace = normalize(normalSample * 2.0 - 1.0);
         normal = normalize(inTBN * normalTangentSpace);
@@ -76,7 +76,7 @@ void main() {
 
     vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - inWorldSpacePos);
 
-    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0);
+    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0, vec3(0.0f));
 
     outColor = vec4(gammaCorrection(color), albedo.a);
 }

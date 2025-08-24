@@ -174,7 +174,8 @@ static vk::AccessFlags GetAccessForLayout(
             return vk::AccessFlagBits::eTransferWrite;
         case vk::ImageLayout::eShaderReadOnlyOptimal: {
             vk::AccessFlags flags = vk::AccessFlagBits::eInputAttachmentRead;
-            if (stageFlags & vk::PipelineStageFlagBits::eRayTracingShaderKHR) {
+            if (stageFlags & vk::PipelineStageFlagBits::eRayTracingShaderKHR ||
+                stageFlags & vk::PipelineStageFlagBits::eComputeShader) {
                 flags = vk::AccessFlags{};
             }
             return vk::AccessFlagBits::eShaderRead | flags;
@@ -241,7 +242,7 @@ vk::ImageMemoryBarrier Texture::GetImageBarrierInfo(
         .setSubresourceRange(vk::ImageSubresourceRange{}
                                  .setAspectMask(mImageAspect)
                                  .setLevelCount(1)
-                                 .setLayerCount(1));
+                                 .setLayerCount(mLayers));
 }
 
 Texture::~Texture() {

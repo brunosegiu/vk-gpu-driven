@@ -20,33 +20,37 @@ layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
 layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
     MeshData uMeshData[];
 };
+layout(binding = 3, set = UPDATE_PER_FRAME, scalar) uniform TDDGIData {
+    DDGIData uDDGI;
+};
 
 layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
     DrawData uPersistentSceneData[];
 };
 layout(binding = 1, set = UPDATE_ONCE) uniform accelerationStructureEXT uTopLevelAS;
-layout(binding = 2, set = UPDATE_ONCE, rgba8) uniform image2D uImage;
-layout(binding = 3, set = UPDATE_ONCE) uniform sampler uMaterialTextureSampler;
-layout(binding = 4, set = UPDATE_ONCE) uniform sampler uFrameBufferTextureSampler;
-layout(binding = 5, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
+layout(binding = 2, set = UPDATE_ONCE, r11f_g11f_b10f) writeonly uniform image2D uProbeIrradianceTargets;
+layout(binding = 3, set = UPDATE_ONCE, rgba16f) uniform writeonly image2D uProbeDirectionDepth;
+layout(binding = 4, set = UPDATE_ONCE) uniform sampler uMaterialTextureSampler;
+layout(binding = 5, set = UPDATE_ONCE) uniform sampler uFrameBufferTextureSampler;
+layout(binding = 6, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
     Material uMaterials[];
 };
-layout(binding = 6, set = UPDATE_ONCE, scalar) readonly buffer Index {
+layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer Index {
     uint uIndices[];
 };
-layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
+layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
     vec3 uPositions[];
 };
-layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
+layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
     uint uPackedTexCoord[];
 };
-layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
+layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
     uint uPackedNormal[];
 };
-layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
+layout(binding = 11, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
     uint uPackedTangent[];
 };
-layout(binding = 11, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
+layout(binding = 12, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
 
 vec4 sampleTexture(int index, vec2 uv) {
     return texture(
@@ -128,9 +132,9 @@ void main() {
 
     vec3 normal = normalize(meshData.normalTransform * interpolate(unpackedNormalA, unpackedNormalB, unpackedNormalC, barycentricCoords));
     
-    vec4 unpackedTangentA = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexA]));
-    vec4 unpackedTangentB = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexB]));
-    vec4 unpackedTangentC = normalize(unpackSnorm4x8(uPackedTangent[vertexIndexC]));
+    vec4 unpackedTangentA = unpackSnorm4x8(uPackedTangent[vertexIndexA]);
+    vec4 unpackedTangentB = unpackSnorm4x8(uPackedTangent[vertexIndexB]);
+    vec4 unpackedTangentC = unpackSnorm4x8(uPackedTangent[vertexIndexC]);
 
     vec4 tangent = interpolate(unpackedTangentA, unpackedTangentB, unpackedTangentC, barycentricCoords);
     vec3 normalizedTangent = normalize(meshData.normalTransform * tangent.xyz);
@@ -141,7 +145,7 @@ void main() {
     const uint materialId = meshData.materialId;
     const Material material = uMaterials[materialId];
 
-    if (material.normalTextureIndex > 0) {
+    if (material.normalTextureIndex >= 0) {
         vec3 normalSample = sampleTexture(material.normalTextureIndex, uv).xyz;
         vec3 normalTangentSpace = normalize(normalSample * 2.0 - 1.0);
         normal = normalize(TBN * normalTangentSpace);
@@ -164,8 +168,9 @@ void main() {
 
     vec3 viewVector = normalize(gl_WorldRayOriginEXT - worldSpacePosition);
 
-    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0f);
+    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0f, vec3(0.0f));
 
     rayPayload.depth += 1;
     rayPayload.color += color;
+    rayPayload.hitDepth = gl_RayTminEXT + gl_HitTEXT;
 }

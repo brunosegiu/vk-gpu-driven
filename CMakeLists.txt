@@ -114,6 +114,7 @@ set(SHADERS
     raytraceProbe.rchit
     raytraceProbe.rmiss
     raytraceProbeShadow.rmiss
+    updateProbes.comp
 )
 
 if(WIN32)

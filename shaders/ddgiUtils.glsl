@@ -38,8 +38,27 @@ uint gridIndexToProbeIndex(uvec3 gridIndex, const DDGIData ddgi) {
 				gridIndex.z * ddgi.probeGridCount.x * ddgi.probeGridCount.y);
 }
 
-vec3 gridIndexToWorldPos(uvec3 gridIndex, const DDGIData ddgi) {
+vec3 gridIndexToWorldPos(ivec3 gridIndex, const DDGIData ddgi) {
 	return ddgi.probeGridOrigin + vec3(gridIndex) * ddgi.probeSpacing;
+}
+
+ivec3 nearestProbeGridIndex(vec3 position, const DDGIData ddgi) {
+    vec3 gridPos = (position - ddgi.probeGridOrigin) / ddgi.probeSpacing;
+    return ivec3(clamp(ivec3(floor(gridPos)), ivec3(0), ddgi.probeGridCount - 1));
+}
+
+float square(float a) {
+    return a * a;
+}
+
+// https://www.youtube.com/watch?v=KufJBCTdn_o&t=5s
+float visibilityFromMoments(float distanceToSample, vec2 moments, float softness) {
+    float mean = moments.x;
+    float mean2 = moments.y;
+    float variance  = abs(square(mean) - mean2);
+    float chebyshevWeight = variance / (variance + square(max(distanceToSample - mean, 0.0f)));
+    chebyshevWeight = max(chebyshevWeight * chebyshevWeight * chebyshevWeight, 0.0f);
+	return (distanceToSample <= mean) ? 1.0 : chebyshevWeight;
 }
 
 #endif

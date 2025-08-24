@@ -90,8 +90,11 @@ private:
     std::vector<ScopedRefPtr<VulkanBuffer>> mPerMeshBuffers;
     ScopedRefPtr<ShaderParameterBuffer> mCameraUniform;
     ScopedRefPtr<ShaderParameterBuffer> mMaterialsUniform;
+    ScopedRefPtr<ShaderParameterImage> mReadOnlyProbeIrradianceParameter;
+    ScopedRefPtr<ShaderParameterImage> mReadOnlyProbeDepthParameter;
     ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
     ScopedRefPtr<ShaderParameterSampler> mFrameBufferSampler;
+    ScopedRefPtr<ShaderParameterSampler> mIrradianceSampler;
     ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
     ScopedRefPtr<ShaderParameterImage> mShadowMapUniform;
     ScopedRefPtr<ShaderParameterBuffer> mScenePersistentDataParameter;
@@ -106,7 +109,6 @@ private:
     ScopedRefPtr<ShaderParameterCollection> mShadePassParameters;
     ScopedRefPtr<ShaderParameterImage> mVisibilityBufferUniform;
     ScopedRefPtr<ShaderParameterImage> mSSAOTextureParameter;
-    ScopedRefPtr<ShaderParameterImage> mRTTempParam; // TODO: Probe sampler
     ScopedRefPtr<ShaderParameterBuffer> mIndexBufferUniform;
     ScopedRefPtr<ShaderParameterBuffer> mPositionBufferUniform;
     ScopedRefPtr<ShaderParameterBuffer> mTexCoordBufferUniform;
@@ -141,9 +143,23 @@ private:
     ScopedRefPtr<RaytracingPipeline> mProbeRaytracingPipeline;
     ScopedRefPtr<ShaderParameterBuffer> mDDGIProbeDataParameter;
     ScopedRefPtr<ShaderParameterAccelerationStructure> mASParamater;
-    ScopedRefPtr<ShaderParameterImage> mRaytracingTargetParameter;
+    ScopedRefPtr<ShaderParameterImage> mWriteProbeRayRadianceParameter;
+    ScopedRefPtr<ShaderParameterImage> mWriteProbeRayDirectionDepthParameter;
     ScopedRefPtr<ShaderParameterCollection> mProbeRaytracingParameters;
-    ScopedRefPtr<Texture> mRaytracingTarget;
+    ScopedRefPtr<Texture> mProbeRayRadianceBuffer;
+    ScopedRefPtr<Texture> mProbeRayDirectionDepthBuffer;
+
+    ScopedRefPtr<ComputePipeline> mUpdateProbePipeline;
+    ScopedRefPtr<ShaderParameterCollection> mUpdateProbeParameters;
+    ScopedRefPtr<ShaderParameterImage> mWriteProbeIrradianceParameter;
+    ScopedRefPtr<ShaderParameterImage> mWriteProbeDepthParameter;
+    ScopedRefPtr<ShaderParameterImage> mReadOnlyProbeRadianceParameter;
+    ScopedRefPtr<ShaderParameterImage> mReadOnlyProbeDirectionDepthParameter;
+    ScopedRefPtr<ShaderParameterImage> mProbeRadianceWriteParam;
+    ScopedRefPtr<ShaderParameterImage> mProbeDepthDirectionWriteParam;
+    ScopedRefPtr<Texture> mProbeIrradianceBuffer;
+    ScopedRefPtr<Texture> mProbeDepthBuffer;
+
 
     void BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name);
     void EndMarker(const vk::CommandBuffer& commandBuffer);

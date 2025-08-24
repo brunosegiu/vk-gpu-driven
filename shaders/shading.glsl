@@ -1,8 +1,6 @@
 #ifndef SHADING_GLSL
 #define SHADING_GLSL
 
-const float PI = 3.14159265359;
-
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a      = roughness*roughness;
     float a2     = a*a;
@@ -59,136 +57,60 @@ float textureProj(vec4 shadowCoord, vec2 offset, sampler shadowSampler, texture2
 	return shadow;
 }
 
-const int POISSON_COUNT = 128;
-vec2 PoissonDisk[POISSON_COUNT] = vec2[](
-    vec2(0.463950, -0.072217),
-    vec2(0.873447, 0.328072),
-    vec2(-0.083342, -0.135162),
-    vec2(0.837134, -0.201763),
-    vec2(0.399359, -0.203975),
-    vec2(0.420568, 0.507870),
-    vec2(-0.933714, -0.327447),
-    vec2(0.354999, 0.636699),
-    vec2(-0.952000, -0.145185),
-    vec2(0.636811, 0.267208),
-    vec2(-0.250689, -0.034403),
-    vec2(-0.531285, 0.520922),
-    vec2(0.394145, 0.316890),
-    vec2(-0.050332, -0.460732),
-    vec2(-0.266527, -0.162523),
-    vec2(0.208583, 0.786823),
-    vec2(0.330637, 0.770085),
-    vec2(0.459687, 0.199686),
-    vec2(-0.807819, 0.381083),
-    vec2(0.243111, 0.092907),
-    vec2(-0.086536, 0.725275),
-    vec2(0.432886, -0.473724),
-    vec2(0.029512, -0.591716),
-    vec2(-0.237883, 0.529008),
-    vec2(-0.279862, 0.873769),
-    vec2(0.904836, 0.169577),
-    vec2(0.013942, 0.456781),
-    vec2(0.023294, -0.203300),
-    vec2(0.708394, -0.173733),
-    vec2(-0.791436, 0.062926),
-    vec2(-0.683657, 0.297490),
-    vec2(0.664615, 0.384819),
-    vec2(0.717602, 0.633124),
-    vec2(0.442272, 0.818125),
-    vec2(-0.150162, -0.529377),
-    vec2(-0.396460, -0.615305),
-    vec2(-0.249581, -0.351954),
-    vec2(0.125342, 0.525869),
-    vec2(-0.202660, 0.407241),
-    vec2(0.586036, -0.004064),
-    vec2(-0.328154, -0.772418),
-    vec2(0.547203, 0.633825),
-    vec2(-0.827418, -0.144402),
-    vec2(0.288351, 0.917260),
-    vec2(-0.585752, -0.374866),
-    vec2(0.094248, -0.459266),
-    vec2(-0.059797, -0.719893),
-    vec2(-0.374681, -0.065091),
-    vec2(-0.594135, -0.710866),
-    vec2(-0.113841, 0.522939),
-    vec2(-0.426051, -0.484136),
-    vec2(0.303777, 0.413730),
-    vec2(0.757911, 0.295382),
-    vec2(0.106465, 0.652080),
-    vec2(-0.040063, 0.036883),
-    vec2(-0.124691, 0.958402),
-    vec2(0.789759, -0.354200),
-    vec2(0.413981, -0.614822),
-    vec2(-0.362793, 0.410704),
-    vec2(-0.457774, -0.761141),
-    vec2(0.308040, -0.938485),
-    vec2(0.105435, -0.301842),
-    vec2(0.782316, 0.052307),
-    vec2(-0.733695, 0.645872),
-    vec2(-0.800922, -0.313832),
-    vec2(0.515100, 0.394894),
-    vec2(-0.647523, -0.483487),
-    vec2(-0.602576, 0.051006),
-    vec2(0.183973, -0.199694),
-    vec2(0.559598, -0.222504),
-    vec2(0.076483, -0.955823),
-    vec2(-0.116548, -0.310254),
-    vec2(-0.623206, 0.435265),
-    vec2(0.956393, -0.176420),
-    vec2(-0.527719, -0.249874),
-    vec2(0.148648, 0.174815),
-    vec2(0.003177, 0.968611),
-    vec2(-0.593391, 0.643277),
-    vec2(-0.895292, -0.010037),
-    vec2(-0.425110, -0.174591),
-    vec2(0.782480, -0.479671),
-    vec2(-0.390184, 0.714252),
-    vec2(0.769153, -0.069662),
-    vec2(-0.892868, 0.130841),
-    vec2(-0.128702, -0.958197),
-    vec2(-0.502431, 0.803503),
-    vec2(-0.719728, 0.170135),
-    vec2(-0.481983, 0.370516),
-    vec2(-0.164075, 0.827580),
-    vec2(0.624875, -0.392163),
-    vec2(-0.406483, 0.552382),
-    vec2(0.586604, 0.120911),
-    vec2(0.121087, 0.053796),
-    vec2(0.078769, 0.775506),
-    vec2(0.410648, -0.803028),
-    vec2(-0.251958, -0.633401),
-    vec2(0.565661, 0.511328),
-    vec2(0.714130, 0.161823),
-    vec2(-0.294239, -0.519349),
-    vec2(0.234483, -0.351186),
-    vec2(-0.026107, 0.611284),
-    vec2(0.304677, -0.471806),
-    vec2(-0.185989, -0.836835),
-    vec2(0.309804, 0.194758),
-    vec2(-0.714554, -0.211801),
-    vec2(-0.283137, 0.304971),
-    vec2(-0.527640, -0.563437),
-    vec2(0.114715, -0.082553),
-    vec2(0.504744, -0.694830),
-    vec2(0.148950, -0.605136),
-    vec2(0.277631, -0.062108),
-    vec2(0.087475, -0.742822),
-    vec2(0.126621, 0.973289),
-    vec2(-0.895429, 0.291341),
-    vec2(0.464596, 0.050376),
-    vec2(0.646404, -0.693754),
-    vec2(-0.354784, -0.290730),
-    vec2(0.716724, 0.505963),
-    vec2(0.013120, 0.183694),
-    vec2(0.455234, -0.349966),
-    vec2(0.175133, -0.882887),
-    vec2(0.182700, 0.412590),
-    vec2(-0.749631, 0.495588),
-    vec2(0.220303, 0.600763),
-    vec2(0.539542, -0.812102),
-    vec2(-0.435937, 0.059413),
-    vec2(-0.458118, 0.241060),
-    vec2(0.625794, -0.547308)
+// https://github.com/GPUOpen-Effects/ShadowFX/blob/master/amd_shadowfx/src/Shaders/AMD_SHADOWFX_FILTER_SIZE_15_POISSON.inc
+const int POISSON_COUNT = 51;
+const vec2 PoissonDisk[POISSON_COUNT] = vec2[](
+  vec2(0.272153, 0.147179),
+  vec2(0.282677, 0.277615),
+  vec2(0.111645, 0.268837),
+  vec2(0.400319, 0.047563),
+  vec2(0.408985, 0.194408),
+  vec2(0.534191, 0.030173),
+  vec2(0.556673, 0.135536),
+  vec2(0.334234, 0.402806),
+  vec2(0.146173, 0.166826),
+  vec2(0.199067, 0.360825),
+  vec2(0.437338, 0.328581),
+  vec2(0.699799, 0.089076),
+  vec2(0.044831, 0.445143),
+  vec2(0.087581, 0.557190),
+  vec2(0.183368, 0.600518),
+  vec2(0.174441, 0.496664),
+  vec2(0.356468, 0.686440),
+  vec2(0.234973, 0.715005),
+  vec2(0.280913, 0.525297),
+  vec2(0.081819, 0.713120),
+  vec2(0.437340, 0.572705),
+  vec2(0.688016, 0.193690),
+  vec2(0.807257, 0.105998),
+  vec2(0.321767, 0.802520),
+  vec2(0.271984, 0.914389),
+  vec2(0.154543, 0.802825),
+  vec2(0.538678, 0.378504),
+  vec2(0.525553, 0.233833),
+  vec2(0.518190, 0.774127),
+  vec2(0.519246, 0.651308),
+  vec2(0.408107, 0.867631),
+  vec2(0.818168, 0.233048),
+  vec2(0.441349, 0.451439),
+  vec2(0.666632, 0.454801),
+  vec2(0.578477, 0.556066),
+  vec2(0.702981, 0.323121),
+  vec2(0.665180, 0.678351),
+  vec2(0.930022, 0.288821),
+  vec2(0.828204, 0.422613),
+  vec2(0.948008, 0.414735),
+  vec2(0.804097, 0.772157),
+  vec2(0.720558, 0.849087),
+  vec2(0.770057, 0.628413),
+  vec2(0.594638, 0.852394),
+  vec2(0.934051, 0.562872),
+  vec2(0.868392, 0.686201),
+  vec2(0.689193, 0.560781),
+  vec2(0.677183, 0.947311),
+  vec2(0.561896, 0.966587),
+  vec2(0.823353, 0.881428),
+  vec2(0.827946, 0.541060)
 );
 
 float filterPCF(vec4 sc, uint taps, sampler shadowSampler, texture2D shadowMap) {
@@ -202,7 +124,6 @@ float filterPCF(vec4 sc, uint taps, sampler shadowSampler, texture2D shadowMap) 
 	}
 	return shadowFactor / float(samples);
 }
-
 
 // From: https://github.com/nvpro-samples/nvpro_core/blob/master/nvvkhl/shaders/dh_sky.h
 struct ProceduralSkyShaderParameters {
@@ -279,7 +200,7 @@ vec3 fakeSkyReflectionFast(vec3 N, vec3 V, float roughness, vec3 F0, ProceduralS
     return specularLight;
 }
 
-vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 albedo, float metallic, float roughness, float visibility) {
+vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 albedo, float metallic, float roughness, float visibility, vec3 indirect) {
     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo.rgb, metallic);
 
@@ -302,15 +223,10 @@ vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 
         
         Lo = (kD * albedo.rgb / PI + specular) * NdotL * radiance * shadowTerm;
     }
-    
-    vec3 ambient = radiance * vec3(0.1) * albedo.rgb * visibility;
 
-    // Hack to get some reflections on metallic materials while there are no reflection probes
-    ProceduralSkyShaderParameters params = initSkyShaderParameters(L);
-    params.lightColor = normalize(radiance);
-    vec3 skySpecular = fakeSkyReflectionFast(N, V, roughness, F0, params);
+    vec3 ambient = indirect * albedo.rgb * visibility;
 
-    return ambient + Lo + skySpecular;
+    return ambient + Lo;
 }
 
 vec3 gammaCorrection(vec3 color) {

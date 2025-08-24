@@ -8,6 +8,11 @@
 #define UPDATE_ONCE 1
 #define PRIMITIVE_ID_NONE 0xFFFFFFFF
 
+const float PI = 3.14159265359;
+const float PHI = 2.399963229728653;
+const float EPSILON = 1e-5;
+const float INF = 1e15;
+
 struct VkDrawIndexedIndirectCommand {
 	uint indexCount;
 	uint instanceCount;
@@ -83,15 +88,17 @@ const uint AllMask = 0xFF;
 
 struct RayPayload {
     vec3 color;
+    float hitDepth;
     uint depth;
 };
 
 struct DDGIData {
     uvec3 probeGridCount;
     vec3 probeGridOrigin;
-    float probeSpacing;
+    vec3 probeSpacing;
     float minRayLength;
     float maxRayLength;
+    mat3 randomRotation;
 };
 
 #endif

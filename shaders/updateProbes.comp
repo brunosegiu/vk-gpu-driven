@@ -1,0 +1,73 @@
+#version 460
+
+#extension GL_EXT_scalar_block_layout : enable
+
+#include "definitions.glsl"
+#include "ddgiUtils.glsl"
+
+layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TDDGIData {
+    DDGIData uDDGI;
+};
+
+layout(binding = 0, set = UPDATE_ONCE) uniform sampler uFramebufferSampler;
+layout(binding = 1, set = UPDATE_ONCE) uniform texture2D uProbeIrradianceTargets;
+layout(binding = 2, set = UPDATE_ONCE) uniform texture2D uProbeDirectionDepth;
+layout(binding = 3, set = UPDATE_ONCE, r11f_g11f_b10f) writeonly uniform image2DArray uConvolutedProbeIrradianceTargets;
+layout(binding = 4, set = UPDATE_ONCE, rg16f) uniform writeonly image2DArray uProbeMoments;
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+void main() {
+    const uint probeIndex = gl_GlobalInvocationID.z;
+
+    const vec2 pixelCenter = vec2(gl_GlobalInvocationID.xy) + vec2(0.5);
+    const vec2 uv = pixelCenter / vec2(gl_NumWorkGroups.xy * gl_WorkGroupSize.xy);
+
+    const vec3 texelDirection = octDecode(uv);
+
+    ivec2 firstStageSize = textureSize(sampler2D(uProbeIrradianceTargets, uFramebufferSampler), 0);
+    const uint raysPerProbe = uint(firstStageSize.x);
+
+    const float energyConservation = 0.95f;
+
+    float sumWeight = 0.0f;
+    float meanDepth = 0.0f, meanDepthSq = 0.0f;
+    vec3 totalRadiance = vec3(0.0f);
+    for (uint rayIndex = 0; rayIndex < raysPerProbe; ++rayIndex) {
+        ivec2 sampleIndex = ivec2(int(rayIndex), int(probeIndex));
+
+        const vec4 directionDepth = texelFetch(
+            sampler2D(uProbeDirectionDepth, uFramebufferSampler),
+            sampleIndex,
+            0);
+        const vec3 direction = normalize(directionDepth.xyz);
+        const float depth = directionDepth.w;
+
+        const vec3 radiance = energyConservation * texelFetch(
+            sampler2D(uProbeIrradianceTargets, uFramebufferSampler),
+            sampleIndex,
+            0).xyz;
+        
+        float weight = max(0.0, dot(texelDirection, direction));
+
+        totalRadiance += weight * radiance;
+        meanDepth += weight * depth;
+        meanDepthSq += weight * depth * depth;
+
+        sumWeight += weight;
+    }
+
+    if (sumWeight < 1e-6) {
+        totalRadiance = vec3(0.0f);
+        meanDepth = INF;
+        meanDepthSq = INF;
+    } else {
+        totalRadiance /= sumWeight;
+        meanDepth /= sumWeight;
+        meanDepthSq /= sumWeight;
+    }
+
+
+    imageStore(uConvolutedProbeIrradianceTargets, ivec3(gl_GlobalInvocationID), vec4(totalRadiance, 0.0));
+    imageStore(uProbeMoments, ivec3(gl_GlobalInvocationID), vec4(meanDepth, meanDepthSq, 0.0, 0.0));
+}

@@ -220,7 +220,7 @@ void UIRenderer::Update() {
                 ImGui::SliderInt("Blur radius", &mSSAOControlData.blurRadius, 1, 10);
             }
             if (ImGui::CollapsingHeader("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
-                SliderUint("Shadow taps", &mShadowTaps, 1u, 128u);
+                SliderUint("Shadow taps", &mShadowTaps, 1u, 51u);
             }
         }
         ImGui::End();
