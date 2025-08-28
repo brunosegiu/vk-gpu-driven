@@ -72,6 +72,8 @@ public:
         const vk::ShaderStageFlags& stageFlags);
 
     ScopedRefPtr<VulkanBuffer> GetBuffer(uint32_t frameIndex = 0);
+    std::vector<ScopedRefPtr<VulkanBuffer>> GetBuffers();
+
     void Write(uint32_t frameIndex, const uint8_t* const data, size_t size);
     const vk::DescriptorBufferInfo& GetBufferInfo(uint32_t frameIndex = 0) override;
     void BindBuffer(ScopedRefPtr<VulkanBuffer> buffer);
@@ -100,6 +102,7 @@ public:
     }
 
     const std::vector<vk::DescriptorImageInfo>& GetImageInfos() override;
+    const std::vector<ScopedRefPtr<Texture>>& GetTextures() { return mTextures; }
 
 private:
     std::vector<ScopedRefPtr<Texture>> mTextures;

@@ -6,21 +6,11 @@
 #include "definitions.glsl"
 #include "shading.glsl"
 #include "visibilityBufferUtils.glsl"
+#include "edgeAwareBoxBlurParameters.glsl"
 
 layout(location = 0) in vec2 inTexCoord;
 
 layout(location = 0) out float outAO;
-
-layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    CameraData uCameraParameters;
-};
-layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TSSAOControlData {
-    SSAOControlData uControlData;
-};
-
-layout(binding = 0, set = UPDATE_ONCE) uniform sampler uFrameBufferTextureSampler;
-layout(binding = 1, set = UPDATE_ONCE) uniform texture2D uDepthBuffer;
-layout(binding = 2, set = UPDATE_ONCE) uniform texture2D uSSAOBuffer;
 
 // Base inspiration from: https://learnopengl.com/Advanced-Lighting/SSAO
 void main() {

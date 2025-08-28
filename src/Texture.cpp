@@ -222,8 +222,11 @@ std::vector<vk::ImageMemoryBarrier> Texture::GetBarriers(
     std::vector<vk::ImageMemoryBarrier> barriers;
     barriers.reserve(textures.size());
     for (const ImageBarrierInfo& textureInfo : textures) {
-        barriers.push_back(
-            textureInfo.texture->GetImageBarrierInfo(textureInfo.srcLayout, textureInfo.dstLayout, srcStage, dstStage));
+        barriers.push_back(textureInfo.texture->GetImageBarrierInfo(
+            textureInfo.srcLayout,
+            textureInfo.dstLayout,
+            srcStage,
+            dstStage));
     }
     return barriers;
 }
@@ -243,6 +246,14 @@ vk::ImageMemoryBarrier Texture::GetImageBarrierInfo(
                                  .setAspectMask(mImageAspect)
                                  .setLevelCount(1)
                                  .setLayerCount(mLayers));
+}
+
+vk::DescriptorImageInfo Texture::GetDescriptorInfo(bool isReadOnly) {
+    return vk::DescriptorImageInfo()
+        .setImageLayout(
+            isReadOnly ? vk::ImageLayout::eShaderReadOnlyOptimal : vk::ImageLayout::eGeneral)
+        .setImageView(GetImageView())
+        .setSampler(nullptr);
 }
 
 Texture::~Texture() {

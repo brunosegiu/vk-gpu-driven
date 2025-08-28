@@ -31,32 +31,6 @@ struct CullData {
     uint32_t maxDrawCount;
 };
 
-constexpr uint32_t raysPerProbe = 512;
-constexpr glm::uvec3 probeGridCount(24u, 11u, 24u);
-constexpr glm::uvec2 probeResolution(32u, 32u);
-constexpr glm::vec3 probeSpacing(2.0f, 2.0f, 2.0f);
-const glm::vec3 probeOrigin =
-    glm::vec3(1.0f, 11.5f, 1.0f) - glm::vec3(probeGridCount) * probeSpacing * 0.5f;
-constexpr float probeMaxRayLength = 1000.0f;
-constexpr float probeMinRayLength = 0.01f;
-
-struct DDGIData {
-    glm::uvec3 probeGridCount;
-    glm::vec3 probeGridOrigin;
-    glm::vec3 probeSpacing;
-    float minRayLength;
-    float maxRayLength;
-    glm::mat3 randomRotation;
-};
-
-DDGIData ddgiData{
-    .probeGridCount = probeGridCount,
-    .probeGridOrigin = probeOrigin,
-    .probeSpacing = probeSpacing,
-    .minRayLength = probeMinRayLength,
-    .maxRayLength = probeMaxRayLength,
-};
-
 Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
     : mContext(context),
       mScene(scene),
@@ -75,6 +49,7 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
     AddPipelines();
 
     mUIRenderer = new UIRenderer(mContext, mMainRenderTarget);
+
 }
 
 void Renderer::AddRenderTargets() {
@@ -195,47 +170,6 @@ void Renderer::AddRenderTargets() {
              .storeOp = vk::AttachmentStoreOp::eStore,
              .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal});
     }
-
-    // Probes
-    {
-        const uint32_t probeCount =
-            ddgiData.probeGridCount.x * ddgiData.probeGridCount.y * ddgiData.probeGridCount.z;
-        mProbeRayRadianceBuffer = new Texture(
-            mContext,
-            raysPerProbe,
-            probeCount,
-            1,
-            vk::Format::eB10G11R11UfloatPack32,
-            vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-            vk::ImageLayout::eShaderReadOnlyOptimal);
-
-        mProbeRayDirectionDepthBuffer = new Texture(
-            mContext,
-            raysPerProbe,
-            probeCount,
-            1,
-            vk::Format::eR16G16B16A16Sfloat,
-            vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-            vk::ImageLayout::eShaderReadOnlyOptimal);
-
-        mProbeIrradianceBuffer = new Texture(
-            mContext,
-            probeResolution.x,
-            probeResolution.y,
-            probeCount,
-            vk::Format::eB10G11R11UfloatPack32,
-            vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-            vk::ImageLayout::eShaderReadOnlyOptimal);
-
-        mProbeDepthBuffer = new Texture(
-            mContext,
-            probeResolution.x,
-            probeResolution.y,
-            probeCount,
-            vk::Format::eR16G16Sfloat,
-            vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-            vk::ImageLayout::eShaderReadOnlyOptimal);
-    }
 }
 
 void Renderer::AddPipelines() {
@@ -302,7 +236,7 @@ void Renderer::AddPipelines() {
             resources.cullingPipeline = new ComputePipeline(
                 mContext,
                 resources.cullingParameters,
-                {vk::ShaderStageFlagBits::eCompute, Resource::Id::CullingShader});
+                {{vk::ShaderStageFlagBits::eCompute, {Resource::Id::CullingShader}}});
         };
 
         createCullingResources(mShadowPassCulling[Material::AlphaMode::Opaque]);
@@ -408,20 +342,21 @@ void Renderer::AddPipelines() {
 
         std::unordered_map<
             Material::AlphaMode,
-            std::unordered_map<vk::ShaderStageFlagBits, Resource::Id>>
+            std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>>
             stages{
                 {Material::AlphaMode::Opaque,
                  {
-                     {vk::ShaderStageFlagBits::eVertex, Resource::Id::DepthOnlyOpaqueVertexShader},
+                     {vk::ShaderStageFlagBits::eVertex,
+                      {Resource::Id::DepthOnlyOpaqueVertexShader}},
                      {vk::ShaderStageFlagBits::eFragment,
-                      Resource::Id::DepthOnlyOpaqueFragmentShader},
+                      {Resource::Id::DepthOnlyOpaqueFragmentShader}},
                  }},
                 {Material::AlphaMode::Masked,
                  {
                      {vk::ShaderStageFlagBits::eVertex,
-                      Resource::Id::DepthOnlyAlphaMaskedVertexShader},
+                      {Resource::Id::DepthOnlyAlphaMaskedVertexShader}},
                      {vk::ShaderStageFlagBits::eFragment,
-                      Resource::Id::DepthOnlyAlphaMaskedFragmentShader},
+                      {Resource::Id::DepthOnlyAlphaMaskedFragmentShader}},
                  }}};
 
         for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
@@ -485,27 +420,28 @@ void Renderer::AddPipelines() {
 
         std::unordered_map<
             Material::AlphaMode,
-            std::unordered_map<vk::ShaderStageFlagBits, Resource::Id>>
+            std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>>
             stages{
                 {Material::AlphaMode::Opaque,
                  {
                      {vk::ShaderStageFlagBits::eVertex,
-                      Resource::Id::GeometryPassOpaqueVertexShader},
+                      {Resource::Id::GeometryPassOpaqueVertexShader}},
                      {vk::ShaderStageFlagBits::eFragment,
-                      Resource::Id::GeometryPassOpaqueFragmentShader},
+                      {Resource::Id::GeometryPassOpaqueFragmentShader}},
                  }},
                 {Material::AlphaMode::Masked,
                  {
                      {vk::ShaderStageFlagBits::eVertex,
-                      Resource::Id::GeometryPassAlphaMaskedVertexShader},
+                      {Resource::Id::GeometryPassAlphaMaskedVertexShader}},
                      {vk::ShaderStageFlagBits::eFragment,
-                      Resource::Id::GeometryPassAlphaMaskedFragmentShader},
+                      {Resource::Id::GeometryPassAlphaMaskedFragmentShader}},
                  }},
                 {Material::AlphaMode::Blended,
                  {
-                     {vk::ShaderStageFlagBits::eVertex, Resource::Id::TransparentPassVertexShader},
+                     {vk::ShaderStageFlagBits::eVertex,
+                      {Resource::Id::TransparentPassVertexShader}},
                      {vk::ShaderStageFlagBits::eFragment,
-                      Resource::Id::TransparentPassFragmentShader},
+                      {Resource::Id::TransparentPassFragmentShader}},
                  }}};
 
         for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
@@ -552,9 +488,10 @@ void Renderer::AddPipelines() {
 
     // Shade pass resources
     {
-        std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
-            {vk::ShaderStageFlagBits::eVertex, Resource::Id::VisibilityBufferShadeVertexShader},
-            {vk::ShaderStageFlagBits::eFragment, Resource::Id::VisibilityBufferShadeFragmentShader},
+        std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>> stages{
+            {vk::ShaderStageFlagBits::eVertex, {Resource::Id::VisibilityBufferShadeVertexShader}},
+            {vk::ShaderStageFlagBits::eFragment,
+             {Resource::Id::VisibilityBufferShadeFragmentShader}},
         };
 
         mVisibilityBufferUniform = new ShaderParameterImage(
@@ -652,9 +589,9 @@ void Renderer::AddPipelines() {
 
     // SSAO resources
     {
-        std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
-            {vk::ShaderStageFlagBits::eVertex, Resource::Id::SSAOVertexShader},
-            {vk::ShaderStageFlagBits::eFragment, Resource::Id::SSAOFragmentShader},
+        std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>> stages{
+            {vk::ShaderStageFlagBits::eVertex, {Resource::Id::SSAOVertexShader}},
+            {vk::ShaderStageFlagBits::eFragment, {Resource::Id::SSAOFragmentShader}},
         };
 
         mDepthBufferParameter = new ShaderParameterImage(
@@ -688,9 +625,9 @@ void Renderer::AddPipelines() {
 
     // SSAO blur resources
     {
-        std::unordered_map<vk::ShaderStageFlagBits, Resource::Id> stages{
-            {vk::ShaderStageFlagBits::eVertex, Resource::Id::EdgeAwareBoxBlurVertexShader},
-            {vk::ShaderStageFlagBits::eFragment, Resource::Id::EdgeAwareBoxBlurFragmentShader},
+        std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>> stages{
+            {vk::ShaderStageFlagBits::eVertex, {Resource::Id::EdgeAwareBoxBlurVertexShader}},
+            {vk::ShaderStageFlagBits::eFragment, {Resource::Id::EdgeAwareBoxBlurFragmentShader}},
         };
 
         mSSAOBufferParameter = new ShaderParameterImage(
@@ -712,85 +649,6 @@ void Renderer::AddPipelines() {
             std::vector<GeometryLayout>{},
             {.enableDepthTest = false});
     }
-
-    // Raytracing resources
-    mASParamater = new ShaderParameterAccelerationStructure(
-        mContext,
-        vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eClosestHitKHR);
-
-    mWriteProbeRayRadianceParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eStorageImage,
-        vk::ShaderStageFlagBits::eRaygenKHR);
-
-    mWriteProbeRayDirectionDepthParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eStorageImage,
-        vk::ShaderStageFlagBits::eRaygenKHR);
-
-    const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>> raytracingStages{
-        {vk::ShaderStageFlagBits::eRaygenKHR, {Resource::Id::RaytraceProbeGenShader}},
-        {vk::ShaderStageFlagBits::eClosestHitKHR, {Resource::Id::RaytraceProbeHitShader}},
-        {vk::ShaderStageFlagBits::eMissKHR,
-         std::vector<Resource::Id>{
-             Resource::Id::RaytraceProbeMissShader,
-             Resource::Id::RaytraceProbeShadowMissShader}}};
-
-    mProbeRaytracingParameters = new ShaderParameterCollection(mContext);
-    mProbeRaytracingParameters->AddParameter(mCameraUniform);
-    mProbeRaytracingParameters->AddParameter(mShadowCameraUniform);
-    mProbeRaytracingParameters->AddParameter(mPerMeshParameters);
-    mProbeRaytracingParameters->AddParameter(mDDGIProbeDataParameter);
-
-    mProbeRaytracingParameters->AddParameter(mScenePersistentDataParameter);
-    mProbeRaytracingParameters->AddParameter(mASParamater);
-    mProbeRaytracingParameters->AddParameter(mWriteProbeRayRadianceParameter);
-    mProbeRaytracingParameters->AddParameter(mWriteProbeRayDirectionDepthParameter);
-    mProbeRaytracingParameters->AddParameter(mMaterialSampler);
-    mProbeRaytracingParameters->AddParameter(mFrameBufferSampler);
-    mProbeRaytracingParameters->AddParameter(mMaterialsUniform);
-    mProbeRaytracingParameters->AddParameter(mIndexBufferUniform);
-    mProbeRaytracingParameters->AddParameter(mPositionBufferUniform);
-    mProbeRaytracingParameters->AddParameter(mTexCoordBufferUniform);
-    mProbeRaytracingParameters->AddParameter(mNormalBufferUniform);
-    mProbeRaytracingParameters->AddParameter(mTangentBufferUniform);
-    mProbeRaytracingParameters->AddParameter(mMaterialsTextures);
-
-    mProbeRaytracingPipeline =
-        new RaytracingPipeline(mContext, mProbeRaytracingParameters, raytracingStages);
-
-    mReadOnlyProbeRadianceParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eSampledImage,
-        vk::ShaderStageFlagBits::eCompute);
-
-    mReadOnlyProbeDirectionDepthParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eSampledImage,
-        vk::ShaderStageFlagBits::eCompute);
-
-    mWriteProbeIrradianceParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eStorageImage,
-        vk::ShaderStageFlagBits::eCompute);
-
-    mWriteProbeDepthParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eStorageImage,
-        vk::ShaderStageFlagBits::eCompute);
-
-    mUpdateProbeParameters = new ShaderParameterCollection(mContext);
-    mUpdateProbeParameters->AddParameter(mDDGIProbeDataParameter);
-    mUpdateProbeParameters->AddParameter(mFrameBufferSampler);
-    mUpdateProbeParameters->AddParameter(mReadOnlyProbeRadianceParameter);
-    mUpdateProbeParameters->AddParameter(mReadOnlyProbeDirectionDepthParameter);
-    mUpdateProbeParameters->AddParameter(mWriteProbeIrradianceParameter);
-    mUpdateProbeParameters->AddParameter(mWriteProbeDepthParameter);
-
-    mUpdateProbePipeline = new ComputePipeline(
-        mContext,
-        mUpdateProbeParameters,
-        {vk::ShaderStageFlagBits::eCompute, Resource::Id::UpdateProbesShader});
 }
 
 void Renderer::AddResources() {
@@ -881,9 +739,6 @@ void Renderer::RemoveRenderTargets() {
     mShadowMap = nullptr;
     mVisibilityBuffer = nullptr;
     mGeometryPass = nullptr;
-    mProbeDepthBuffer = nullptr;
-    mProbeRayRadianceBuffer = nullptr;
-    mProbeIrradianceBuffer = nullptr;
 
     mMainRenderTarget = nullptr;
 
@@ -959,21 +814,28 @@ void Renderer::UpdatePersistentUniforms() {
 
     // DDGI
     {
-        mASParamater->Bind(mScene->GetTLAS());
+        mDDGIRenderer = new DDGIRenderer(
+            mContext,
+            mScene,
+            {.mCameraUniform = mCameraUniform->GetBuffers(),
+             .mShadowCameraUniform = mShadowCameraUniform->GetBuffers(),
+             .mPerMeshParameters = mPerMeshParameters->GetBuffers(),
+             .mDDGIProbeDataParameter = mDDGIProbeDataParameter->GetBuffers(),
 
-        // Shading
-        mReadOnlyProbeIrradianceParameter->Bind(mProbeIrradianceBuffer);
-        mReadOnlyProbeDepthParameter->Bind(mProbeDepthBuffer);
+             .mScenePersistentDataParameter = mScenePersistentDataParameter->GetBuffer(),
+             .mMaterialSampler = mMaterialSampler->GetImageInfos()[0].sampler,
+             .mFrameBufferSampler = mFrameBufferSampler->GetImageInfos()[0].sampler,
+             .mMaterialsUniform = mMaterialsUniform->GetBuffer(),
+             .mIndexBufferUniform = mIndexBufferUniform->GetBuffer(),
+             .mPositionBufferUniform = mPositionBufferUniform->GetBuffer(),
+             .mTexCoordBufferUniform = mTexCoordBufferUniform->GetBuffer(),
+             .mNormalBufferUniform = mNormalBufferUniform->GetBuffer(),
+             .mTangentBufferUniform = mTangentBufferUniform->GetBuffer(),
+             .mMaterialsTextures = mMaterialsTextures->GetTextures()});
+        mDDGIRenderer->UpdatePersistentUniforms();
 
-        // RT
-        mWriteProbeRayRadianceParameter->Bind(mProbeRayRadianceBuffer);
-        mWriteProbeRayDirectionDepthParameter->Bind(mProbeRayDirectionDepthBuffer);
-
-        // Compute
-        mReadOnlyProbeRadianceParameter->Bind(mProbeRayRadianceBuffer);
-        mReadOnlyProbeDirectionDepthParameter->Bind(mProbeRayDirectionDepthBuffer);
-        mWriteProbeIrradianceParameter->Bind(mProbeIrradianceBuffer);
-        mWriteProbeDepthParameter->Bind(mProbeDepthBuffer);
+        mReadOnlyProbeIrradianceParameter->Bind(mDDGIRenderer->GetIrradianceBuffer());
+        mReadOnlyProbeDepthParameter->Bind(mDDGIRenderer->GetDepthBuffer());
     }
 }
 
@@ -1074,36 +936,8 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
 
     // DDGI
     {
-        auto randomRotation = []() {
-            static std::mt19937 gen{std::random_device{}()};
-            static std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-            float u1 = dist(gen);
-            float u2 = dist(gen);
-            float u3 = dist(gen);
-            glm::quat quat = glm::quat(glm::vec3(u1, u2, u3) * 2.0f * glm::pi<float>());
-            return glm::toMat3(quat);
-        };
-
-        ddgiData.randomRotation = randomRotation();
-        mDDGIProbeDataParameter->Write(
-            imageIndex,
-            reinterpret_cast<uint8_t*>(&ddgiData),
-            sizeof(DDGIData));
+        mDDGIRenderer->UpdateUniforms(camera, imageIndex);
     }
-}
-
-void Renderer::BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name) {
-#ifdef VKRT_ENABLE_VALIDATION
-    commandBuffer.beginDebugUtilsLabelEXT(
-        vk::DebugUtilsLabelEXT().setPLabelName(name.c_str()),
-        mContext->GetDevice()->GetDispatcher());
-#endif
-}
-
-void Renderer::EndMarker(const vk::CommandBuffer& commandBuffer) {
-#ifdef VKRT_ENABLE_VALIDATION
-    commandBuffer.endDebugUtilsLabelEXT(mContext->GetDevice()->GetDispatcher());
-#endif
 }
 
 std::string AlphaModeToStr(const Material::AlphaMode& alphaMode) {
@@ -1234,174 +1068,30 @@ void Renderer::Render(Camera* camera) {
             }
         };
 
-        BeginMarker(command.buffer, "DDGI");
-        {
-            BeginMarker(command.buffer, "Trace rays");
-            {
-                {
-                    std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
-                        vk::PipelineStageFlagBits::eFragmentShader,
-                        vk::PipelineStageFlagBits::eRayTracingShaderKHR,
-                        {{mProbeRayRadianceBuffer,
-                          vk::ImageLayout::eShaderReadOnlyOptimal,
-                          vk::ImageLayout::eGeneral},
-                         {mProbeRayDirectionDepthBuffer,
-                          vk::ImageLayout::eShaderReadOnlyOptimal,
-                          vk::ImageLayout::eGeneral}});
+        mDDGIRenderer->Render(camera, command.buffer, mCurrentFrameIndex);
 
-                    command.buffer.pipelineBarrier(
-                        vk::PipelineStageFlagBits::eFragmentShader,
-                        vk::PipelineStageFlagBits::eRayTracingShaderKHR,
-                        vk::DependencyFlags{},
-                        {},
-                        {},
-                        imageBarriers);
-                }
-
-                command.buffer.bindPipeline(
-                    vk::PipelineBindPoint::eRayTracingKHR,
-                    mProbeRaytracingPipeline->GetPipelineHandle());
-                std::vector<vk::DescriptorSet> descriptorSets =
-                    mProbeRaytracingParameters->GetDescriptorSets(mCurrentFrameIndex);
-                command.buffer.bindDescriptorSets(
-                    vk::PipelineBindPoint::eRayTracingKHR,
-                    mProbeRaytracingPipeline->GetPipelineLayout(),
-                    0,
-                    descriptorSets,
-                    nullptr);
-
-                const uint32_t probeCount = ddgiData.probeGridCount.x * ddgiData.probeGridCount.y *
-                                            ddgiData.probeGridCount.z;
-
-                const RaytracingPipeline::RayTracingTablesRef& tableRef =
-                    mProbeRaytracingPipeline->GetTablesRef();
-                command.buffer.traceRaysKHR(
-                    tableRef.rayGen,
-                    tableRef.rayMiss,
-                    tableRef.rayHit,
-                    tableRef.callable,
-                    raysPerProbe,
-                    probeCount,
-                    1,
-                    mContext->GetDevice()->GetDispatcher());
-
-                {
-                    std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
-                        vk::PipelineStageFlagBits::eRayTracingShaderKHR,
-                        vk::PipelineStageFlagBits::eComputeShader,
-                        {{mProbeRayRadianceBuffer,
-                          vk::ImageLayout::eGeneral,
-                          vk::ImageLayout::eShaderReadOnlyOptimal},
-                         {mProbeRayDirectionDepthBuffer,
-                          vk::ImageLayout::eGeneral,
-                          vk::ImageLayout::eShaderReadOnlyOptimal}});
-
-                    command.buffer.pipelineBarrier(
-                        vk::PipelineStageFlagBits::eRayTracingShaderKHR,
-                        vk::PipelineStageFlagBits::eComputeShader,
-                        vk::DependencyFlags{},
-                        {},
-                        {},
-                        imageBarriers);
-                }
-            }
-            EndMarker(command.buffer);
-
-            BeginMarker(command.buffer, "Update probes");
-            {
-                {
-                    std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
-                        vk::PipelineStageFlagBits::eFragmentShader,
-                        vk::PipelineStageFlagBits::eComputeShader,
-                        {
-                            {mProbeIrradianceBuffer,
-                             vk::ImageLayout::eShaderReadOnlyOptimal,
-                             vk::ImageLayout::eGeneral},
-                            {mProbeDepthBuffer,
-                             vk::ImageLayout::eShaderReadOnlyOptimal,
-                             vk::ImageLayout::eGeneral},
-                        });
-
-                    command.buffer.pipelineBarrier(
-                        vk::PipelineStageFlagBits::eFragmentShader,
-                        vk::PipelineStageFlagBits::eComputeShader,
-                        vk::DependencyFlags{},
-                        {},
-                        {},
-                        imageBarriers);
-                }
-                const uint32_t probeCount = ddgiData.probeGridCount.x * ddgiData.probeGridCount.y *
-                                            ddgiData.probeGridCount.z;
-                {
-                    command.buffer.bindPipeline(
-                        vk::PipelineBindPoint::eCompute,
-                        mUpdateProbePipeline->GetPipelineHandle());
-
-                    std::vector<vk::DescriptorSet> updateProbeDescriptors =
-                        mUpdateProbeParameters->GetDescriptorSets(mCurrentFrameIndex);
-
-                    command.buffer.bindDescriptorSets(
-                        vk::PipelineBindPoint::eCompute,
-                        mUpdateProbePipeline->GetPipelineLayout(),
-                        0,
-                        updateProbeDescriptors,
-                        nullptr);
-
-                    static_assert(probeResolution.x % 8 == 0 && probeResolution.y % 8 == 0);
-                    command.buffer.dispatch(
-                        probeResolution.x / 8,
-                        probeResolution.y / 8,
-                        probeCount);
-                }
-
-                {
-                    std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
-                        vk::PipelineStageFlagBits::eComputeShader,
-                        vk::PipelineStageFlagBits::eFragmentShader,
-                        {
-                            {mProbeIrradianceBuffer,
-                             vk::ImageLayout::eGeneral,
-                             vk::ImageLayout::eShaderReadOnlyOptimal},
-                            {mProbeDepthBuffer,
-                             vk::ImageLayout::eGeneral,
-                             vk::ImageLayout::eShaderReadOnlyOptimal},
-                        });
-
-                    command.buffer.pipelineBarrier(
-                        vk::PipelineStageFlagBits::eComputeShader,
-                        vk::PipelineStageFlagBits::eFragmentShader,
-                        vk::DependencyFlags{},
-                        {},
-                        {},
-                        imageBarriers);
-                }
-            }
-            EndMarker(command.buffer);
-        }
-        EndMarker(command.buffer);
-
-        BeginMarker(command.buffer, "Shadow culling");
+        mContext->BeginMarker(command.buffer, "Shadow culling");
         for (const Material::AlphaMode alphaMode : Material::AlphaModes) {
             if (alphaMode !=
                 Material::AlphaMode::Blended) {  // Blended materials aren't shadow casters
-                BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
+                mContext->BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
                 dispatchCulling(mShadowPassCulling[alphaMode], mScene->GetDrawCallCount(alphaMode));
-                EndMarker(command.buffer);
+                mContext->EndMarker(command.buffer);
             }
         }
-        EndMarker(command.buffer);
+        mContext->EndMarker(command.buffer);
 
-        BeginMarker(command.buffer, "Basepass culling");
+        mContext->BeginMarker(command.buffer, "Basepass culling");
         for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
-            BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
+            mContext->BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
             dispatchCulling(mBasePassCulling[alphaMode], mScene->GetDrawCallCount(alphaMode));
-            EndMarker(command.buffer);
+            mContext->EndMarker(command.buffer);
         }
-        EndMarker(command.buffer);
+        mContext->EndMarker(command.buffer);
 
         // Shadow pass
         {
-            BeginMarker(command.buffer, "Shadowmap Rendering");
+            mContext->BeginMarker(command.buffer, "Shadowmap Rendering");
             {
                 // Transition shadow map to depth attachment
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
@@ -1452,7 +1142,7 @@ void Renderer::Render(Camera* camera) {
                 if (alphaMode == Material::AlphaMode::Blended || drawCallCount == 0) {
                     continue;
                 }
-                BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
+                mContext->BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
 
                 command.buffer.bindPipeline(
                     vk::PipelineBindPoint::eGraphics,
@@ -1493,16 +1183,16 @@ void Renderer::Render(Camera* camera) {
                         drawCallCount,
                         sizeof(VkDrawIndexedIndirectCommand));
                 }
-                EndMarker(command.buffer);
+                mContext->EndMarker(command.buffer);
             }
 
             command.buffer.endRenderPass();
-            EndMarker(command.buffer);
+            mContext->EndMarker(command.buffer);
         }
 
         // Base pass
         {
-            BeginMarker(command.buffer, "Base pass");
+            mContext->BeginMarker(command.buffer, "Base pass");
 
             {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
@@ -1553,7 +1243,7 @@ void Renderer::Render(Camera* camera) {
                 if (alphaMode == Material::AlphaMode::Blended || drawCallCount == 0) {
                     continue;
                 }
-                BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
+                mContext->BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
                 command.buffer.bindPipeline(
                     vk::PipelineBindPoint::eGraphics,
                     mGeometryPassPipeline[alphaMode].pipeline->GetPipelineHandle());
@@ -1593,17 +1283,17 @@ void Renderer::Render(Camera* camera) {
                         drawCallCount,
                         sizeof(VkDrawIndexedIndirectCommand));
                 }
-                EndMarker(command.buffer);
+                mContext->EndMarker(command.buffer);
             }
             command.buffer.endRenderPass();
-            EndMarker(command.buffer);
+            mContext->EndMarker(command.buffer);
         }
 
         // SSAO pass
         {
-            BeginMarker(command.buffer, "SSAO");
+            mContext->BeginMarker(command.buffer, "SSAO");
             {
-                BeginMarker(command.buffer, "SSAO draw");
+                mContext->BeginMarker(command.buffer, "SSAO draw");
                 {
                     std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
                         vk::PipelineStageFlagBits::eColorAttachmentOutput,
@@ -1664,10 +1354,10 @@ void Renderer::Render(Camera* camera) {
                 command.buffer.draw(3, 1, 0, 0);
 
                 command.buffer.endRenderPass();
-                EndMarker(command.buffer);
+                mContext->EndMarker(command.buffer);
             }
 
-            BeginMarker(command.buffer, "SSAO blur");
+            mContext->BeginMarker(command.buffer, "SSAO blur");
             {
                 const std::vector<vk::ClearValue> clearValues{
                     vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
@@ -1712,14 +1402,14 @@ void Renderer::Render(Camera* camera) {
                 command.buffer.draw(3, 1, 0, 0);
 
                 command.buffer.endRenderPass();
-                EndMarker(command.buffer);
+                mContext->EndMarker(command.buffer);
             }
-            EndMarker(command.buffer);
+            mContext->EndMarker(command.buffer);
         }
 
         // Shade pass
         {
-            BeginMarker(command.buffer, "Shade pass");
+            mContext->BeginMarker(command.buffer, "Shade pass");
 
             {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
@@ -1784,12 +1474,12 @@ void Renderer::Render(Camera* camera) {
             command.buffer.draw(3, 1, 0, 0);
 
             command.buffer.endRenderPass();
-            EndMarker(command.buffer);
+            mContext->EndMarker(command.buffer);
         }
 
         // Render transparencies
         {
-            BeginMarker(command.buffer, "Transparent pass");
+            mContext->BeginMarker(command.buffer, "Transparent pass");
 
             {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
@@ -1880,13 +1570,13 @@ void Renderer::Render(Camera* camera) {
                 }
             }
             command.buffer.endRenderPass();
-            EndMarker(command.buffer);
+            mContext->EndMarker(command.buffer);
         }
 
         {
-            BeginMarker(command.buffer, "Render UI");
+            mContext->BeginMarker(command.buffer, "Render UI");
             mUIRenderer->Render(command.buffer);
-            EndMarker(command.buffer);
+            mContext->EndMarker(command.buffer);
         }
 
         VKRT_ASSERT_VK(command.buffer.end());

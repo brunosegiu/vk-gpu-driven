@@ -53,6 +53,10 @@ ScopedRefPtr<VulkanBuffer> ShaderParameterBuffer::GetBuffer(uint32_t frameIndex)
     return mBuffers[frameIndex];
 }
 
+std::vector<ScopedRefPtr<VulkanBuffer>> ShaderParameterBuffer::GetBuffers() {
+    return mBuffers;
+}
+
 void ShaderParameterBuffer::Write(uint32_t frameIndex, const uint8_t* const data, size_t size) {
     ScopedRefPtr<VulkanBuffer> buffer = GetBuffer(frameIndex);
     uint8_t* mappedBuffer = buffer->MapBuffer();

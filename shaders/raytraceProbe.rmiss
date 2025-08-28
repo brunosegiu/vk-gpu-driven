@@ -4,13 +4,7 @@
 
 #include "definitions.glsl"
 #include "shading.glsl"
-
-layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    CameraData uCameraParameters;
-};
-layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    LightData uLightParameters;
-};
+#include "raytraceProbeParameters.glsl"
 
 layout(location = ColorPayloadIndex) rayPayloadInEXT RayPayload rayPayload;
 

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.31 FATAL_ERROR)
 
 set(VERSION 1.0)
 set(PROJECT_NAME VK-RT)
@@ -45,6 +45,7 @@ set(HEADERS
     include/VulkanHelpers.h
     include/UIRenderer.h
     include/RaytracingPipeline.h
+    include/DDGIRenderer.h
 )
 
 set(SOURCE
@@ -80,6 +81,7 @@ set(SOURCE
     src/VulkanHelpers.cpp
     src/UIRenderer.cpp
     src/RaytracingPipeline.cpp
+    src/DDGIRenderer.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
@@ -90,6 +92,17 @@ set(SHADER_HEADERS
     visibilityBufferUtils.glsl
     utils.glsl
     ddgiUtils.glsl
+    cullingParameters.glsl
+    depthOnlyShaderAlphaMaskedParameters.glsl
+    depthOnlyShaderOpaqueParameters.glsl
+    edgeAwareBoxBlurParameters.glsl
+    geometryPassAlphaMaskedParameters.glsl
+    geometryPassOpaqueParameters.glsl
+    raytraceProbeParameters.glsl
+    ssaoParameters.glsl
+    transparentPassParameters.glsl
+    updateProbesParameters.glsl
+    visibilityBufferShadeParameters.glsl
 )
 
 set(SHADERS
@@ -193,6 +206,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE imgui::imgui)
 if(UNIX)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/incbin)
 endif()
+
+# Find and link SPIRV reflect
+find_package(unofficial-spirv-reflect CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE unofficial::spirv-reflect)
 
 # Add shader compilation build step
 if(WIN32)

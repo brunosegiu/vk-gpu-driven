@@ -67,6 +67,8 @@ public:
         vk::PipelineStageFlags srcStage,
         vk::PipelineStageFlags dstStage);
 
+    vk::DescriptorImageInfo GetDescriptorInfo(bool isReadOnly);
+
     ~Texture();
 
 private:

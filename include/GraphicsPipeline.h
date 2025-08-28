@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Macros.h"
+#include "Mesh.h"
 #include "Pipeline.h"
 #include "RefCountPtr.h"
 #include "RenderPass.h"
@@ -12,7 +13,6 @@
 #include "ShaderParameterCollection.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
-#include "Mesh.h"
 
 namespace VKRT {
 
@@ -32,7 +32,8 @@ public:
     GraphicsPipeline(
         ScopedRefPtr<Context> context,
         const ScopedRefPtr<ShaderParameterCollection>& parameters,
-        const std::unordered_map<vk::ShaderStageFlagBits, Resource::Id>& shaderResourcesMap,
+        const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>&
+            shaderResourcesMap,
         ScopedRefPtr<RenderPass> renderPass,
         const std::vector<GeometryLayout>& geometryLayout,
         GraphicsPipelineOptionals optionals = {});

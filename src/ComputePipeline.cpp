@@ -9,16 +9,16 @@ namespace VKRT {
 ComputePipeline::ComputePipeline(
     ScopedRefPtr<Context> context,
     const ScopedRefPtr<ShaderParameterCollection>& parameters,
-    const std::pair<vk::ShaderStageFlagBits, Resource::Id>& shaderResourcesMap)
+    const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>&
+        shaderResourcesMap)
     : Pipeline(context) {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
 
-    const vk::ShaderModule shaderModule = LoadShader(shaderResourcesMap.second);
-    mShaders.emplace(shaderResourcesMap.first, std::vector<vk::ShaderModule>{shaderModule});
+    LoadShaders(shaderResourcesMap);
     const vk::PipelineShaderStageCreateInfo stageCreateInfo =
         vk::PipelineShaderStageCreateInfo()
-            .setStage(shaderResourcesMap.first)
-            .setModule(shaderModule)
+            .setStage(vk::ShaderStageFlagBits::eCompute)
+            .setModule(mShaders.begin()->second.front())
             .setPName("main");
 
     std::vector<vk::PushConstantRange> pushConstants = parameters->GetPushConstants();

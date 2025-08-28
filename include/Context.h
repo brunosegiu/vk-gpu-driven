@@ -27,6 +27,9 @@ public:
     ScopedRefPtr<Swapchain> GetSwapchain() { return mSwapchain; }
     uint32_t GetMaxInFlightFrameCount() { return 2; }
 
+    void BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name);
+    void EndMarker(const vk::CommandBuffer& commandBuffer);
+
     void Destroy();
 
     ~Context();

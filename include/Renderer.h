@@ -10,6 +10,7 @@
 #include "RenderPass.h"
 #include "Scene.h"
 #include "UIRenderer.h"
+#include "DDGIRenderer.h"
 
 namespace VKRT {
 class Renderer : public RefCountPtr, public InputEventListener {
@@ -139,29 +140,8 @@ private:
     // UI rendering
     ScopedRefPtr<UIRenderer> mUIRenderer;
 
-    // Probe rendering
-    ScopedRefPtr<RaytracingPipeline> mProbeRaytracingPipeline;
+    // DDGI
+    ScopedRefPtr<DDGIRenderer> mDDGIRenderer;
     ScopedRefPtr<ShaderParameterBuffer> mDDGIProbeDataParameter;
-    ScopedRefPtr<ShaderParameterAccelerationStructure> mASParamater;
-    ScopedRefPtr<ShaderParameterImage> mWriteProbeRayRadianceParameter;
-    ScopedRefPtr<ShaderParameterImage> mWriteProbeRayDirectionDepthParameter;
-    ScopedRefPtr<ShaderParameterCollection> mProbeRaytracingParameters;
-    ScopedRefPtr<Texture> mProbeRayRadianceBuffer;
-    ScopedRefPtr<Texture> mProbeRayDirectionDepthBuffer;
-
-    ScopedRefPtr<ComputePipeline> mUpdateProbePipeline;
-    ScopedRefPtr<ShaderParameterCollection> mUpdateProbeParameters;
-    ScopedRefPtr<ShaderParameterImage> mWriteProbeIrradianceParameter;
-    ScopedRefPtr<ShaderParameterImage> mWriteProbeDepthParameter;
-    ScopedRefPtr<ShaderParameterImage> mReadOnlyProbeRadianceParameter;
-    ScopedRefPtr<ShaderParameterImage> mReadOnlyProbeDirectionDepthParameter;
-    ScopedRefPtr<ShaderParameterImage> mProbeRadianceWriteParam;
-    ScopedRefPtr<ShaderParameterImage> mProbeDepthDirectionWriteParam;
-    ScopedRefPtr<Texture> mProbeIrradianceBuffer;
-    ScopedRefPtr<Texture> mProbeDepthBuffer;
-
-
-    void BeginMarker(const vk::CommandBuffer& commandBuffer, const std::string& name);
-    void EndMarker(const vk::CommandBuffer& commandBuffer);
 };
 }  // namespace VKRT

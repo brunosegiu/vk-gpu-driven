@@ -6,6 +6,7 @@
 #include "definitions.glsl"
 #include "shading.glsl"
 #include "visibilityBufferUtils.glsl"
+#include "geometryPassOpaqueParameters.glsl"
 
 layout(location = 0) in flat uint inDrawID;
 

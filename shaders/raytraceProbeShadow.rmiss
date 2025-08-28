@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "definitions.glsl"
+#include "raytraceProbeParameters.glsl"
 
 layout(location = ShadowPayloadIndex) rayPayloadInEXT float shadowAttenuation;
 

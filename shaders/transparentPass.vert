@@ -4,27 +4,7 @@
 
 #include "definitions.glsl"
 #include "shading.glsl"
-
-layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    CameraData uCameraParameters;
-};
-layout(binding = 1, set = UPDATE_PER_FRAME, scalar) uniform TLightParameters {
-    LightData uLightParameters;
-};
-layout(binding = 2, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
-    MeshData uMeshData[];
-};
-layout(binding = 3, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
-	uint uDrawData[];
-};
-
-layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
-    DrawData uPersistentSceneData[];
-};
-layout(binding = 1, set = UPDATE_ONCE) uniform sampler uTextureSampler;
-layout(binding = 2, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
-    Material uMaterials[];
-};
+#include "transparentPassParameters.glsl"
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in uint inPackedTexCoord;

@@ -21,7 +21,8 @@ public:
     ComputePipeline(
         ScopedRefPtr<Context> context,
         const ScopedRefPtr<ShaderParameterCollection>& parameters,
-        const std::pair<vk::ShaderStageFlagBits, Resource::Id>& shaderResourcesMap);
+        const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>&
+            shaderResourcesMap);
 
     ~ComputePipeline();
 };

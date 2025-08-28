@@ -25,7 +25,7 @@ public:
     vk::BufferMemoryBarrier GetBufferBarrierInfo(
         vk::PipelineStageFlags srcStageMask,
         vk::PipelineStageFlags dstStageMask);
-
+    void Write(const uint8_t* const data, size_t size);
     uint8_t* MapBuffer();
     void UnmapBuffer();
 

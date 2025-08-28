@@ -9,7 +9,7 @@ namespace VKRT {
 GraphicsPipeline::GraphicsPipeline(
     ScopedRefPtr<Context> context,
     const ScopedRefPtr<ShaderParameterCollection>& parameters,
-    const std::unordered_map<vk::ShaderStageFlagBits, Resource::Id>& shaderResourcesMap,
+    const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>& shaderResourcesMap,
     ScopedRefPtr<RenderPass> renderPass,
     const std::vector<GeometryLayout>& geometryLayout,
     GraphicsPipelineOptionals optionals)
@@ -43,13 +43,12 @@ GraphicsPipeline::GraphicsPipeline(
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
 
     std::vector<vk::PipelineShaderStageCreateInfo> stageCreateInfos;
-    for (const auto& entry : shaderResourcesMap) {
-        const std::vector<vk::ShaderModule> shaderModules{LoadShader(entry.second)};
-        mShaders.emplace(entry.first, shaderModules);
+    LoadShaders(shaderResourcesMap);
+    for (const auto& entry : mShaders) {
         const vk::PipelineShaderStageCreateInfo stageCreateInfo =
             vk::PipelineShaderStageCreateInfo()
                 .setStage(entry.first)
-                .setModule(shaderModules.front())
+                .setModule(entry.second.front())
                 .setPName("main");
         stageCreateInfos.emplace_back(stageCreateInfo);
     }

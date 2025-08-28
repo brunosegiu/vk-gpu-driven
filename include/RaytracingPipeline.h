@@ -19,8 +19,8 @@ class RaytracingPipeline : public Pipeline {
 public:
     RaytracingPipeline(
         ScopedRefPtr<Context> context,
-        const ScopedRefPtr<ShaderParameterCollection>& parameters,
-        const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>& shaderResources);
+        const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>&
+            shaderResources);
 
     struct RayTracingTablesRef {
         vk::StridedDeviceAddressRegionKHR rayGen, rayHit, rayMiss, callable;

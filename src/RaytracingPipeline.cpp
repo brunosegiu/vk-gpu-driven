@@ -9,15 +9,15 @@ namespace VKRT {
 
 RaytracingPipeline::RaytracingPipeline(
     ScopedRefPtr<Context> context,
-    const ScopedRefPtr<ShaderParameterCollection>& parameters,
     const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>& shaderResources)
     : Pipeline(context) {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
+    
+    LoadShaders(shaderResources);
 
-    std::vector<vk::PushConstantRange> pushConstants = parameters->GetPushConstants();
-    const std::vector<vk::DescriptorSetLayout> layouts = parameters->GetLayouts();
+    const std::vector<vk::DescriptorSetLayout> layouts = GetDescriptorLayouts();
     vk::PipelineLayoutCreateInfo layoutCreateInfo =
-        vk::PipelineLayoutCreateInfo().setSetLayouts(layouts).setPushConstantRanges(pushConstants);
+        vk::PipelineLayoutCreateInfo().setSetLayouts(layouts);
     mLayout = VKRT_ASSERT_VK(logicalDevice.createPipelineLayout(layoutCreateInfo));
 
     const std::array<vk::ShaderStageFlagBits, 3> stageOrder{
@@ -29,14 +29,6 @@ RaytracingPipeline::RaytracingPipeline(
     std::vector<vk::PipelineShaderStageCreateInfo> stageCreateInfos;
     std::vector<vk::RayTracingShaderGroupCreateInfoKHR> rayTracingGroupCreateInfos;
     {
-        for (const std::pair<vk::ShaderStageFlagBits, std::vector<Resource::Id>>& entry :
-             shaderResources) {
-            std::vector<vk::ShaderModule> modules;
-            for (const Resource::Id& shaders : entry.second) {
-                modules.push_back(LoadShader(shaders));
-            }
-            mShaders.emplace(entry.first, modules);
-        }
 
         uint32_t shaderIndex = 0;
         for (const vk::ShaderStageFlagBits stage : stageOrder) {
@@ -103,7 +95,7 @@ RaytracingPipeline::RaytracingPipeline(
             groupCount,
             sbtSize,
             mContext->GetDevice()->GetDispatcher()));
-    
+
     uint8_t* shaderHandleStoragePtr = shaderHandleStorage.data();
 
     vk::DeviceAddress raygenAddr;
@@ -133,8 +125,7 @@ RaytracingPipeline::RaytracingPipeline(
         rayHitAddr = alignUp(mRayHitTable->GetDeviceAddress(), baseAlignment);
         uint64_t writeOffset = uint64_t(rayHitAddr - mRayHitTable->GetDeviceAddress());
         uint8_t* rayHitTableData = mRayHitTable->MapBuffer();
-        std::copy_n(shaderHandleStoragePtr,
-            handleSize, rayHitTableData + writeOffset);
+        std::copy_n(shaderHandleStoragePtr, handleSize, rayHitTableData + writeOffset);
         shaderHandleStoragePtr += handleSize;
         mRayHitTable->UnmapBuffer();
     }

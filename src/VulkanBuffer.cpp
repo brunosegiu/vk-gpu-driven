@@ -63,6 +63,12 @@ std::vector<vk::BufferMemoryBarrier> VulkanBuffer::GetBarriers(
     return barriers;
 }
 
+void VulkanBuffer::Write(const uint8_t* const data, size_t size) {
+    uint8_t* mappedBuffer = MapBuffer();
+    std::copy_n(data, size, mappedBuffer);
+    UnmapBuffer();
+}
+
 vk::BufferMemoryBarrier VulkanBuffer::GetBufferBarrierInfo(
     vk::PipelineStageFlags srcStageMask,
     vk::PipelineStageFlags dstStageMask) {
