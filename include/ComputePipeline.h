@@ -7,7 +7,6 @@
 #include "Macros.h"
 #include "RefCountPtr.h"
 #include "ResourceLoader.h"
-#include "ShaderParameterCollection.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
 #include "Pipeline.h"
@@ -20,7 +19,6 @@ class ComputePipeline : public Pipeline {
 public:
     ComputePipeline(
         ScopedRefPtr<Context> context,
-        const ScopedRefPtr<ShaderParameterCollection>& parameters,
         const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>&
             shaderResourcesMap);
 

@@ -111,15 +111,17 @@ void Pipeline::CreateDescriptorLayouts(vk::ShaderStageFlags stageFlags, const Re
                     } break;
                 }
 
+                const uint32_t count =
+                    parameterData.hasVariableCount ? MaxBindlessCount : parameterData.count;
                 descriptorSizes[parameterData.descriptorType] +=
-                    parameterData.count * mContext->GetMaxInFlightFrameCount();
+                    count * mContext->GetMaxInFlightFrameCount();
 
                 {
                     descriptorBindings.emplace_back(
                         vk::DescriptorSetLayoutBinding()
                             .setBinding(parameterData.binding)
                             .setDescriptorType(parameterData.descriptorType)
-                            .setDescriptorCount(parameterData.count)
+                            .setDescriptorCount(count)
                             .setStageFlags(stageFlags));
 
                     vk::DescriptorBindingFlags bindingFlag =
@@ -307,10 +309,9 @@ void Pipeline::Bind(
 
     bool isReadOnly = mParameters[frequency].parameters[binding].descriptorType ==
                       vk::DescriptorType::eSampledImage;
-    std::vector<std::vector<vk::DescriptorImageInfo>> imageInfos;
+    std::vector<std::vector<vk::DescriptorImageInfo>> imageInfos(1);
     for (const ScopedRefPtr<Texture>& texture : textures) {
-        std::vector<vk::DescriptorImageInfo> infos{texture->GetDescriptorInfo(isReadOnly)};
-        imageInfos.push_back(infos);
+        imageInfos[0].push_back(texture->GetDescriptorInfo(isReadOnly));
     }
     parameter.imageInfos = imageInfos;
 }
@@ -318,7 +319,8 @@ void Pipeline::Bind(
 void Pipeline::Bind(ParameterUpdateFrequency frequency, uint32_t binding, vk::Sampler sampler) {
     ParameterData& parameter = mParameters[frequency].parameters[binding];
     VKRT_ASSERT(parameter.descriptorType == vk::DescriptorType::eSampler);
-    parameter.imageInfos = {{vk::DescriptorImageInfo().setSampler(sampler)}};
+    parameter.sampler = sampler;
+    parameter.imageInfos = {{vk::DescriptorImageInfo().setSampler(parameter.sampler)}};
 }
 
 void Pipeline::Bind(

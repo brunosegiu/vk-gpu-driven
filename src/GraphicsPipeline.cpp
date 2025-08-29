@@ -8,8 +8,8 @@
 namespace VKRT {
 GraphicsPipeline::GraphicsPipeline(
     ScopedRefPtr<Context> context,
-    const ScopedRefPtr<ShaderParameterCollection>& parameters,
-    const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>& shaderResourcesMap,
+    const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>&
+        shaderResourcesMap,
     ScopedRefPtr<RenderPass> renderPass,
     const std::vector<GeometryLayout>& geometryLayout,
     GraphicsPipelineOptionals optionals)
@@ -53,11 +53,9 @@ GraphicsPipeline::GraphicsPipeline(
         stageCreateInfos.emplace_back(stageCreateInfo);
     }
 
-    std::vector<vk::PushConstantRange> pushConstants = parameters->GetPushConstants();
-
-    const std::vector<vk::DescriptorSetLayout> layouts = parameters->GetLayouts();
+    const std::vector<vk::DescriptorSetLayout> layouts = GetDescriptorLayouts();
     vk::PipelineLayoutCreateInfo layoutCreateInfo =
-        vk::PipelineLayoutCreateInfo().setSetLayouts(layouts).setPushConstantRanges(pushConstants);
+        vk::PipelineLayoutCreateInfo().setSetLayouts(layouts);
     mLayout = VKRT_ASSERT_VK(logicalDevice.createPipelineLayout(layoutCreateInfo));
 
     // Rasterization setup

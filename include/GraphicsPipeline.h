@@ -10,7 +10,6 @@
 #include "RefCountPtr.h"
 #include "RenderPass.h"
 #include "ResourceLoader.h"
-#include "ShaderParameterCollection.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
 
@@ -31,7 +30,6 @@ class GraphicsPipeline : public Pipeline {
 public:
     GraphicsPipeline(
         ScopedRefPtr<Context> context,
-        const ScopedRefPtr<ShaderParameterCollection>& parameters,
         const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>&
             shaderResourcesMap,
         ScopedRefPtr<RenderPass> renderPass,

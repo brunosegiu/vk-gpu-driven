@@ -131,14 +131,32 @@ void ApplyFlatStyle() {
     colors[ImGuiCol_SeparatorActive] = accentActive;
 }
 
-UIRenderer::UIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<RenderTarget> uiTarget)
-    : mContext(context), mUITarget(uiTarget), mSSAOControlData(), mShadowTaps(16u) {
-    ImGuiIO& io = ImGui::GetIO();
-    io.DisplaySize = ImVec2(uiTarget->GetWidth(), uiTarget->GetHeight());
-    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
-
+UIRenderer::UIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<SettingsManager> settingsManager)
+    : mContext(context), mSettingsManager(settingsManager) {
     ApplyFlatStyle();
+}
 
+void UIRenderer::AddRenderTargets(ScopedRefPtr<RenderTarget> uiTarget) {
+    {
+        mUITarget = uiTarget;
+
+        ImGuiIO& io = ImGui::GetIO();
+        io.DisplaySize = ImVec2(uiTarget->GetWidth(), uiTarget->GetHeight());
+        io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+
+        mRenderPass = new RenderPass(
+            mContext,
+            {
+                {.renderTarget = mUITarget,
+                 .loadOp = vk::AttachmentLoadOp::eLoad,
+                 .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
+                 .storeOp = vk::AttachmentStoreOp::eStore,
+                 .finalLayout = vk::ImageLayout::ePresentSrcKHR},
+            });
+    }
+}
+
+void UIRenderer::AddResources() {
     {
         vk::DescriptorPoolSize poolSizes[] = {
             {vk::DescriptorType::eCombinedImageSampler, 1},
@@ -155,18 +173,6 @@ UIRenderer::UIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<RenderTarget>
                 .setPPoolSizes(poolSizes);
         mDescriptorPool = VKRT_ASSERT_VK(
             mContext->GetDevice()->GetLogicalDevice().createDescriptorPool(poolInfo));
-    }
-
-    {
-        mRenderPass = new RenderPass(
-            context,
-            {
-                {.renderTarget = uiTarget,
-                 .loadOp = vk::AttachmentLoadOp::eLoad,
-                 .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
-                 .storeOp = vk::AttachmentStoreOp::eStore,
-                 .finalLayout = vk::ImageLayout::ePresentSrcKHR},
-            });
     }
 
     ImGui_ImplVulkan_InitInfo initInfo{
@@ -214,13 +220,29 @@ void UIRenderer::Update() {
                 ImGuiWindowFlags_NoDecoration);
         {
             if (ImGui::CollapsingHeader("SSAO", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::SliderFloat("Radius", &mSSAOControlData.radius, 0.02f, 10.0f);
-                ImGui::SliderFloat("Power", &mSSAOControlData.power, 0.02f, 10.0f);
-                SliderUint("Kernel size", &mSSAOControlData.kernelSize, 1u, 128u);
-                ImGui::SliderInt("Blur radius", &mSSAOControlData.blurRadius, 1, 10);
+                ImGui::SliderFloat(
+                    "Radius",
+                    &mSettingsManager->GetSSAOControlData().radius,
+                    0.02f,
+                    10.0f);
+                ImGui::SliderFloat(
+                    "Power",
+                    &mSettingsManager->GetSSAOControlData().power,
+                    0.02f,
+                    10.0f);
+                SliderUint(
+                    "Kernel size",
+                    &mSettingsManager->GetSSAOControlData().kernelSize,
+                    1u,
+                    128u);
+                ImGui::SliderInt(
+                    "Blur radius",
+                    &mSettingsManager->GetSSAOControlData().blurRadius,
+                    1,
+                    10);
             }
             if (ImGui::CollapsingHeader("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
-                SliderUint("Shadow taps", &mShadowTaps, 1u, 51u);
+                SliderUint("Shadow taps", &mSettingsManager->GetShadowTaps(), 1u, 51u);
             }
         }
         ImGui::End();
@@ -229,6 +251,8 @@ void UIRenderer::Update() {
 }
 
 void UIRenderer::Render(vk::CommandBuffer commandBuffer) {
+    Update();
+
     ImGui::Render();
     ImDrawData* drawData = ImGui::GetDrawData();
 

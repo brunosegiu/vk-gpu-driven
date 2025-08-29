@@ -17,6 +17,7 @@ class Context;
 
 enum class ParameterUpdateFrequency { PerFrame = 0, Once = 1 };
 constexpr uint32_t ParameterUpdateFrequencyCount = 2u;
+constexpr uint32_t MaxBindlessCount = 4096u;
 
 class Pipeline : public RefCountPtr {
 public:
@@ -72,6 +73,7 @@ protected:
         std::vector<std::vector<vk::DescriptorBufferInfo>> bufferInfos;
         std::vector<std::vector<vk::DescriptorImageInfo>> imageInfos;
         std::vector<vk::WriteDescriptorSetAccelerationStructureKHR> accelerationStructureInfos;
+        vk::Sampler sampler;
         vk::AccelerationStructureKHR accelerationStructure;
     };
     struct DescriptorData {

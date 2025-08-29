@@ -4,18 +4,24 @@
 #include "CommandRing.h"
 #include "ComputePipeline.h"
 #include "Context.h"
+#include "DDGIRenderer.h"
 #include "GraphicsPipeline.h"
-#include "RaytracingPipeline.h"
+#include "PostProcessingRenderer.h"
 #include "RefCountPtr.h"
 #include "RenderPass.h"
 #include "Scene.h"
+#include "ShadowRenderer.h"
 #include "UIRenderer.h"
-#include "DDGIRenderer.h"
+#include "VisibilityManager.h"
+#include "SettingsManager.h"
 
 namespace VKRT {
 class Renderer : public RefCountPtr, public InputEventListener {
 public:
-    Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene);
+    Renderer(
+        ScopedRefPtr<Context> context,
+        ScopedRefPtr<Scene> scene,
+        ScopedRefPtr<SettingsManager> settingsManager);
 
     void Render(Camera* camera);
 
@@ -49,99 +55,38 @@ private:
     // Shared resources
     ScopedRefPtr<Context> mContext;
     ScopedRefPtr<Scene> mScene;
+    ScopedRefPtr<SettingsManager> mSettingsManager;
     uint32_t mCurrentFrameIndex;
     ScopedRefPtr<CommandRing> mCommandRing;
 
-    // Culling resources
-    struct CullingPipelineResources {
-        ScopedRefPtr<ShaderParameterCollection> cullingParameters;
-        ScopedRefPtr<ShaderParameterBuffer> cullingDataUniform;
-        ScopedRefPtr<ShaderParameterBuffer> indirectDrawBufferParameter;
-        ScopedRefPtr<ShaderParameterBuffer> additionalDrawDataBufferParameter;
-        ScopedRefPtr<ShaderParameterBuffer> drawCallCountBufferParameter;
-        std::vector<ScopedRefPtr<VulkanBuffer>> indirectDrawBuffers;
-        std::vector<ScopedRefPtr<VulkanBuffer>> additionalDrawDataBuffers;
-        std::vector<ScopedRefPtr<VulkanBuffer>> drawCallCountBuffer;
-        ScopedRefPtr<ComputePipeline> cullingPipeline;
-    };
-    std::unordered_map<Material::AlphaMode, CullingPipelineResources> mShadowPassCulling;
-    std::unordered_map<Material::AlphaMode, CullingPipelineResources> mBasePassCulling;
-
-    struct MaterialDomainPipeline {
-        ScopedRefPtr<ShaderParameterCollection> parameters;
-        ScopedRefPtr<GraphicsPipeline> pipeline;
-    };
-
-    // Shadow pass resources
-    ScopedRefPtr<RenderPass> mDepthOnlyPass;
-    ScopedRefPtr<RenderTarget> mDepthOnlyPassRenderTarget;
-    ScopedRefPtr<Texture> mShadowMap;
-    std::unordered_map<Material::AlphaMode, MaterialDomainPipeline> mShadowPassPipeline;
-
-    ScopedRefPtr<ShaderParameterBuffer> mShadowCameraUniform;
+    // Culling
+    std::unordered_map<Material::AlphaMode, ScopedRefPtr<VisibilityManager>> mVisibilityManagers;
 
     // Geometry pass resources
     ScopedRefPtr<Texture> mVisibilityBuffer;
     ScopedRefPtr<RenderTarget> mVisibilityBufferRT;
-
-    // Base pass resources
-    std::unordered_map<Material::AlphaMode, MaterialDomainPipeline> mGeometryPassPipeline;
-    ScopedRefPtr<VulkanBuffer> mMaterialsBuffer;
+    std::unordered_map<Material::AlphaMode, ScopedRefPtr<GraphicsPipeline>> mGeometryPassPipelines;
+    ScopedRefPtr<VulkanBuffer> mMaterialsUniform;
     ScopedRefPtr<VulkanBuffer> mScenePersistentDataBuffer;
     std::vector<ScopedRefPtr<VulkanBuffer>> mPerMeshBuffers;
-    ScopedRefPtr<ShaderParameterBuffer> mCameraUniform;
-    ScopedRefPtr<ShaderParameterBuffer> mMaterialsUniform;
-    ScopedRefPtr<ShaderParameterImage> mReadOnlyProbeIrradianceParameter;
-    ScopedRefPtr<ShaderParameterImage> mReadOnlyProbeDepthParameter;
-    ScopedRefPtr<ShaderParameterSampler> mMaterialSampler;
-    ScopedRefPtr<ShaderParameterSampler> mFrameBufferSampler;
-    ScopedRefPtr<ShaderParameterSampler> mIrradianceSampler;
-    ScopedRefPtr<ShaderParameterImage> mMaterialsTextures;
-    ScopedRefPtr<ShaderParameterImage> mShadowMapUniform;
-    ScopedRefPtr<ShaderParameterBuffer> mScenePersistentDataParameter;
-    ScopedRefPtr<ShaderParameterBuffer> mPerMeshParameters;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mCameraUniform;
+    vk::Sampler mMaterialSampler;
+    vk::Sampler mFrameBufferSampler;
+    vk::Sampler mIrradianceSampler;
     ScopedRefPtr<RenderTarget> mMainRenderTarget;
     ScopedRefPtr<Texture> mDepthBuffer;
     ScopedRefPtr<RenderTarget> mDepthRenderTarget;
     ScopedRefPtr<RenderPass> mGeometryPass;
+    std::vector<ScopedRefPtr<Texture>> mSceneTextures;
 
     // Shading pass resources
     ScopedRefPtr<RenderPass> mShadePass;
-    ScopedRefPtr<ShaderParameterCollection> mShadePassParameters;
-    ScopedRefPtr<ShaderParameterImage> mVisibilityBufferUniform;
-    ScopedRefPtr<ShaderParameterImage> mSSAOTextureParameter;
-    ScopedRefPtr<ShaderParameterBuffer> mIndexBufferUniform;
-    ScopedRefPtr<ShaderParameterBuffer> mPositionBufferUniform;
-    ScopedRefPtr<ShaderParameterBuffer> mTexCoordBufferUniform;
-    ScopedRefPtr<ShaderParameterBuffer> mNormalBufferUniform;
-    ScopedRefPtr<ShaderParameterBuffer> mTangentBufferUniform;
     ScopedRefPtr<GraphicsPipeline> mShadePassPipeline;
-
-    // Tranparency resources
     ScopedRefPtr<RenderPass> mTransparentPass;
 
-    // SSAO resources
-    ScopedRefPtr<RenderPass> mSSAOPass;
-    ScopedRefPtr<ShaderParameterCollection> mSSAOParameters;
-    ScopedRefPtr<ShaderParameterImage> mDepthBufferParameter;
-    ScopedRefPtr<ShaderParameterBuffer> mSSAOControlParameter;
-    ScopedRefPtr<GraphicsPipeline> mSSAOPipeline;
-    ScopedRefPtr<Texture> mSSAOBuffer;
-    ScopedRefPtr<RenderTarget> mSSAORenderTarget;
-
-    // SSAO blur resources
-    ScopedRefPtr<RenderPass> mSSAOBlurPass;
-    ScopedRefPtr<ShaderParameterCollection> mSSAOBlurParameters;
-    ScopedRefPtr<ShaderParameterImage> mSSAOBufferParameter;
-    ScopedRefPtr<GraphicsPipeline> mSSAOBlurPipeline;
-    ScopedRefPtr<Texture> mSSAOBlurredBuffer;
-    ScopedRefPtr<RenderTarget> mSSAOBlurredRenderTarget;
-
-    // UI rendering
     ScopedRefPtr<UIRenderer> mUIRenderer;
-
-    // DDGI
     ScopedRefPtr<DDGIRenderer> mDDGIRenderer;
-    ScopedRefPtr<ShaderParameterBuffer> mDDGIProbeDataParameter;
+    ScopedRefPtr<ShadowRenderer> mShadowRenderer;
+    ScopedRefPtr<PostProcessingRenderer> mPostProcessingRenderer;
 };
 }  // namespace VKRT

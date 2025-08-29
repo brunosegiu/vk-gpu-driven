@@ -8,7 +8,7 @@
 layout(location = 0) in vec3 inPosition;
 
 void main() {
-    uint globalDrawIndex = drawData[gl_DrawID];
+    uint globalDrawIndex = uDrawData[gl_DrawID];
     const DrawData drawData = uPersistentSceneData[globalDrawIndex];
     const MeshData meshData = uMeshData[drawData.meshIndex];
 

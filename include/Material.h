@@ -59,4 +59,18 @@ private:
     ScopedRefPtr<Texture> mMetallicRoughnessTexture;
     ScopedRefPtr<Texture> mNormalTexture;
 };
+
+// TODO: Move to utils
+static std::string AlphaModeToStr(const Material::AlphaMode& alphaMode) {
+    switch (alphaMode) {
+        case Material::AlphaMode::Opaque:
+            return "Opaque";
+        case Material::AlphaMode::Masked:
+            return "Masked";
+        case Material::AlphaMode::Blended:
+            return "Blended";
+    }
+    return "";
+}
+
 }  // namespace VKRT

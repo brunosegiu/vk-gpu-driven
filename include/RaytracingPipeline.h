@@ -7,7 +7,6 @@
 #include "Macros.h"
 #include "Pipeline.h"
 #include "RefCountPtr.h"
-#include "ShaderParameterCollection.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
 

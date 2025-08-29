@@ -8,24 +8,22 @@
 namespace VKRT {
 ComputePipeline::ComputePipeline(
     ScopedRefPtr<Context> context,
-    const ScopedRefPtr<ShaderParameterCollection>& parameters,
     const std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>&
         shaderResourcesMap)
     : Pipeline(context) {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
 
     LoadShaders(shaderResourcesMap);
+
     const vk::PipelineShaderStageCreateInfo stageCreateInfo =
         vk::PipelineShaderStageCreateInfo()
             .setStage(vk::ShaderStageFlagBits::eCompute)
             .setModule(mShaders.begin()->second.front())
             .setPName("main");
 
-    std::vector<vk::PushConstantRange> pushConstants = parameters->GetPushConstants();
-
-    const std::vector<vk::DescriptorSetLayout> layouts = parameters->GetLayouts();
+    const std::vector<vk::DescriptorSetLayout> layouts = GetDescriptorLayouts();
     vk::PipelineLayoutCreateInfo layoutCreateInfo =
-        vk::PipelineLayoutCreateInfo().setSetLayouts(layouts).setPushConstantRanges(pushConstants);
+        vk::PipelineLayoutCreateInfo().setSetLayouts(layouts);
     mLayout = VKRT_ASSERT_VK(logicalDevice.createPipelineLayout(layoutCreateInfo));
 
     const vk::ComputePipelineCreateInfo pipelineCreateInfo =

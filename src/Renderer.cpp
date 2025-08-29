@@ -16,26 +16,15 @@ struct CameraData {
     glm::vec4 cameraPos;
 };
 
-struct LightData {
-    glm::vec3 radiance;
-    glm::vec3 direction;
-    glm::mat4 viewProjection;
-    uint32_t shadowTaps;
-};
-
-struct CullData {
-    uint32_t ortho;
-    glm::vec3 viewDirectionOrCameraPos;
-    std::array<glm::vec4, 6> frustumPlanes;
-    uint32_t globalDrawOffset;
-    uint32_t maxDrawCount;
-};
-
-Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
+Renderer::Renderer(
+    ScopedRefPtr<Context> context,
+    ScopedRefPtr<Scene> scene,
+    ScopedRefPtr<SettingsManager> settingsManager)
     : mContext(context),
       mScene(scene),
+      mSettingsManager(settingsManager),
       mCurrentFrameIndex(0),
-      mMaterialsBuffer(nullptr),
+      mMaterialsUniform(),
       mScenePersistentDataBuffer(),
       mFreezeCulling(false),
       mHasResouces(false),
@@ -45,11 +34,16 @@ Renderer::Renderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
 
     mCommandRing = new CommandRing(mContext);
 
+    for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
+        mVisibilityManagers[alphaMode] = new VisibilityManager(mContext, mScene, alphaMode);
+    }
+    mUIRenderer = new UIRenderer(mContext, mSettingsManager);
+    mDDGIRenderer = new DDGIRenderer(mContext, mScene);
+    mShadowRenderer = new ShadowRenderer(mContext, mScene, mSettingsManager);
+    mPostProcessingRenderer = new PostProcessingRenderer(mContext, mScene, mSettingsManager);
+
     AddRenderTargets();
     AddPipelines();
-
-    mUIRenderer = new UIRenderer(mContext, mMainRenderTarget);
-
 }
 
 void Renderer::AddRenderTargets() {
@@ -91,41 +85,6 @@ void Renderer::AddRenderTargets() {
               .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal}});
     }
 
-    // SSAO resources
-    {
-        mSSAOBuffer = new Texture(
-            mContext,
-            imageSize.width,
-            imageSize.height,
-            vk::Format::eR16Unorm,
-            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled);
-        mSSAORenderTarget = new RenderTarget(mContext, mSSAOBuffer);
-
-        mSSAOPass = new RenderPass(
-            mContext,
-            {{.renderTarget = mSSAORenderTarget,
-              .loadOp = vk::AttachmentLoadOp::eClear,
-              .initialLayout = vk::ImageLayout::eUndefined,
-              .storeOp = vk::AttachmentStoreOp::eStore,
-              .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal}});
-
-        mSSAOBlurredBuffer = new Texture(
-            mContext,
-            imageSize.width,
-            imageSize.height,
-            vk::Format::eR16Unorm,
-            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled);
-        mSSAOBlurredRenderTarget = new RenderTarget(mContext, mSSAOBlurredBuffer);
-
-        mSSAOBlurPass = new RenderPass(
-            mContext,
-            {{.renderTarget = mSSAOBlurredRenderTarget,
-              .loadOp = vk::AttachmentLoadOp::eClear,
-              .initialLayout = vk::ImageLayout::eUndefined,
-              .storeOp = vk::AttachmentStoreOp::eStore,
-              .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal}});
-    }
-
     // Shading + transparent render targets
     {
         mShadePass = new RenderPass(
@@ -152,272 +111,20 @@ void Renderer::AddRenderTargets() {
             });
     }
 
-    // Shadow pass
-    {
-        mShadowMap = new Texture(
-            mContext,
-            4096,
-            4096,
-            vk::Format::eD16Unorm,
-            vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled,
-            vk::ImageLayout::eShaderReadOnlyOptimal);
-        mDepthOnlyPassRenderTarget = new RenderTarget(mContext, mShadowMap);
-        mDepthOnlyPass = new RenderPass(
-            mContext,
-            {.renderTarget = mDepthOnlyPassRenderTarget,
-             .loadOp = vk::AttachmentLoadOp::eClear,
-             .initialLayout = vk::ImageLayout::eUndefined,
-             .storeOp = vk::AttachmentStoreOp::eStore,
-             .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal});
-    }
+    mUIRenderer->AddRenderTargets(mMainRenderTarget);
+    mDDGIRenderer->AddRenderTargets();
+    mShadowRenderer->AddRenderTargets();
+    mPostProcessingRenderer->AddRenderTargets();
 }
 
 void Renderer::AddPipelines() {
-    // Global resources
-    {
-        mScenePersistentDataParameter = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eStorageBuffer,
-            ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment |
-                vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
-
-        mPerMeshParameters = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eStorageBuffer,
-            ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment |
-                vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
-    }
-
     // Culling resources
-    {
-        // Shadow culling resources
-        auto createCullingResources = [&](Renderer::CullingPipelineResources& resources) {
-            resources.cullingParameters = new ShaderParameterCollection(mContext);
-            resources.cullingDataUniform = new ShaderParameterBuffer(
-                mContext,
-                vk::DescriptorType::eUniformBuffer,
-                ShaderParameter::UpdateFrequency::PerFrame,
-                vk::ShaderStageFlagBits::eCompute,
-                sizeof(CullData),
-                vk::BufferUsageFlagBits::eUniformBuffer,
-                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                    VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-            resources.indirectDrawBufferParameter = new ShaderParameterBuffer(
-                mContext,
-                vk::DescriptorType::eStorageBuffer,
-                ShaderParameter::UpdateFrequency::PerFrame,
-                vk::ShaderStageFlagBits::eCompute);
-
-            resources.additionalDrawDataBufferParameter = new ShaderParameterBuffer(
-                mContext,
-                vk::DescriptorType::eStorageBuffer,
-                ShaderParameter::UpdateFrequency::PerFrame,
-                vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eVertex |
-                    vk::ShaderStageFlagBits::eFragment);
-
-            resources.drawCallCountBufferParameter = new ShaderParameterBuffer(
-                mContext,
-                vk::DescriptorType::eStorageBuffer,
-                ShaderParameter::UpdateFrequency::PerFrame,
-                vk::ShaderStageFlagBits::eCompute);
-
-            resources.cullingParameters->AddParameter(resources.cullingDataUniform);
-            resources.cullingParameters->AddParameter(mPerMeshParameters);
-            resources.cullingParameters->AddParameter(resources.indirectDrawBufferParameter);
-            resources.cullingParameters->AddParameter(resources.drawCallCountBufferParameter);
-            resources.cullingParameters->AddParameter(resources.additionalDrawDataBufferParameter);
-            resources.cullingParameters->AddParameter(mScenePersistentDataParameter);
-
-            resources.cullingPipeline = new ComputePipeline(
-                mContext,
-                resources.cullingParameters,
-                {{vk::ShaderStageFlagBits::eCompute, {Resource::Id::CullingShader}}});
-        };
-
-        createCullingResources(mShadowPassCulling[Material::AlphaMode::Opaque]);
-        createCullingResources(mShadowPassCulling[Material::AlphaMode::Masked]);
-        createCullingResources(mBasePassCulling[Material::AlphaMode::Opaque]);
-        createCullingResources(mBasePassCulling[Material::AlphaMode::Masked]);
-        createCullingResources(mBasePassCulling[Material::AlphaMode::Blended]);
-    }
-
-    // Shadow pass parameters
-    {
-        mShadowCameraUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eUniformBuffer,
-            ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex |
-                vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eClosestHitKHR |
-                vk::ShaderStageFlagBits::eMissKHR,
-            sizeof(LightData),
-            vk::BufferUsageFlagBits::eUniformBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        const float anisotropy =
-            mContext->GetDevice()->GetDeviceProperties().limits.maxSamplerAnisotropy;
-        vk::SamplerCreateInfo materialSamplerCreateInfo =
-            vk::SamplerCreateInfo()
-                .setMagFilter(vk::Filter::eLinear)
-                .setMinFilter(vk::Filter::eLinear)
-                .setMipmapMode(vk::SamplerMipmapMode::eLinear)
-                .setAddressModeU(vk::SamplerAddressMode::eRepeat)
-                .setAddressModeV(vk::SamplerAddressMode::eRepeat)
-                .setAddressModeW(vk::SamplerAddressMode::eRepeat)
-                .setMipLodBias(0.0f)
-                .setCompareOp(vk::CompareOp::eNever)
-                .setMinLod(0.0f)
-                .setMaxLod(0.0f)
-                .setAnisotropyEnable(true)
-                .setMaxAnisotropy(anisotropy);
-
-        mMaterialSampler = new ShaderParameterSampler(
-            mContext,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR,
-            materialSamplerCreateInfo);
-
-        vk::SamplerCreateInfo frameBufferSamplerCreateInfo =
-            vk::SamplerCreateInfo()
-                .setMagFilter(vk::Filter::eNearest)
-                .setMinFilter(vk::Filter::eNearest)
-                .setMipmapMode(vk::SamplerMipmapMode::eNearest)
-                .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
-                .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
-                .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
-                .setMipLodBias(0.0f)
-                .setCompareOp(vk::CompareOp::eNever)
-                .setMinLod(0.0f)
-                .setMaxLod(0.0f)
-                .setAnisotropyEnable(false);
-
-        mFrameBufferSampler = new ShaderParameterSampler(
-            mContext,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR |
-                vk::ShaderStageFlagBits::eCompute,
-            frameBufferSamplerCreateInfo);
-
-        vk::SamplerCreateInfo irradianceSamplerCreateInfo =
-            vk::SamplerCreateInfo()
-                .setMagFilter(vk::Filter::eLinear)
-                .setMinFilter(vk::Filter::eLinear)
-                .setMipmapMode(vk::SamplerMipmapMode::eNearest)
-                .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
-                .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
-                .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
-                .setMipLodBias(0.0f)
-                .setCompareOp(vk::CompareOp::eNever)
-                .setMinLod(0.0f)
-                .setMaxLod(0.0f)
-                .setAnisotropyEnable(false);
-        mIrradianceSampler = new ShaderParameterSampler(
-            mContext,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR |
-                vk::ShaderStageFlagBits::eCompute,
-            irradianceSamplerCreateInfo);
-
-        mMaterialsUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eStorageBuffer,
-            ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex |
-                vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eClosestHitKHR |
-                vk::ShaderStageFlagBits::eMissKHR);
-
-        mMaterialsTextures = new ShaderParameterImage(
-            mContext,
-            vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR,
-            4096,
-            true);
-
-        std::unordered_map<
-            Material::AlphaMode,
-            std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>>
-            stages{
-                {Material::AlphaMode::Opaque,
-                 {
-                     {vk::ShaderStageFlagBits::eVertex,
-                      {Resource::Id::DepthOnlyOpaqueVertexShader}},
-                     {vk::ShaderStageFlagBits::eFragment,
-                      {Resource::Id::DepthOnlyOpaqueFragmentShader}},
-                 }},
-                {Material::AlphaMode::Masked,
-                 {
-                     {vk::ShaderStageFlagBits::eVertex,
-                      {Resource::Id::DepthOnlyAlphaMaskedVertexShader}},
-                     {vk::ShaderStageFlagBits::eFragment,
-                      {Resource::Id::DepthOnlyAlphaMaskedFragmentShader}},
-                 }}};
-
-        for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
-            if (alphaMode !=
-                Material::AlphaMode::Blended) {  // Blended materials aren't shadow casters
-                ScopedRefPtr<ShaderParameterCollection>& parameters =
-                    mShadowPassPipeline[alphaMode].parameters;
-                ScopedRefPtr<GraphicsPipeline>& pipeline = mShadowPassPipeline[alphaMode].pipeline;
-
-                parameters = new ShaderParameterCollection(mContext);
-                parameters->AddParameter(mShadowCameraUniform);
-                parameters->AddParameter(mPerMeshParameters);
-                parameters->AddParameter(
-                    mShadowPassCulling[alphaMode].additionalDrawDataBufferParameter);
-                parameters->AddParameter(mScenePersistentDataParameter);
-                parameters->AddParameter(mMaterialSampler);
-                parameters->AddParameter(mMaterialsUniform);
-                parameters->AddParameter(mMaterialsTextures);
-
-                VertexAttributeFlag geometryFlags =
-                    alphaMode == Material::AlphaMode::Opaque
-                        ? VertexAttributeFlag::Position
-                        : VertexAttributeFlag(
-                              VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord);
-                const std::vector<GeometryLayout> geometryLayout =
-                    MeshSystem::GetGeometryLayout(geometryFlags);
-
-                pipeline = new GraphicsPipeline(
-                    mContext,
-                    parameters,
-                    stages[alphaMode],
-                    mDepthOnlyPass,
-                    geometryLayout,
-                    GraphicsPipelineOptionals{
-                        .enableDepthBias = true,
-                        .depthBias = 1.0f,
-                        .depthSlope = 1.0f * (2 + 1)});
-            }
-        }
+    for (auto& visEntry : mVisibilityManagers) {
+        visEntry.second->AddPipelines();
     }
 
     // Base pass resources
     {
-        mCameraUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eUniformBuffer,
-            ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex |
-                vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eClosestHitKHR |
-                vk::ShaderStageFlagBits::eMissKHR,
-            sizeof(CameraData),
-            vk::BufferUsageFlagBits::eUniformBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        mShadowMapUniform = new ShaderParameterImage(
-            mContext,
-            vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
-
         std::unordered_map<
             Material::AlphaMode,
             std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>>>
@@ -447,26 +154,8 @@ void Renderer::AddPipelines() {
         for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
             bool isTransparentPass = alphaMode == Material::AlphaMode::Blended;
             bool isAlphaMaskedPass = alphaMode == Material::AlphaMode::Masked;
-            ScopedRefPtr<ShaderParameterCollection>& parameters =
-                mGeometryPassPipeline[alphaMode].parameters;
-            ScopedRefPtr<GraphicsPipeline>& pipeline = mGeometryPassPipeline[alphaMode].pipeline;
+            ScopedRefPtr<GraphicsPipeline>& pipeline = mGeometryPassPipelines[alphaMode];
 
-            parameters = new ShaderParameterCollection(mContext);
-            parameters->AddParameter(mCameraUniform);
-            if (isTransparentPass) {
-                parameters->AddParameter(mShadowCameraUniform);
-            }
-            parameters->AddParameter(mPerMeshParameters);
-            parameters->AddParameter(mBasePassCulling[alphaMode].additionalDrawDataBufferParameter);
-            parameters->AddParameter(mScenePersistentDataParameter);
-            if (isTransparentPass || isAlphaMaskedPass) {
-                parameters->AddParameter(mMaterialSampler);
-                parameters->AddParameter(mMaterialsUniform);
-                if (isTransparentPass) {
-                    parameters->AddParameter(mShadowMapUniform);
-                }
-                parameters->AddParameter(mMaterialsTextures);
-            }
             const VertexAttributeFlag geometryFlags =
                 isTransparentPass ? VertexAttributeFlag::All
                 : isAlphaMaskedPass
@@ -478,7 +167,6 @@ void Renderer::AddPipelines() {
 
             pipeline = new GraphicsPipeline(
                 mContext,
-                parameters,
                 stages[alphaMode],
                 isTransparentPass ? mTransparentPass : mGeometryPass,
                 geometryLayout,
@@ -494,161 +182,17 @@ void Renderer::AddPipelines() {
              {Resource::Id::VisibilityBufferShadeFragmentShader}},
         };
 
-        mVisibilityBufferUniform = new ShaderParameterImage(
-            mContext,
-            vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment);
-
-        mSSAOTextureParameter = new ShaderParameterImage(
-            mContext,
-            vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment);
-
-        mDDGIProbeDataParameter = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eUniformBuffer,
-            ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eFragment,
-            sizeof(DDGIData),
-            vk::BufferUsageFlagBits::eUniformBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        mIndexBufferUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eStorageBuffer,
-            ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
-
-        mPositionBufferUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eStorageBuffer,
-            ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
-        mTexCoordBufferUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eStorageBuffer,
-            ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
-        mNormalBufferUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eStorageBuffer,
-            ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
-        mTangentBufferUniform = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eStorageBuffer,
-            ShaderParameter::UpdateFrequency::Once,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-                vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR);
-
-        mReadOnlyProbeIrradianceParameter = new ShaderParameterImage(
-            mContext,
-            vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment);
-
-        mReadOnlyProbeDepthParameter = new ShaderParameterImage(
-            mContext,
-            vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment);
-
-        mShadePassParameters = new ShaderParameterCollection(mContext);
-        mShadePassParameters->AddParameter(mCameraUniform);
-        mShadePassParameters->AddParameter(mShadowCameraUniform);
-        mShadePassParameters->AddParameter(mPerMeshParameters);
-        mShadePassParameters->AddParameter(mDDGIProbeDataParameter);
-        mShadePassParameters->AddParameter(mScenePersistentDataParameter);
-        mShadePassParameters->AddParameter(mMaterialSampler);
-        mShadePassParameters->AddParameter(mFrameBufferSampler);
-        mShadePassParameters->AddParameter(mIrradianceSampler);
-        mShadePassParameters->AddParameter(mMaterialsUniform);
-        mShadePassParameters->AddParameter(mShadowMapUniform);
-        mShadePassParameters->AddParameter(mVisibilityBufferUniform);
-        mShadePassParameters->AddParameter(mSSAOTextureParameter);
-        mShadePassParameters->AddParameter(mReadOnlyProbeIrradianceParameter);
-        mShadePassParameters->AddParameter(mReadOnlyProbeDepthParameter);
-        mShadePassParameters->AddParameter(mIndexBufferUniform);
-        mShadePassParameters->AddParameter(mPositionBufferUniform);
-        mShadePassParameters->AddParameter(mTexCoordBufferUniform);
-        mShadePassParameters->AddParameter(mNormalBufferUniform);
-        mShadePassParameters->AddParameter(mTangentBufferUniform);
-        mShadePassParameters->AddParameter(mMaterialsTextures);
-
         mShadePassPipeline = new GraphicsPipeline(
             mContext,
-            mShadePassParameters,
             stages,
             mShadePass,
             std::vector<GeometryLayout>{},
             {.enableDepthTest = false});
     }
 
-    // SSAO resources
-    {
-        std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>> stages{
-            {vk::ShaderStageFlagBits::eVertex, {Resource::Id::SSAOVertexShader}},
-            {vk::ShaderStageFlagBits::eFragment, {Resource::Id::SSAOFragmentShader}},
-        };
-
-        mDepthBufferParameter = new ShaderParameterImage(
-            mContext,
-            vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment);
-
-        mSSAOControlParameter = new ShaderParameterBuffer(
-            mContext,
-            vk::DescriptorType::eUniformBuffer,
-            ShaderParameter::UpdateFrequency::PerFrame,
-            vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eVertex,
-            sizeof(SSAOControlData),
-            vk::BufferUsageFlagBits::eUniformBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        mSSAOParameters = new ShaderParameterCollection(mContext);
-        mSSAOParameters->AddParameter(mCameraUniform);
-        mSSAOParameters->AddParameter(mSSAOControlParameter);
-        mSSAOParameters->AddParameter(mFrameBufferSampler);
-        mSSAOParameters->AddParameter(mDepthBufferParameter);
-        mSSAOPipeline = new GraphicsPipeline(
-            mContext,
-            mSSAOParameters,
-            stages,
-            mSSAOPass,
-            std::vector<GeometryLayout>{},
-            {.enableDepthTest = false});
-    }
-
-    // SSAO blur resources
-    {
-        std::unordered_map<vk::ShaderStageFlagBits, std::vector<Resource::Id>> stages{
-            {vk::ShaderStageFlagBits::eVertex, {Resource::Id::EdgeAwareBoxBlurVertexShader}},
-            {vk::ShaderStageFlagBits::eFragment, {Resource::Id::EdgeAwareBoxBlurFragmentShader}},
-        };
-
-        mSSAOBufferParameter = new ShaderParameterImage(
-            mContext,
-            vk::DescriptorType::eSampledImage,
-            vk::ShaderStageFlagBits::eFragment);
-
-        mSSAOBlurParameters = new ShaderParameterCollection(mContext);
-        mSSAOBlurParameters->AddParameter(mCameraUniform);
-        mSSAOBlurParameters->AddParameter(mFrameBufferSampler);
-        mSSAOBlurParameters->AddParameter(mSSAOControlParameter);
-        mSSAOBlurParameters->AddParameter(mDepthBufferParameter);
-        mSSAOBlurParameters->AddParameter(mSSAOBufferParameter);
-        mSSAOBlurPipeline = new GraphicsPipeline(
-            mContext,
-            mSSAOBlurParameters,
-            stages,
-            mSSAOBlurPass,
-            std::vector<GeometryLayout>{},
-            {.enableDepthTest = false});
-    }
+    mDDGIRenderer->AddPipelines();
+    mShadowRenderer->AddPipelines();
+    mPostProcessingRenderer->AddPipelines();
 }
 
 void Renderer::AddResources() {
@@ -672,7 +216,7 @@ void Renderer::AddResources() {
         Scene::SceneMaterials sceneMaterials = mScene->GetMaterialProxies();
         size_t materialBufferSize = sceneMaterials.materials.size() * sizeof(Scene::MaterialProxy);
         VKRT_ASSERT(materialBufferSize > 0);
-        mMaterialsBuffer = mContext->GetDevice()->CreateBuffer(
+        mMaterialsUniform = mContext->GetDevice()->CreateBuffer(
             materialBufferSize,
             vk::BufferUsageFlagBits::eStorageBuffer,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
@@ -694,61 +238,88 @@ void Renderer::AddResources() {
             mPerMeshBuffers.push_back(perMeshBuffer);
         }
 
-        mPerMeshParameters->BindBuffers(mPerMeshBuffers);
+        mCameraUniform = mContext->GetDevice()->CreateBuffers(
+            mContext->GetMaxInFlightFrameCount(),
+            sizeof(CameraData),
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                VMA_ALLOCATION_CREATE_MAPPED_BIT);
     }
 
-    auto createCullingResources = [&](Renderer::CullingPipelineResources& resources,
-                                      Material::AlphaMode alphaMode) {
-        const uint32_t drawCallCount = mScene->GetDrawCallCount(alphaMode);
-        if (drawCallCount == 0) {
-            return;
-        }
-        const uint32_t bufferCount = mContext->GetMaxInFlightFrameCount();
+    {
+        const float anisotropy =
+            mContext->GetDevice()->GetDeviceProperties().limits.maxSamplerAnisotropy;
+        vk::SamplerCreateInfo materialSamplerCreateInfo =
+            vk::SamplerCreateInfo()
+                .setMagFilter(vk::Filter::eLinear)
+                .setMinFilter(vk::Filter::eLinear)
+                .setMipmapMode(vk::SamplerMipmapMode::eLinear)
+                .setAddressModeU(vk::SamplerAddressMode::eRepeat)
+                .setAddressModeV(vk::SamplerAddressMode::eRepeat)
+                .setAddressModeW(vk::SamplerAddressMode::eRepeat)
+                .setMipLodBias(0.0f)
+                .setCompareOp(vk::CompareOp::eNever)
+                .setMinLod(0.0f)
+                .setMaxLod(0.0f)
+                .setAnisotropyEnable(true)
+                .setMaxAnisotropy(anisotropy);
+        mMaterialSampler = VKRT_ASSERT_VK(
+            mContext->GetDevice()->GetLogicalDevice().createSampler(materialSamplerCreateInfo));
 
-        resources.indirectDrawBuffers = mContext->GetDevice()->CreateBuffers(
-            bufferCount,
-            drawCallCount * sizeof(vk::DrawIndexedIndirectCommand),
-            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eIndirectBuffer,
-            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+        vk::SamplerCreateInfo frameBufferSamplerCreateInfo =
+            vk::SamplerCreateInfo()
+                .setMagFilter(vk::Filter::eNearest)
+                .setMinFilter(vk::Filter::eNearest)
+                .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+                .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
+                .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
+                .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
+                .setMipLodBias(0.0f)
+                .setCompareOp(vk::CompareOp::eNever)
+                .setMinLod(0.0f)
+                .setMaxLod(0.0f)
+                .setAnisotropyEnable(false);
 
-        resources.additionalDrawDataBuffers = mContext->GetDevice()->CreateBuffers(
-            bufferCount,
-            drawCallCount * sizeof(uint32_t),
-            vk::BufferUsageFlagBits::eStorageBuffer,
-            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+        mFrameBufferSampler = VKRT_ASSERT_VK(
+            mContext->GetDevice()->GetLogicalDevice().createSampler(frameBufferSamplerCreateInfo));
 
-        resources.drawCallCountBuffer = mContext->GetDevice()->CreateBuffers(
-            bufferCount,
-            sizeof(uint32_t),
-            vk::BufferUsageFlagBits::eIndirectBuffer | vk::BufferUsageFlagBits::eStorageBuffer |
-                vk::BufferUsageFlagBits::eTransferDst,
-            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
-    };
-
-    for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
-        if (alphaMode != Material::AlphaMode::Blended) {  // Blended materials aren't shadow casters
-            createCullingResources(mShadowPassCulling[alphaMode], alphaMode);
-        }
-        createCullingResources(mBasePassCulling[alphaMode], alphaMode);
+        vk::SamplerCreateInfo irradianceSamplerCreateInfo =
+            vk::SamplerCreateInfo()
+                .setMagFilter(vk::Filter::eLinear)
+                .setMinFilter(vk::Filter::eLinear)
+                .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+                .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
+                .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
+                .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
+                .setMipLodBias(0.0f)
+                .setCompareOp(vk::CompareOp::eNever)
+                .setMinLod(0.0f)
+                .setMaxLod(0.0f)
+                .setAnisotropyEnable(false);
+        mIrradianceSampler = VKRT_ASSERT_VK(
+            mContext->GetDevice()->GetLogicalDevice().createSampler(irradianceSamplerCreateInfo));
     }
+
+    for (auto& visEntry : mVisibilityManagers) {
+        visEntry.second->AddResources();
+    }
+
+    mUIRenderer->AddResources();
+
+    mDDGIRenderer->AddResources();
+
+    mShadowRenderer->AddResources();
+
+    mPostProcessingRenderer->AddResources();
 }
 
 void Renderer::RemoveRenderTargets() {
     mShadePass = nullptr;
     mTransparentPass = nullptr;
-    mShadowMap = nullptr;
     mVisibilityBuffer = nullptr;
     mGeometryPass = nullptr;
 
     mMainRenderTarget = nullptr;
-
-    mSSAOBlurPass = nullptr;
-    mSSAOBlurredRenderTarget = nullptr;
-    mSSAOBlurredBuffer = nullptr;
-
-    mSSAOPass = nullptr;
-    mSSAORenderTarget = nullptr;
-    mSSAOBuffer = nullptr;
 
     mDepthRenderTarget = nullptr;
     mDepthBuffer = nullptr;
@@ -760,6 +331,10 @@ void Renderer::RemoveResources() {}
 
 void Renderer::UpdatePersistentUniforms() {
     mHasBoundResources = true;
+
+    for (auto& visEntry : mVisibilityManagers) {
+        visEntry.second->UpdatePersistentUniforms({mScenePersistentDataBuffer});
+    }
 
     const Scene::PackedDrawData& drawData = mScene->GetPackedDrawData();
     {
@@ -774,77 +349,167 @@ void Renderer::UpdatePersistentUniforms() {
                 buffer);
             mScenePersistentDataBuffer->UnmapBuffer();
         }
-
-        mScenePersistentDataParameter->BindBuffer(mScenePersistentDataBuffer);
     }
-
-    mShadowMapUniform->Bind(mShadowMap);
-    mVisibilityBufferUniform->Bind(mVisibilityBuffer);
 
     // Update materials
     {
         uint32_t descriptorCount = 0;
         Scene::SceneMaterials sceneMaterials = mScene->GetMaterialProxies();
-        uint8_t* buffer = mMaterialsBuffer->MapBuffer();
-        std::copy_n(
-            reinterpret_cast<const uint8_t*>(sceneMaterials.materials.data()),
-            mMaterialsBuffer->GetBufferSize(),
-            buffer);
-        mMaterialsBuffer->UnmapBuffer();
+        mMaterialsUniform->Write(
+            reinterpret_cast<const uint8_t* const>(sceneMaterials.materials.data()),
+            size_t(mMaterialsUniform->GetBufferSize()));
         descriptorCount = sceneMaterials.textures.size();
         for (const ScopedRefPtr<Texture>& materialTexture : sceneMaterials.textures) {
-            mMaterialsTextures->Bind(materialTexture);
+            mSceneTextures.push_back(materialTexture);
         }
-        mMaterialsUniform->BindBuffer(mMaterialsBuffer);
     }
-
-    // Updte geometry buffers
-    {
-        mIndexBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetIndexBuffer());
-        mPositionBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetVertexBuffer());
-        mTexCoordBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTexCoordBuffer());
-        mNormalBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetNormalBuffer());
-        mTangentBufferUniform->BindBuffer(mScene->GetMeshSystem()->GetTangentBuffer());
-    }
-
-    // Update SSAO bindings
-    mDepthBufferParameter->Bind(mDepthBuffer);
-    mSSAOBufferParameter->Bind(mSSAOBuffer);
-    mSSAOTextureParameter->Bind(mSSAOBlurredBuffer);
 
     // DDGI
     {
-        mDDGIRenderer = new DDGIRenderer(
-            mContext,
-            mScene,
-            {.mCameraUniform = mCameraUniform->GetBuffers(),
-             .mShadowCameraUniform = mShadowCameraUniform->GetBuffers(),
-             .mPerMeshParameters = mPerMeshParameters->GetBuffers(),
-             .mDDGIProbeDataParameter = mDDGIProbeDataParameter->GetBuffers(),
-
-             .mScenePersistentDataParameter = mScenePersistentDataParameter->GetBuffer(),
-             .mMaterialSampler = mMaterialSampler->GetImageInfos()[0].sampler,
-             .mFrameBufferSampler = mFrameBufferSampler->GetImageInfos()[0].sampler,
-             .mMaterialsUniform = mMaterialsUniform->GetBuffer(),
-             .mIndexBufferUniform = mIndexBufferUniform->GetBuffer(),
-             .mPositionBufferUniform = mPositionBufferUniform->GetBuffer(),
-             .mTexCoordBufferUniform = mTexCoordBufferUniform->GetBuffer(),
-             .mNormalBufferUniform = mNormalBufferUniform->GetBuffer(),
-             .mTangentBufferUniform = mTangentBufferUniform->GetBuffer(),
-             .mMaterialsTextures = mMaterialsTextures->GetTextures()});
-        mDDGIRenderer->UpdatePersistentUniforms();
-
-        mReadOnlyProbeIrradianceParameter->Bind(mDDGIRenderer->GetIrradianceBuffer());
-        mReadOnlyProbeDepthParameter->Bind(mDDGIRenderer->GetDepthBuffer());
+        DDGIRenderer::PersistentParameters parameters{
+            .mScenePersistentDataParameter = mScenePersistentDataBuffer,
+            .mMaterialSampler = mMaterialSampler,
+            .mFrameBufferSampler = mFrameBufferSampler,
+            .mMaterialsUniform = mMaterialsUniform,
+            .mIndexBufferUniform = mScene->GetMeshSystem()->GetIndexBuffer(),
+            .mPositionBufferUniform = mScene->GetMeshSystem()->GetVertexBuffer(),
+            .mTexCoordBufferUniform = mScene->GetMeshSystem()->GetTexCoordBuffer(),
+            .mNormalBufferUniform = mScene->GetMeshSystem()->GetNormalBuffer(),
+            .mTangentBufferUniform = mScene->GetMeshSystem()->GetTangentBuffer(),
+            .mMaterialsTextures = mSceneTextures,
+        };
+        mDDGIRenderer->UpdatePersistentUniforms(parameters);
     }
+
+    // Shadow resources
+    {
+        ShadowRenderer::PersistentParameters parameters{
+            .scenePersistentDataBuffer = mScenePersistentDataBuffer,
+            .materialSampler = mMaterialSampler,
+            .materialUniform = mMaterialsUniform,
+            .sceneTextures = mSceneTextures,
+        };
+        mShadowRenderer->UpdatePersistentUniforms(parameters);
+    }
+
+    // Post processing
+    {
+        PostProcessingRenderer::PersistentParameters parameters{
+            mFrameBufferSampler = mFrameBufferSampler,
+            mDepthBuffer = mDepthBuffer,
+        };
+        mPostProcessingRenderer->UpdatePersistentUniforms(parameters);
+    }
+
+    // Visibility buffer geometry + shading
+    for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
+        bool isTransparentPass = alphaMode == Material::AlphaMode::Blended;
+        bool isAlphaMaskedPass = alphaMode == Material::AlphaMode::Masked;
+        ScopedRefPtr<GraphicsPipeline>& pipeline = mGeometryPassPipelines[alphaMode];
+
+        uint32_t bindingIndex = 0;
+        pipeline->Bind(ParameterUpdateFrequency::Once, bindingIndex++, mScenePersistentDataBuffer);
+        pipeline->Bind(ParameterUpdateFrequency::Once, bindingIndex++, mMaterialSampler);
+        pipeline->Bind(ParameterUpdateFrequency::Once, bindingIndex++, mMaterialsUniform);
+        if (isTransparentPass) {
+            pipeline->Bind(
+                ParameterUpdateFrequency::Once,
+                bindingIndex++,
+                mShadowRenderer->GetShadowMap());
+        }
+        pipeline->Bind(ParameterUpdateFrequency::Once, bindingIndex++, mSceneTextures);
+    }
+
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 0, mScenePersistentDataBuffer);
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 1, mMaterialSampler);
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 2, mFrameBufferSampler);
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 3, mIrradianceSampler);
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 4, mMaterialsUniform);
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 5, mShadowRenderer->GetShadowMap());
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 6, mVisibilityBuffer);
+    mShadePassPipeline->Bind(
+        ParameterUpdateFrequency::Once,
+        7,
+        mPostProcessingRenderer->GetSSAOBuffer());
+    mShadePassPipeline->Bind(
+        ParameterUpdateFrequency::Once,
+        8,
+        mDDGIRenderer->GetIrradianceBuffer());
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 9, mDDGIRenderer->GetDepthBuffer());
+    mShadePassPipeline->Bind(
+        ParameterUpdateFrequency::Once,
+        10,
+        mScene->GetMeshSystem()->GetIndexBuffer());
+    mShadePassPipeline->Bind(
+        ParameterUpdateFrequency::Once,
+        11,
+        mScene->GetMeshSystem()->GetVertexBuffer());
+    mShadePassPipeline->Bind(
+        ParameterUpdateFrequency::Once,
+        12,
+        mScene->GetMeshSystem()->GetTexCoordBuffer());
+    mShadePassPipeline->Bind(
+        ParameterUpdateFrequency::Once,
+        13,
+        mScene->GetMeshSystem()->GetNormalBuffer());
+    mShadePassPipeline->Bind(
+        ParameterUpdateFrequency::Once,
+        14,
+        mScene->GetMeshSystem()->GetTangentBuffer());
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 15, mSceneTextures);
 }
 
-void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
+void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
+    // Update culling systems
+    for (auto& visEntry : mVisibilityManagers) {
+        const Material::AlphaMode alphaMode = visEntry.first;
+        VisibilityManager::CullData cullingData{
+            .ortho = 0,
+            .viewDirectionOrCameraPos = camera->GetPosition(),
+            .frustumPlanes = camera->GetViewFrustum().GetPlanes(),
+            .globalDrawOffset = static_cast<uint32_t>(mScene->GetDrawCallOffset(alphaMode)),
+            .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount(alphaMode))};
+
+        visEntry.second->UpdateUniforms(cullingData, frameIndex, mPerMeshBuffers);
+    }
+
+    for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
+        bool isTransparentPass = alphaMode == Material::AlphaMode::Blended;
+        ScopedRefPtr<GraphicsPipeline>& pipeline = mGeometryPassPipelines[alphaMode];
+
+        const uint32_t drawCallCount = static_cast<uint32_t>(mScene->GetDrawCallCount(alphaMode));
+        if (drawCallCount <= 0) {
+            continue;
+        }
+
+        uint32_t bindingIndex = 0;
+        pipeline->Bind(ParameterUpdateFrequency::PerFrame, bindingIndex++, mCameraUniform);
+        if (isTransparentPass) {
+            pipeline->Bind(
+                ParameterUpdateFrequency::PerFrame,
+                bindingIndex++,
+                mShadowRenderer->GetShadowUniform());
+        }
+        pipeline->Bind(ParameterUpdateFrequency::PerFrame, bindingIndex++, mPerMeshBuffers);
+        pipeline->Bind(
+            ParameterUpdateFrequency::PerFrame,
+            bindingIndex++,
+            mVisibilityManagers[alphaMode]->GetAdditionalDrawDataBuffers());
+    }
+
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::PerFrame, 0, mCameraUniform);
+    mShadePassPipeline->Bind(
+        ParameterUpdateFrequency::PerFrame,
+        1,
+        mShadowRenderer->GetShadowUniform());
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::PerFrame, 2, mPerMeshBuffers);
+    mShadePassPipeline->Bind(ParameterUpdateFrequency::PerFrame, 3, mDDGIRenderer->GetProbeData());
+
     // Update content of per-draw parameters
     {
         const Scene::PackedDrawData& drawData = mScene->GetPackedDrawData();
         {
-            ScopedRefPtr<VulkanBuffer> currentBuffer = mPerMeshBuffers[imageIndex];
+            ScopedRefPtr<VulkanBuffer> currentBuffer = mPerMeshBuffers[frameIndex];
             uint8_t* buffer = currentBuffer->MapBuffer();
             std::copy_n(
                 reinterpret_cast<const uint8_t*>(drawData.perMeshData.data()),
@@ -852,61 +517,6 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
                 buffer);
             currentBuffer->UnmapBuffer();
         }
-    }
-
-    // Update culling parameters
-    auto updateCullingResources = [&](Renderer::CullingPipelineResources& resources,
-                                      Material::AlphaMode alphaMode,
-                                      CullData cullData) {
-        const uint32_t drawCallCount = mScene->GetDrawCallCount(alphaMode);
-        if (drawCallCount == 0) {
-            return;
-        }
-        if (!mFreezeCulling) {
-            resources.cullingDataUniform->Write(
-                imageIndex,
-                reinterpret_cast<uint8_t*>(&cullData),
-                sizeof(CullData));
-        }
-        resources.indirectDrawBufferParameter->BindBuffers(resources.indirectDrawBuffers);
-        resources.additionalDrawDataBufferParameter->BindBuffers(
-            resources.additionalDrawDataBuffers);
-        resources.drawCallCountBufferParameter->BindBuffers(resources.drawCallCountBuffer);
-    };
-
-    for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
-        if (alphaMode != Material::AlphaMode::Blended) {  // Blended materials aren't shadow casters
-            CullData shadowCullingData{
-                .ortho = 1,
-                .viewDirectionOrCameraPos = mScene->GetLight().GetDirection(),
-                .frustumPlanes = ViewFrustum(mScene->GetLight().ComputeShadowMatrix()).GetPlanes(),
-                .globalDrawOffset = static_cast<uint32_t>(mScene->GetDrawCallOffset(alphaMode)),
-                .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount(alphaMode))};
-            updateCullingResources(mShadowPassCulling[alphaMode], alphaMode, shadowCullingData);
-        }
-
-        CullData mainCameraCullingData{
-            .ortho = 0,
-            .viewDirectionOrCameraPos = camera->GetPosition(),
-            .frustumPlanes = camera->GetViewFrustum().GetPlanes(),
-            .globalDrawOffset = static_cast<uint32_t>(mScene->GetDrawCallOffset(alphaMode)),
-            .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount(alphaMode))};
-        updateCullingResources(mBasePassCulling[alphaMode], alphaMode, mainCameraCullingData);
-    }
-
-    // Shadow camera parameters
-    {
-        DirectionalLight& light = mScene->GetLight();
-        glm::mat4 shadowMatrix = light.ComputeShadowMatrix();
-        LightData cameraMatrices{
-            .radiance = light.GetRadiance(),
-            .direction = light.GetDirection(),
-            .viewProjection = shadowMatrix,
-            .shadowTaps = mUIRenderer->GetShadowTaps()};
-        mShadowCameraUniform->Write(
-            imageIndex,
-            reinterpret_cast<uint8_t*>(&cameraMatrices),
-            sizeof(LightData));
     }
 
     // Update camera uniform
@@ -919,37 +529,25 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
             .invProjection = glm::inverse(camera->GetProjectionTransform()),
             .invView = glm::inverse(camera->GetViewTransform()),
             .cameraPos = glm::vec4(camera->GetPosition(), 0.0f)};
-        mCameraUniform->Write(
-            imageIndex,
-            reinterpret_cast<uint8_t*>(&cameraMatrices),
-            sizeof(CameraData));
+        mCameraUniform[frameIndex]->Write(cameraMatrices);
     }
 
-    // SSAO
-    {
-        SSAOControlData ssaoControl = mUIRenderer->GetSSAOControlData();
-        mSSAOControlParameter->Write(
-            imageIndex,
-            reinterpret_cast<uint8_t*>(&ssaoControl),
-            sizeof(SSAOControlData));
-    }
+    mShadowRenderer->UpdateUniforms(frameIndex, {.meshDataBuffer = mPerMeshBuffers});
+    mPostProcessingRenderer->UpdateUniforms({.mCameraUniform = mCameraUniform}, frameIndex);
 
     // DDGI
     {
-        mDDGIRenderer->UpdateUniforms(camera, imageIndex);
+        struct PerFrameParameters {
+            std::vector<ScopedRefPtr<VulkanBuffer>> mCameraUniform;
+            std::vector<ScopedRefPtr<VulkanBuffer>> mShadowCameraUniform;
+            std::vector<ScopedRefPtr<VulkanBuffer>> mPerMeshParameters;
+        };
+        mDDGIRenderer->UpdateUniforms(
+            {.mCameraUniform = mCameraUniform,
+             .mShadowCameraUniform = mShadowRenderer->GetShadowUniform(),
+             .mPerMeshParameters = mPerMeshBuffers},
+            frameIndex);
     }
-}
-
-std::string AlphaModeToStr(const Material::AlphaMode& alphaMode) {
-    switch (alphaMode) {
-        case Material::AlphaMode::Opaque:
-            return "Opaque";
-        case Material::AlphaMode::Masked:
-            return "Masked";
-        case Material::AlphaMode::Blended:
-            return "Blended";
-    }
-    return "";
 }
 
 void Renderer::Render(Camera* camera) {
@@ -959,7 +557,6 @@ void Renderer::Render(Camera* camera) {
     mContext->GetSwapchain()->AcquireNextImage(mCurrentFrameIndex);
 
     mScene->Update();
-    mUIRenderer->Update();
 
     if (!mHasResouces) {
         AddResources();
@@ -974,222 +571,14 @@ void Renderer::Render(Camera* camera) {
 
         const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
 
-        const auto dispatchCulling = [&](CullingPipelineResources& resources,
-                                         uint32_t maxDrawCallCount) {
-            if (maxDrawCallCount == 0) {
-                return;
-            }
-
-            ScopedRefPtr<VulkanBuffer> drawCallCountBuffer =
-                resources.drawCallCountBuffer[mCurrentFrameIndex];
-            ScopedRefPtr<VulkanBuffer> indirectDrawBuffer =
-                resources.indirectDrawBuffers[mCurrentFrameIndex];
-            ScopedRefPtr<VulkanBuffer> additionalDrawDataBuffer =
-                resources.additionalDrawDataBuffers[mCurrentFrameIndex];
-            // Write 0 in drawCallCountBuffer
-            {
-                std::vector<vk::BufferMemoryBarrier> bufferBarriers = VulkanBuffer::GetBarriers(
-                    {drawCallCountBuffer},
-                    vk::PipelineStageFlagBits::eDrawIndirect,
-                    vk::PipelineStageFlagBits::eTransfer);
-
-                command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eDrawIndirect,
-                    vk::PipelineStageFlagBits::eTransfer,
-                    vk::DependencyFlags{},
-                    {},
-                    bufferBarriers,
-                    {});
-
-                command.buffer
-                    .fillBuffer(drawCallCountBuffer->GetBufferHandle(), 0, sizeof(uint32_t), 0);
-            }
-
-            {
-                std::vector<vk::BufferMemoryBarrier> bufferBarriers = VulkanBuffer::GetBarriers(
-                    {drawCallCountBuffer},
-                    vk::PipelineStageFlagBits::eTransfer,
-                    vk::PipelineStageFlagBits::eComputeShader);
-
-                command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eTransfer,
-                    vk::PipelineStageFlagBits::eComputeShader,
-                    vk::DependencyFlags{},
-                    {},
-                    bufferBarriers,
-                    {});
-            }
-
-            {
-                std::vector<vk::BufferMemoryBarrier> bufferBarriers = VulkanBuffer::GetBarriers(
-                    {indirectDrawBuffer, additionalDrawDataBuffer},
-                    vk::PipelineStageFlagBits::eDrawIndirect,
-                    vk::PipelineStageFlagBits::eComputeShader);
-
-                command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eDrawIndirect,
-                    vk::PipelineStageFlagBits::eComputeShader,
-                    vk::DependencyFlags{},
-                    {},
-                    bufferBarriers,
-                    {});
-            }
-
-            command.buffer.bindPipeline(
-                vk::PipelineBindPoint::eCompute,
-                resources.cullingPipeline->GetPipelineHandle());
-
-            std::vector<vk::DescriptorSet> cullingDescriptorSets =
-                resources.cullingParameters->GetDescriptorSets(mCurrentFrameIndex);
-
-            command.buffer.bindDescriptorSets(
-                vk::PipelineBindPoint::eCompute,
-                resources.cullingPipeline->GetPipelineLayout(),
-                0,
-                cullingDescriptorSets,
-                nullptr);
-
-            command.buffer.dispatch((maxDrawCallCount / 64) + 1, 1, 1);
-
-            // TODO: Wait until before actual draws are dispatched, this is too early
-            {
-                std::vector<vk::BufferMemoryBarrier> bufferBarriers = VulkanBuffer::GetBarriers(
-                    {indirectDrawBuffer, additionalDrawDataBuffer, drawCallCountBuffer},
-                    vk::PipelineStageFlagBits::eComputeShader,
-                    vk::PipelineStageFlagBits::eComputeShader);
-
-                command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eComputeShader,
-                    vk::PipelineStageFlagBits::eAllGraphics,
-                    vk::DependencyFlags{},
-                    {},
-                    bufferBarriers,
-                    {});
-            }
-        };
-
         mDDGIRenderer->Render(camera, command.buffer, mCurrentFrameIndex);
 
-        mContext->BeginMarker(command.buffer, "Shadow culling");
-        for (const Material::AlphaMode alphaMode : Material::AlphaModes) {
-            if (alphaMode !=
-                Material::AlphaMode::Blended) {  // Blended materials aren't shadow casters
-                mContext->BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
-                dispatchCulling(mShadowPassCulling[alphaMode], mScene->GetDrawCallCount(alphaMode));
-                mContext->EndMarker(command.buffer);
-            }
-        }
-        mContext->EndMarker(command.buffer);
-
         mContext->BeginMarker(command.buffer, "Basepass culling");
-        for (const Material::AlphaMode& alphaMode : Material::AlphaModes) {
-            mContext->BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
-            dispatchCulling(mBasePassCulling[alphaMode], mScene->GetDrawCallCount(alphaMode));
-            mContext->EndMarker(command.buffer);
+        for (auto& visEntry : mVisibilityManagers) {
+            visEntry.second->Dispatch(command.buffer, mCurrentFrameIndex);
         }
         mContext->EndMarker(command.buffer);
-
-        // Shadow pass
-        {
-            mContext->BeginMarker(command.buffer, "Shadowmap Rendering");
-            {
-                // Transition shadow map to depth attachment
-                std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
-                    vk::PipelineStageFlagBits::eFragmentShader,
-                    vk::PipelineStageFlagBits::eVertexShader,
-                    {{mShadowMap,
-                      vk::ImageLayout::eShaderReadOnlyOptimal,
-                      vk::ImageLayout::eDepthAttachmentOptimal}});
-
-                command.buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eFragmentShader,
-                    vk::PipelineStageFlagBits::eVertexShader,
-                    vk::DependencyFlags{},
-                    {},
-                    {},
-                    imageBarriers);
-            }
-
-            const std::vector<vk::ClearValue> clearValues{
-                vk::ClearDepthStencilValue(1.0f, 0),
-            };
-            const vk::RenderPassBeginInfo renderPassBeginInfo =
-                vk::RenderPassBeginInfo()
-                    .setRenderPass(mDepthOnlyPass->GetRenderPassHandle())
-                    .setFramebuffer(mDepthOnlyPass->GetFramebufferHandle())
-                    .setRenderArea({vk::Offset2D{0, 0}, mShadowMap->GetExtent()})
-                    .setClearValues(clearValues);
-            command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
-
-            {
-                const vk::Viewport viewport{
-                    0.0f,
-                    0.0f,
-                    static_cast<float>(mShadowMap->GetWidth()),
-                    static_cast<float>(mShadowMap->GetHeight()),
-                    0.0f,
-                    1.0f};
-                command.buffer.setViewport(0, viewport);
-
-                const vk::Rect2D scissor =
-                    vk::Rect2D().setOffset(0).setExtent(mShadowMap->GetExtent());
-                command.buffer.setScissor(0, scissor);
-            }
-
-            for (const Material::AlphaMode alphaMode : Material::AlphaModes) {
-                // Skip transparent objects while rendering shadows
-                uint32_t drawCallCount = mScene->GetDrawCallCount(alphaMode);
-                if (alphaMode == Material::AlphaMode::Blended || drawCallCount == 0) {
-                    continue;
-                }
-                mContext->BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
-
-                command.buffer.bindPipeline(
-                    vk::PipelineBindPoint::eGraphics,
-                    mShadowPassPipeline[alphaMode].pipeline->GetPipelineHandle());
-
-                std::vector<vk::DescriptorSet> descriptorSets =
-                    mShadowPassPipeline[alphaMode].parameters->GetDescriptorSets(
-                        mCurrentFrameIndex);
-
-                command.buffer.bindDescriptorSets(
-                    vk::PipelineBindPoint::eGraphics,
-                    mShadowPassPipeline[alphaMode].pipeline->GetPipelineLayout(),
-                    0,
-                    descriptorSets,
-                    nullptr);
-
-                {
-                    mScene->GetMeshSystem()->BindBuffers(
-                        command.buffer,
-                        alphaMode == Material::AlphaMode::Opaque
-                            ? VertexAttributeFlag::Position
-                            : VertexAttributeFlag(
-                                  VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord));
-
-                    uint32_t maxDrawIndirectCount =
-                        mContext->GetDevice()->GetDeviceProperties().limits.maxDrawIndirectCount;
-                    VKRT_ASSERT(maxDrawIndirectCount >= drawCallCount);
-
-                    command.buffer.drawIndexedIndirectCount(
-                        mShadowPassCulling[alphaMode]
-                            .indirectDrawBuffers[mCurrentFrameIndex]
-                            ->GetBufferHandle(),
-                        0,
-                        mShadowPassCulling[alphaMode]
-                            .drawCallCountBuffer[mCurrentFrameIndex]
-                            ->GetBufferHandle(),
-                        0,
-                        drawCallCount,
-                        sizeof(VkDrawIndexedIndirectCommand));
-                }
-                mContext->EndMarker(command.buffer);
-            }
-
-            command.buffer.endRenderPass();
-            mContext->EndMarker(command.buffer);
-        }
-
+        mShadowRenderer->Render(command.buffer, mCurrentFrameIndex);
         // Base pass
         {
             mContext->BeginMarker(command.buffer, "Base pass");
@@ -1246,15 +635,14 @@ void Renderer::Render(Camera* camera) {
                 mContext->BeginMarker(command.buffer, AlphaModeToStr(alphaMode));
                 command.buffer.bindPipeline(
                     vk::PipelineBindPoint::eGraphics,
-                    mGeometryPassPipeline[alphaMode].pipeline->GetPipelineHandle());
+                    mGeometryPassPipelines[alphaMode]->GetPipelineHandle());
 
                 std::vector<vk::DescriptorSet> descriptorSets =
-                    mGeometryPassPipeline[alphaMode].parameters->GetDescriptorSets(
-                        mCurrentFrameIndex);
+                    mGeometryPassPipelines[alphaMode]->GetDescriptorSets(mCurrentFrameIndex);
 
                 command.buffer.bindDescriptorSets(
                     vk::PipelineBindPoint::eGraphics,
-                    mGeometryPassPipeline[alphaMode].pipeline->GetPipelineLayout(),
+                    mGeometryPassPipelines[alphaMode]->GetPipelineLayout(),
                     0,
                     descriptorSets,
                     nullptr);
@@ -1272,12 +660,12 @@ void Renderer::Render(Camera* camera) {
                     VKRT_ASSERT(maxDrawIndirectCount >= drawCallCount);
 
                     command.buffer.drawIndexedIndirectCount(
-                        mBasePassCulling[alphaMode]
-                            .indirectDrawBuffers[mCurrentFrameIndex]
+                        mVisibilityManagers[alphaMode]
+                            ->GetIndirectDrawBuffer(mCurrentFrameIndex)
                             ->GetBufferHandle(),
                         0,
-                        mBasePassCulling[alphaMode]
-                            .drawCallCountBuffer[mCurrentFrameIndex]
+                        mVisibilityManagers[alphaMode]
+                            ->GetIndirectDrawCountBuffer(mCurrentFrameIndex)
                             ->GetBufferHandle(),
                         0,
                         drawCallCount,
@@ -1289,123 +677,7 @@ void Renderer::Render(Camera* camera) {
             mContext->EndMarker(command.buffer);
         }
 
-        // SSAO pass
-        {
-            mContext->BeginMarker(command.buffer, "SSAO");
-            {
-                mContext->BeginMarker(command.buffer, "SSAO draw");
-                {
-                    std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
-                        vk::PipelineStageFlagBits::eColorAttachmentOutput,
-                        vk::PipelineStageFlagBits::eFragmentShader,
-                        {{mDepthBuffer,
-                          vk::ImageLayout::eDepthAttachmentOptimal,
-                          vk::ImageLayout::eShaderReadOnlyOptimal}});
-
-                    command.buffer.pipelineBarrier(
-                        vk::PipelineStageFlagBits::eColorAttachmentOutput,
-                        vk::PipelineStageFlagBits::eFragmentShader,
-                        vk::DependencyFlags{},
-                        {},
-                        {},
-                        imageBarriers);
-                }
-
-                const std::vector<vk::ClearValue> clearValues{
-                    vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
-                };
-                const vk::RenderPassBeginInfo renderPassBeginInfo =
-                    vk::RenderPassBeginInfo()
-                        .setRenderPass(mSSAOPass->GetRenderPassHandle())
-                        .setFramebuffer(mSSAOPass->GetFramebufferHandle())
-                        .setRenderArea({vk::Offset2D{0, 0}, imageSize})
-                        .setClearValues(clearValues);
-                command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
-
-                {
-                    const vk::Viewport viewport{
-                        0.0f,
-                        0.0f,
-                        static_cast<float>(imageSize.width),
-                        static_cast<float>(imageSize.height),
-                        0.0f,
-                        1.0f};
-                    command.buffer.setViewport(0, viewport);
-
-                    const vk::Rect2D scissor = vk::Rect2D().setOffset(0).setExtent(
-                        vk::Extent2D{imageSize.width, imageSize.height});
-                    command.buffer.setScissor(0, scissor);
-                }
-
-                command.buffer.bindPipeline(
-                    vk::PipelineBindPoint::eGraphics,
-                    mSSAOPipeline->GetPipelineHandle());
-
-                std::vector<vk::DescriptorSet> descriptorSets =
-                    mSSAOParameters->GetDescriptorSets(mCurrentFrameIndex);
-
-                command.buffer.bindDescriptorSets(
-                    vk::PipelineBindPoint::eGraphics,
-                    mSSAOPipeline->GetPipelineLayout(),
-                    0,
-                    descriptorSets,
-                    nullptr);
-
-                command.buffer.draw(3, 1, 0, 0);
-
-                command.buffer.endRenderPass();
-                mContext->EndMarker(command.buffer);
-            }
-
-            mContext->BeginMarker(command.buffer, "SSAO blur");
-            {
-                const std::vector<vk::ClearValue> clearValues{
-                    vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
-                };
-                const vk::RenderPassBeginInfo renderPassBeginInfo =
-                    vk::RenderPassBeginInfo()
-                        .setRenderPass(mSSAOBlurPass->GetRenderPassHandle())
-                        .setFramebuffer(mSSAOBlurPass->GetFramebufferHandle())
-                        .setRenderArea({vk::Offset2D{0, 0}, imageSize})
-                        .setClearValues(clearValues);
-                command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
-
-                {
-                    const vk::Viewport viewport{
-                        0.0f,
-                        0.0f,
-                        static_cast<float>(imageSize.width),
-                        static_cast<float>(imageSize.height),
-                        0.0f,
-                        1.0f};
-                    command.buffer.setViewport(0, viewport);
-
-                    const vk::Rect2D scissor = vk::Rect2D().setOffset(0).setExtent(
-                        vk::Extent2D{imageSize.width, imageSize.height});
-                    command.buffer.setScissor(0, scissor);
-                }
-
-                command.buffer.bindPipeline(
-                    vk::PipelineBindPoint::eGraphics,
-                    mSSAOBlurPipeline->GetPipelineHandle());
-
-                std::vector<vk::DescriptorSet> descriptorSets =
-                    mSSAOBlurParameters->GetDescriptorSets(mCurrentFrameIndex);
-
-                command.buffer.bindDescriptorSets(
-                    vk::PipelineBindPoint::eGraphics,
-                    mSSAOBlurPipeline->GetPipelineLayout(),
-                    0,
-                    descriptorSets,
-                    nullptr);
-
-                command.buffer.draw(3, 1, 0, 0);
-
-                command.buffer.endRenderPass();
-                mContext->EndMarker(command.buffer);
-            }
-            mContext->EndMarker(command.buffer);
-        }
+        mPostProcessingRenderer->Render(command.buffer, mCurrentFrameIndex, mDepthBuffer);
 
         // Shade pass
         {
@@ -1415,7 +687,7 @@ void Renderer::Render(Camera* camera) {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
                     vk::PipelineStageFlagBits::eColorAttachmentOutput,
                     vk::PipelineStageFlagBits::eFragmentShader,
-                    {{mShadowMap,
+                    {{mShadowRenderer->GetShadowMap(),
                       vk::ImageLayout::eDepthAttachmentOptimal,
                       vk::ImageLayout::eShaderReadOnlyOptimal},
                      {mVisibilityBuffer,
@@ -1462,7 +734,7 @@ void Renderer::Render(Camera* camera) {
                 mShadePassPipeline->GetPipelineHandle());
 
             std::vector<vk::DescriptorSet> descriptorSets =
-                mShadePassParameters->GetDescriptorSets(mCurrentFrameIndex);
+                mShadePassPipeline->GetDescriptorSets(mCurrentFrameIndex);
 
             command.buffer.bindDescriptorSets(
                 vk::PipelineBindPoint::eGraphics,
@@ -1532,15 +804,14 @@ void Renderer::Render(Camera* camera) {
                 if (drawCallCount > 0) {
                     command.buffer.bindPipeline(
                         vk::PipelineBindPoint::eGraphics,
-                        mGeometryPassPipeline[alphaMode].pipeline->GetPipelineHandle());
+                        mGeometryPassPipelines[alphaMode]->GetPipelineHandle());
 
                     std::vector<vk::DescriptorSet> descriptorSets =
-                        mGeometryPassPipeline[alphaMode].parameters->GetDescriptorSets(
-                            mCurrentFrameIndex);
+                        mGeometryPassPipelines[alphaMode]->GetDescriptorSets(mCurrentFrameIndex);
 
                     command.buffer.bindDescriptorSets(
                         vk::PipelineBindPoint::eGraphics,
-                        mGeometryPassPipeline[alphaMode].pipeline->GetPipelineLayout(),
+                        mGeometryPassPipelines[alphaMode]->GetPipelineLayout(),
                         0,
                         descriptorSets,
                         nullptr);
@@ -1556,12 +827,12 @@ void Renderer::Render(Camera* camera) {
                         VKRT_ASSERT(maxDrawIndirectCount >= drawCallCount);
 
                         command.buffer.drawIndexedIndirectCount(
-                            mBasePassCulling[alphaMode]
-                                .indirectDrawBuffers[mCurrentFrameIndex]
+                            mVisibilityManagers[alphaMode]
+                                ->GetIndirectDrawBuffer(mCurrentFrameIndex)
                                 ->GetBufferHandle(),
                             0,
-                            mBasePassCulling[alphaMode]
-                                .drawCallCountBuffer[mCurrentFrameIndex]
+                            mVisibilityManagers[alphaMode]
+                                ->GetIndirectDrawCountBuffer(mCurrentFrameIndex)
                                 ->GetBufferHandle(),
                             0,
                             drawCallCount,
@@ -1607,6 +878,10 @@ Renderer::~Renderer() {
     mCommandRing->Flush();
     ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
     inputManager->Unsuscribe(this);
+
+    mContext->GetDevice()->GetLogicalDevice().destroySampler(mMaterialSampler);
+    mContext->GetDevice()->GetLogicalDevice().destroySampler(mFrameBufferSampler);
+    mContext->GetDevice()->GetLogicalDevice().destroySampler(mIrradianceSampler);
 }
 
 }  // namespace VKRT

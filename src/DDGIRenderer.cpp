@@ -24,11 +24,8 @@ DDGIData ddgiData{
     .maxRayLength = probeMaxRayLength,
 };
 
-DDGIRenderer::DDGIRenderer(
-    ScopedRefPtr<Context> context,
-    ScopedRefPtr<Scene> scene,
-    Parameters parameters)
-    : mContext(context), mScene(scene), mParameters(parameters) {
+DDGIRenderer::DDGIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
+    : mContext(context), mScene(scene) {
     AddRenderTargets();
     AddPipelines();
 }
@@ -89,69 +86,18 @@ void DDGIRenderer::AddPipelines() {
 
     mProbeRaytracingPipeline = new RaytracingPipeline(mContext, raytracingStages);
 
-    mReadOnlyProbeRadianceParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eSampledImage,
-        vk::ShaderStageFlagBits::eCompute);
-
-    mReadOnlyProbeDirectionDepthParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eSampledImage,
-        vk::ShaderStageFlagBits::eCompute);
-
-    mWriteProbeIrradianceParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eStorageImage,
-        vk::ShaderStageFlagBits::eCompute);
-
-    mWriteProbeDepthParameter = new ShaderParameterImage(
-        mContext,
-        vk::DescriptorType::eStorageImage,
-        vk::ShaderStageFlagBits::eCompute);
-
-    vk::SamplerCreateInfo frameBufferSamplerCreateInfo =
-        vk::SamplerCreateInfo()
-            .setMagFilter(vk::Filter::eNearest)
-            .setMinFilter(vk::Filter::eNearest)
-            .setMipmapMode(vk::SamplerMipmapMode::eNearest)
-            .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
-            .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
-            .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
-            .setMipLodBias(0.0f)
-            .setCompareOp(vk::CompareOp::eNever)
-            .setMinLod(0.0f)
-            .setMaxLod(0.0f)
-            .setAnisotropyEnable(false);
-
-    mFrameBufferSampler = new ShaderParameterSampler(
-        mContext,
-        vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenKHR |
-            vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eMissKHR |
-            vk::ShaderStageFlagBits::eCompute,
-        frameBufferSamplerCreateInfo);
-
-    mDDGIProbeDataParameter = new ShaderParameterBuffer(
-        mContext,
-        vk::DescriptorType::eUniformBuffer,
-        ShaderParameter::UpdateFrequency::PerFrame,
-        vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eFragment);
-    mDDGIProbeDataParameter->BindBuffers(mParameters.mDDGIProbeDataParameter);
-
-    mUpdateProbeParameters = new ShaderParameterCollection(mContext);
-    mUpdateProbeParameters->AddParameter(mDDGIProbeDataParameter);
-    mUpdateProbeParameters->AddParameter(mFrameBufferSampler);
-    mUpdateProbeParameters->AddParameter(mReadOnlyProbeRadianceParameter);
-    mUpdateProbeParameters->AddParameter(mReadOnlyProbeDirectionDepthParameter);
-    mUpdateProbeParameters->AddParameter(mWriteProbeIrradianceParameter);
-    mUpdateProbeParameters->AddParameter(mWriteProbeDepthParameter);
-
     mUpdateProbePipeline = new ComputePipeline(
         mContext,
-        mUpdateProbeParameters,
         {{vk::ShaderStageFlagBits::eCompute, {Resource::Id::UpdateProbesShader}}});
 }
 
-void DDGIRenderer::AddResources() {}
+void DDGIRenderer::AddResources() {
+    mDDGIProbeData = mContext->GetDevice()->CreateBuffers(
+        mContext->GetMaxInFlightFrameCount(),
+        sizeof(DDGIData),
+        vk::BufferUsageFlagBits::eUniformBuffer,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+}
 
 void DDGIRenderer::RemoveRenderTargets() {
     mProbeDepthBuffer = nullptr;
@@ -163,14 +109,14 @@ void DDGIRenderer::RemovePipelines() {}
 
 void DDGIRenderer::RemoveResources() {}
 
-void DDGIRenderer::UpdatePersistentUniforms() {
+void DDGIRenderer::UpdatePersistentUniforms(const PersistentParameters& parameters) {
     // DDGI
     {
         {
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 0,
-                mParameters.mScenePersistentDataParameter);
+                parameters.mScenePersistentDataParameter);
             mProbeRaytracingPipeline->Bind(ParameterUpdateFrequency::Once, 1, mScene->GetTLAS());
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
@@ -183,68 +129,78 @@ void DDGIRenderer::UpdatePersistentUniforms() {
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 4,
-                mParameters.mMaterialSampler);
+                parameters.mMaterialSampler);
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 5,
-                mParameters.mFrameBufferSampler);
+                parameters.mFrameBufferSampler);
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 6,
-                mParameters.mMaterialsUniform);
+                parameters.mMaterialsUniform);
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 7,
-                mParameters.mIndexBufferUniform);
+                parameters.mIndexBufferUniform);
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 8,
-                mParameters.mPositionBufferUniform);
+                parameters.mPositionBufferUniform);
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 9,
-                mParameters.mTexCoordBufferUniform);
+                parameters.mTexCoordBufferUniform);
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 10,
-                mParameters.mNormalBufferUniform);
+                parameters.mNormalBufferUniform);
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 11,
-                mParameters.mTangentBufferUniform);
+                parameters.mTangentBufferUniform);
             mProbeRaytracingPipeline->Bind(
                 ParameterUpdateFrequency::Once,
                 12,
-                mParameters.mMaterialsTextures);
+                parameters.mMaterialsTextures);
         }
 
         // Compute
-        mReadOnlyProbeRadianceParameter->Bind(mProbeRayRadianceBuffer);
-        mReadOnlyProbeDirectionDepthParameter->Bind(mProbeRayDirectionDepthBuffer);
-        mWriteProbeIrradianceParameter->Bind(mProbeIrradianceBuffer);
-        mWriteProbeDepthParameter->Bind(mProbeDepthBuffer);
+        {
+            mUpdateProbePipeline->Bind(
+                ParameterUpdateFrequency::Once,
+                0,
+                parameters.mFrameBufferSampler);
+            mUpdateProbePipeline->Bind(ParameterUpdateFrequency::Once, 1, mProbeRayRadianceBuffer);
+            mUpdateProbePipeline->Bind(
+                ParameterUpdateFrequency::Once,
+                2,
+                mProbeRayDirectionDepthBuffer);
+            mUpdateProbePipeline->Bind(ParameterUpdateFrequency::Once, 3, mProbeIrradianceBuffer);
+            mUpdateProbePipeline->Bind(ParameterUpdateFrequency::Once, 4, mProbeDepthBuffer);
+        }
     }
 }
 
-void DDGIRenderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
+void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t imageIndex) {
     mProbeRaytracingPipeline->Bind(
         ParameterUpdateFrequency::PerFrame,
         0,
-        mParameters.mCameraUniform);
+        parameters.mCameraUniform);
 
     mProbeRaytracingPipeline->Bind(
         ParameterUpdateFrequency::PerFrame,
         1,
-        mParameters.mShadowCameraUniform);
+        parameters.mShadowCameraUniform);
 
     mProbeRaytracingPipeline->Bind(
         ParameterUpdateFrequency::PerFrame,
         2,
-        mParameters.mPerMeshParameters);
-    mProbeRaytracingPipeline->Bind(
-        ParameterUpdateFrequency::PerFrame,
-        3,
-        mParameters.mDDGIProbeDataParameter);
+        parameters.mPerMeshParameters);
+
+    mProbeRaytracingPipeline->Bind(ParameterUpdateFrequency::PerFrame, 3, mDDGIProbeData);
+
+    mUpdateProbePipeline->Bind(ParameterUpdateFrequency::PerFrame, 0, mDDGIProbeData);
+
     // DDGI
     {
         auto randomRotation = []() {
@@ -258,9 +214,7 @@ void DDGIRenderer::UpdateUniforms(Camera* camera, uint32_t imageIndex) {
         };
 
         ddgiData.randomRotation = randomRotation();
-        mParameters.mDDGIProbeDataParameter[imageIndex]->Write(
-            reinterpret_cast<uint8_t*>(&ddgiData),
-            sizeof(DDGIData));
+        mDDGIProbeData[imageIndex]->Write(reinterpret_cast<uint8_t*>(&ddgiData), sizeof(DDGIData));
     }
 }
 
@@ -372,7 +326,7 @@ void DDGIRenderer::Render(
                     mUpdateProbePipeline->GetPipelineHandle());
 
                 std::vector<vk::DescriptorSet> updateProbeDescriptors =
-                    mUpdateProbeParameters->GetDescriptorSets(frameIndex);
+                    mUpdateProbePipeline->GetDescriptorSets(frameIndex);
 
                 commandBuffer.bindDescriptorSets(
                     vk::PipelineBindPoint::eCompute,

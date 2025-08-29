@@ -33,8 +33,6 @@ set(HEADERS
     include/Pipeline.h
     include/RenderPass.h
     include/RenderTarget.h
-    include/ShaderParameter.h
-    include/ShaderParameterCollection.h
     include/CommandRing.h
     include/MeshSystem.h
     include/AABB.h
@@ -46,6 +44,10 @@ set(HEADERS
     include/UIRenderer.h
     include/RaytracingPipeline.h
     include/DDGIRenderer.h
+    include/VisibilityManager.h
+    include/ShadowRenderer.h
+    include/PostProcessingRenderer.h
+    include/SettingsManager.h
 )
 
 set(SOURCE
@@ -69,8 +71,6 @@ set(SOURCE
     src/Pipeline.cpp
     src/RenderPass.cpp
     src/RenderTarget.cpp
-    src/ShaderParameter.cpp
-    src/ShaderParameterCollection.cpp
     src/CommandRing.cpp
     src/MeshSystem.cpp
     src/AABB.cpp
@@ -82,6 +82,10 @@ set(SOURCE
     src/UIRenderer.cpp
     src/RaytracingPipeline.cpp
     src/DDGIRenderer.cpp
+    src/VisibilityManager.cpp
+    src/ShadowRenderer.cpp
+    src/PostProcessingRenderer.cpp
+    src/SettingsManager.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")

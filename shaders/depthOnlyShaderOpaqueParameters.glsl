@@ -10,7 +10,7 @@ layout(binding = 1, set = UPDATE_PER_FRAME, scalar) readonly buffer TMeshData {
     MeshData uMeshData[];
 };
 layout(binding = 2, set = UPDATE_PER_FRAME) buffer readonly DrawCallIDs {
-	uint drawData[];
+	uint uDrawData[];
 };
 
 layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {

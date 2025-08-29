@@ -76,8 +76,8 @@ int main() {
             ScopedRefPtr<Camera> camera = new Camera(window);
             camera->SetTranslation(glm::vec3(-14.0f, 5.0f, -1.0f));
             camera->SetForwardDir(glm::normalize(glm::vec3(0.9f, -0.2f, 0.1f)));
-
-            ScopedRefPtr<Renderer> renderer = new Renderer(context, scene);
+            ScopedRefPtr<SettingsManager> settingsManager = new SettingsManager();
+            ScopedRefPtr<Renderer> renderer = new Renderer(context, scene, settingsManager);
 
             DirectionalLight& light = scene->GetLight();
 
