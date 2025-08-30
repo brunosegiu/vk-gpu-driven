@@ -58,7 +58,6 @@ private:
     ScopedRefPtr<Context> mContext;
     ScopedRefPtr<Scene> mScene;
     Material::AlphaMode mAlphaMode;
-    bool mFreezeCulling;
 
     ScopedRefPtr<ComputePipeline> mCullingPipeline;
     std::vector<ScopedRefPtr<VulkanBuffer>> mCullingDataBuffers;

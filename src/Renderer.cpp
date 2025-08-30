@@ -26,7 +26,6 @@ Renderer::Renderer(
       mCurrentFrameIndex(0),
       mMaterialsUniform(),
       mScenePersistentDataBuffer(),
-      mFreezeCulling(false),
       mHasResouces(false),
       mHasBoundResources(false) {
     ScopedRefPtr<InputManager> inputManager = mContext->GetWindow()->GetInputManager();
@@ -408,55 +407,31 @@ void Renderer::UpdatePersistentUniforms() {
         ScopedRefPtr<GraphicsPipeline>& pipeline = mGeometryPassPipelines[alphaMode];
 
         uint32_t bindingIndex = 0;
-        pipeline->Bind(ParameterUpdateFrequency::Once, bindingIndex++, mScenePersistentDataBuffer);
-        pipeline->Bind(ParameterUpdateFrequency::Once, bindingIndex++, mMaterialSampler);
-        pipeline->Bind(ParameterUpdateFrequency::Once, bindingIndex++, mMaterialsUniform);
+        pipeline->Bind(bindingIndex++, mScenePersistentDataBuffer);
+        pipeline->Bind(bindingIndex++, mMaterialSampler);
+        pipeline->Bind(bindingIndex++, mMaterialsUniform);
         if (isTransparentPass) {
-            pipeline->Bind(
-                ParameterUpdateFrequency::Once,
-                bindingIndex++,
-                mShadowRenderer->GetShadowMap());
+            pipeline->Bind(bindingIndex++, mShadowRenderer->GetShadowMap());
         }
-        pipeline->Bind(ParameterUpdateFrequency::Once, bindingIndex++, mSceneTextures);
+        pipeline->Bind(bindingIndex++, mSceneTextures);
     }
 
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 0, mScenePersistentDataBuffer);
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 1, mMaterialSampler);
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 2, mFrameBufferSampler);
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 3, mIrradianceSampler);
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 4, mMaterialsUniform);
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 5, mShadowRenderer->GetShadowMap());
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 6, mVisibilityBuffer);
-    mShadePassPipeline->Bind(
-        ParameterUpdateFrequency::Once,
-        7,
-        mPostProcessingRenderer->GetSSAOBuffer());
-    mShadePassPipeline->Bind(
-        ParameterUpdateFrequency::Once,
-        8,
-        mDDGIRenderer->GetIrradianceBuffer());
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 9, mDDGIRenderer->GetDepthBuffer());
-    mShadePassPipeline->Bind(
-        ParameterUpdateFrequency::Once,
-        10,
-        mScene->GetMeshSystem()->GetIndexBuffer());
-    mShadePassPipeline->Bind(
-        ParameterUpdateFrequency::Once,
-        11,
-        mScene->GetMeshSystem()->GetVertexBuffer());
-    mShadePassPipeline->Bind(
-        ParameterUpdateFrequency::Once,
-        12,
-        mScene->GetMeshSystem()->GetTexCoordBuffer());
-    mShadePassPipeline->Bind(
-        ParameterUpdateFrequency::Once,
-        13,
-        mScene->GetMeshSystem()->GetNormalBuffer());
-    mShadePassPipeline->Bind(
-        ParameterUpdateFrequency::Once,
-        14,
-        mScene->GetMeshSystem()->GetTangentBuffer());
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::Once, 15, mSceneTextures);
+    mShadePassPipeline->Bind(0, mScenePersistentDataBuffer);
+    mShadePassPipeline->Bind(1, mMaterialSampler);
+    mShadePassPipeline->Bind(2, mFrameBufferSampler);
+    mShadePassPipeline->Bind(3, mIrradianceSampler);
+    mShadePassPipeline->Bind(4, mMaterialsUniform);
+    mShadePassPipeline->Bind(5, mShadowRenderer->GetShadowMap());
+    mShadePassPipeline->Bind(6, mVisibilityBuffer);
+    mShadePassPipeline->Bind(7, mPostProcessingRenderer->GetSSAOBuffer());
+    mShadePassPipeline->Bind(8, mDDGIRenderer->GetIrradianceBuffer());
+    mShadePassPipeline->Bind(9, mDDGIRenderer->GetDepthBuffer());
+    mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetIndexBuffer());
+    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetVertexBuffer());
+    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetTexCoordBuffer());
+    mShadePassPipeline->Bind(13, mScene->GetMeshSystem()->GetNormalBuffer());
+    mShadePassPipeline->Bind(14, mScene->GetMeshSystem()->GetTangentBuffer());
+    mShadePassPipeline->Bind(15, mSceneTextures);
 }
 
 void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
@@ -483,27 +458,24 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
         }
 
         uint32_t bindingIndex = 0;
-        pipeline->Bind(ParameterUpdateFrequency::PerFrame, bindingIndex++, mCameraUniform);
+        pipeline->Bind(frameIndex, bindingIndex++, mCameraUniform[frameIndex]);
         if (isTransparentPass) {
             pipeline->Bind(
-                ParameterUpdateFrequency::PerFrame,
+                frameIndex,
                 bindingIndex++,
-                mShadowRenderer->GetShadowUniform());
+                mShadowRenderer->GetShadowUniform()[frameIndex]);
         }
-        pipeline->Bind(ParameterUpdateFrequency::PerFrame, bindingIndex++, mPerMeshBuffers);
+        pipeline->Bind(frameIndex, bindingIndex++, mPerMeshBuffers[frameIndex]);
         pipeline->Bind(
-            ParameterUpdateFrequency::PerFrame,
+            frameIndex,
             bindingIndex++,
-            mVisibilityManagers[alphaMode]->GetAdditionalDrawDataBuffers());
+            mVisibilityManagers[alphaMode]->GetAdditionalDrawDataBuffer(frameIndex));
     }
 
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::PerFrame, 0, mCameraUniform);
-    mShadePassPipeline->Bind(
-        ParameterUpdateFrequency::PerFrame,
-        1,
-        mShadowRenderer->GetShadowUniform());
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::PerFrame, 2, mPerMeshBuffers);
-    mShadePassPipeline->Bind(ParameterUpdateFrequency::PerFrame, 3, mDDGIRenderer->GetProbeData());
+    mShadePassPipeline->Bind(frameIndex, 0, mCameraUniform[frameIndex]);
+    mShadePassPipeline->Bind(frameIndex, 1, mShadowRenderer->GetShadowUniform()[frameIndex]);
+    mShadePassPipeline->Bind(frameIndex, 2, mPerMeshBuffers[frameIndex]);
+    mShadePassPipeline->Bind(frameIndex, 3, mDDGIRenderer->GetProbeData()[frameIndex]);
 
     // Update content of per-draw parameters
     {
@@ -856,11 +828,7 @@ void Renderer::Render(Camera* camera) {
     mContext->GetSwapchain()->Present(command.buffer, command.fence, mCurrentFrameIndex);
 }
 
-void Renderer::OnKeyPressed(int key) {
-    if (key == GLFW_KEY_P) {
-        mFreezeCulling = !mFreezeCulling;
-    }
-}
+void Renderer::OnKeyPressed(int key) {}
 
 void Renderer::OnKeyReleased(int key) {}
 

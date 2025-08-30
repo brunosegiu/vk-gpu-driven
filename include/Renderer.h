@@ -10,10 +10,10 @@
 #include "RefCountPtr.h"
 #include "RenderPass.h"
 #include "Scene.h"
+#include "SettingsManager.h"
 #include "ShadowRenderer.h"
 #include "UIRenderer.h"
 #include "VisibilityManager.h"
-#include "SettingsManager.h"
 
 namespace VKRT {
 class Renderer : public RefCountPtr, public InputEventListener {
@@ -48,7 +48,6 @@ private:
     void OnRightMouseButtonReleased() override;
 
     // Renderer state flags
-    bool mFreezeCulling;
     bool mHasResouces;
     bool mHasBoundResources;
 

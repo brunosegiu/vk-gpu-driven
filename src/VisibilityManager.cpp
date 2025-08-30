@@ -8,9 +8,7 @@ VisibilityManager::VisibilityManager(
     ScopedRefPtr<Context> context,
     ScopedRefPtr<Scene> scene,
     Material::AlphaMode alphaMode)
-    : mContext(context), mScene(scene), mAlphaMode(alphaMode), mFreezeCulling(false) {
-    AddPipelines();
-}
+    : mContext(context), mScene(scene), mAlphaMode(alphaMode) {}
 
 void VisibilityManager::AddPipelines() {
     mCullingPipeline = new ComputePipeline(
@@ -54,28 +52,25 @@ void VisibilityManager::AddResources() {
 
 void VisibilityManager::UpdatePersistentUniforms(
     const ScopedRefPtr<VulkanBuffer>& scenePersistentDataBuffer) {
-    mCullingPipeline->Bind(ParameterUpdateFrequency::Once, 0, scenePersistentDataBuffer);
+    mCullingPipeline->Bind(0, scenePersistentDataBuffer);
 }
 
 void VisibilityManager::UpdateUniforms(
     const CullData& cullData,
     uint32_t frameIndex,
     const std::vector<ScopedRefPtr<VulkanBuffer>>& meshDataBuffer) {
-
     const uint32_t drawCallCount = static_cast<uint32_t>(mScene->GetDrawCallCount(mAlphaMode));
     if (drawCallCount <= 0) {
         return;
     }
 
-    mCullingPipeline->Bind(ParameterUpdateFrequency::PerFrame, 0, mCullingDataBuffers);
-    mCullingPipeline->Bind(ParameterUpdateFrequency::PerFrame, 1, meshDataBuffer);
-    mCullingPipeline->Bind(ParameterUpdateFrequency::PerFrame, 2, mIndirectDrawBuffers);
-    mCullingPipeline->Bind(ParameterUpdateFrequency::PerFrame, 3, mDrawCallCountBuffer);
-    mCullingPipeline->Bind(ParameterUpdateFrequency::PerFrame, 4, mAdditionalDrawDataBuffers);
+    mCullingPipeline->Bind(frameIndex, 0, mCullingDataBuffers[frameIndex]);
+    mCullingPipeline->Bind(frameIndex, 1, meshDataBuffer[frameIndex]);
+    mCullingPipeline->Bind(frameIndex, 2, mIndirectDrawBuffers[frameIndex]);
+    mCullingPipeline->Bind(frameIndex, 3, mDrawCallCountBuffer[frameIndex]);
+    mCullingPipeline->Bind(frameIndex, 4, mAdditionalDrawDataBuffers[frameIndex]);
 
-    if (!mFreezeCulling) {
-        mCullingDataBuffers[frameIndex]->Write(cullData);
-    }
+    mCullingDataBuffers[frameIndex]->Write(cullData);
 }
 
 void VisibilityManager::Dispatch(vk::CommandBuffer commandBuffer, uint32_t frameIndex) {

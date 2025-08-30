@@ -136,26 +136,15 @@ void ShadowRenderer::UpdatePersistentUniforms(const PersistentParameters& parama
     }
 
     mShadowPassPipelines[Material::AlphaMode::Opaque]->Bind(
-        ParameterUpdateFrequency::Once,
         0,
         paramaters.scenePersistentDataBuffer);
 
     mShadowPassPipelines[Material::AlphaMode::Masked]->Bind(
-        ParameterUpdateFrequency::Once,
         0,
         paramaters.scenePersistentDataBuffer);
-    mShadowPassPipelines[Material::AlphaMode::Masked]->Bind(
-        ParameterUpdateFrequency::Once,
-        1,
-        paramaters.materialSampler);
-    mShadowPassPipelines[Material::AlphaMode::Masked]->Bind(
-        ParameterUpdateFrequency::Once,
-        2,
-        paramaters.materialUniform);
-    mShadowPassPipelines[Material::AlphaMode::Masked]->Bind(
-        ParameterUpdateFrequency::Once,
-        3,
-        paramaters.sceneTextures);
+    mShadowPassPipelines[Material::AlphaMode::Masked]->Bind(1, paramaters.materialSampler);
+    mShadowPassPipelines[Material::AlphaMode::Masked]->Bind(2, paramaters.materialUniform);
+    mShadowPassPipelines[Material::AlphaMode::Masked]->Bind(3, paramaters.sceneTextures);
 }
 
 void ShadowRenderer::UpdateUniforms(
@@ -197,18 +186,12 @@ void ShadowRenderer::UpdateUniforms(
         if (alphaMode == Material::AlphaMode::Blended || drawCallCount == 0) {
             continue;
         }
+        mShadowPassPipelines[alphaMode]->Bind(frameIndex, 0, mShadowCameraUniform[frameIndex]);
+        mShadowPassPipelines[alphaMode]->Bind(frameIndex, 1, parameters.meshDataBuffer[frameIndex]);
         mShadowPassPipelines[alphaMode]->Bind(
-            ParameterUpdateFrequency::PerFrame,
-            0,
-            mShadowCameraUniform);
-        mShadowPassPipelines[alphaMode]->Bind(
-            ParameterUpdateFrequency::PerFrame,
-            1,
-            parameters.meshDataBuffer);
-        mShadowPassPipelines[alphaMode]->Bind(
-            ParameterUpdateFrequency::PerFrame,
+            frameIndex,
             2,
-            mVisibilityManagers[alphaMode]->GetAdditionalDrawDataBuffers());
+            mVisibilityManagers[alphaMode]->GetAdditionalDrawDataBuffer(frameIndex));
     }
 }
 

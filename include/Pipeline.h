@@ -7,9 +7,9 @@
 #include "Macros.h"
 #include "RefCountPtr.h"
 #include "ResourceLoader.h"
+#include "Texture.h"
 #include "VulkanBase.h"
 #include "VulkanBuffer.h"
-#include "Texture.h"
 
 namespace VKRT {
 
@@ -28,24 +28,27 @@ public:
 
     std::vector<vk::DescriptorSet> GetDescriptorSets(uint32_t frameIndex);
 
+    // Persistent parameters
+    void Bind(uint32_t binding, ScopedRefPtr<VulkanBuffer> buffer);
+    void Bind(uint32_t binding, std::vector<ScopedRefPtr<VulkanBuffer>> buffers);
+    void Bind(uint32_t binding, ScopedRefPtr<Texture> texture);
+    void Bind(uint32_t binding, std::vector<ScopedRefPtr<Texture>> textures);
+    void Bind(uint32_t binding, vk::Sampler sampler);
+    void Bind(uint32_t binding, vk::AccelerationStructureKHR accelerationStructure);
+
+    // Per-frame parameters
+    void Bind(uint32_t frameIndex, uint32_t binding, ScopedRefPtr<VulkanBuffer> buffer);
     void Bind(
-        ParameterUpdateFrequency frequency,
-        uint32_t binding,
-        ScopedRefPtr<VulkanBuffer> buffer);
-    void Bind(
-        ParameterUpdateFrequency frequency,
+        uint32_t frameIndex,
         uint32_t binding,
         std::vector<ScopedRefPtr<VulkanBuffer>> buffers);
-
-    void Bind(ParameterUpdateFrequency frequency, uint32_t binding, ScopedRefPtr<Texture> texture);
+    void Bind(uint32_t frameIndex, uint32_t binding, ScopedRefPtr<Texture> texture);
+    void Bind(uint32_t frameIndex, uint32_t binding, std::vector<ScopedRefPtr<Texture>> textures);
+    void Bind(uint32_t frameIndex, uint32_t binding, vk::Sampler sampler);
     void Bind(
-        ParameterUpdateFrequency frequency,
+        uint32_t frameIndex,
         uint32_t binding,
-        std::vector<ScopedRefPtr<Texture>> textures);
-
-    void Bind(ParameterUpdateFrequency frequency, uint32_t binding, vk::Sampler sampler);
-
-    void Bind(ParameterUpdateFrequency frequency, uint32_t binding, vk::AccelerationStructureKHR accelerationStructure);
+        vk::AccelerationStructureKHR accelerationStructure);
 
     std::vector<vk::DescriptorSetLayout> GetDescriptorLayouts();
 
@@ -58,6 +61,40 @@ protected:
     void CreateDescriptorLayouts(vk::ShaderStageFlags stageFlags, const Resource& resource);
     void CreateDescriptorSets();
     void UpdateDescriptors(uint32_t frameIndex);
+
+    void Bind(
+        ParameterUpdateFrequency frequency,
+        uint32_t binding,
+        uint32_t frameIndex,
+        ScopedRefPtr<VulkanBuffer> buffer);
+    void Bind(
+        ParameterUpdateFrequency frequency,
+        uint32_t binding,
+        uint32_t frameIndex,
+        std::vector<ScopedRefPtr<VulkanBuffer>> buffers);
+
+    void Bind(
+        ParameterUpdateFrequency frequency,
+        uint32_t frameIndex,
+        uint32_t binding,
+        ScopedRefPtr<Texture> texture);
+    void Bind(
+        ParameterUpdateFrequency frequency,
+        uint32_t frameIndex,
+        uint32_t binding,
+        std::vector<ScopedRefPtr<Texture>> textures);
+
+    void Bind(
+        ParameterUpdateFrequency frequency,
+        uint32_t frameIndex,
+        uint32_t binding,
+        vk::Sampler sampler);
+
+    void Bind(
+        ParameterUpdateFrequency frequency,
+        uint32_t frameIndex,
+        uint32_t binding,
+        vk::AccelerationStructureKHR accelerationStructure);
 
     ScopedRefPtr<Context> mContext;
     vk::PipelineLayout mLayout;

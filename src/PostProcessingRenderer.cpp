@@ -93,22 +93,22 @@ void PostProcessingRenderer::AddResources() {
 }
 
 void PostProcessingRenderer::UpdatePersistentUniforms(const PersistentParameters& parameters) {
-    mSSAOPipeline->Bind(ParameterUpdateFrequency::Once, 0, parameters.mFrameBufferSampler);
-    mSSAOPipeline->Bind(ParameterUpdateFrequency::Once, 1, parameters.mDepthBuffer);
+    mSSAOPipeline->Bind(0, parameters.mFrameBufferSampler);
+    mSSAOPipeline->Bind(1, parameters.mDepthBuffer);
 
-    mSSAOBlurPipeline->Bind(ParameterUpdateFrequency::Once, 0, parameters.mFrameBufferSampler);
-    mSSAOBlurPipeline->Bind(ParameterUpdateFrequency::Once, 1, parameters.mDepthBuffer);
-    mSSAOBlurPipeline->Bind(ParameterUpdateFrequency::Once, 2, mSSAOBuffer);
+    mSSAOBlurPipeline->Bind(0, parameters.mFrameBufferSampler);
+    mSSAOBlurPipeline->Bind(1, parameters.mDepthBuffer);
+    mSSAOBlurPipeline->Bind(2, mSSAOBuffer);
 }
 
 void PostProcessingRenderer::UpdateUniforms(
     const PerFrameParameters& parameters,
     uint32_t frameIndex) {
-    mSSAOPipeline->Bind(ParameterUpdateFrequency::PerFrame, 0, parameters.mCameraUniform);
-    mSSAOPipeline->Bind(ParameterUpdateFrequency::PerFrame, 1, mSSAOControlBuffer);
+    mSSAOPipeline->Bind(frameIndex, 0, parameters.mCameraUniform[frameIndex]);
+    mSSAOPipeline->Bind(frameIndex, 1, mSSAOControlBuffer[frameIndex]);
 
-    mSSAOBlurPipeline->Bind(ParameterUpdateFrequency::PerFrame, 0, parameters.mCameraUniform);
-    mSSAOBlurPipeline->Bind(ParameterUpdateFrequency::PerFrame, 1, mSSAOControlBuffer);
+    mSSAOBlurPipeline->Bind(frameIndex, 0, parameters.mCameraUniform[frameIndex]);
+    mSSAOBlurPipeline->Bind(frameIndex, 1, mSSAOControlBuffer[frameIndex]);
 
     // SSAO
     {
