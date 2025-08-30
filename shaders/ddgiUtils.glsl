@@ -52,7 +52,7 @@ float square(float a) {
 }
 
 // https://www.youtube.com/watch?v=KufJBCTdn_o&t=5s
-float visibilityFromMoments(float distanceToSample, vec2 moments, float softness) {
+float visibilityFromMoments(float distanceToSample, vec2 moments) {
     float mean = moments.x;
     float mean2 = moments.y;
     float variance  = abs(square(mean) - mean2);
@@ -101,7 +101,7 @@ vec3 ddgiIndirectDiffuse(
 
 
                 vec2 moments = sampleProbeMoments(sampleProbeIndex, dir, nearSampler, moments);
-                float visibility = visibilityFromMoments(r, moments, 0.02);
+                float visibility = visibilityFromMoments(r, moments);
 
                 float backfaceTest = (dot(-dir, normal) + 1.0f) * 0.5f;
 
@@ -110,8 +110,12 @@ vec3 ddgiIndirectDiffuse(
                 float tz = (oz == 0) ? (1.0 - interpolators.z) : interpolators.z;
                 float trillinearWeight = tx * ty * tz;
 
-                float weight = visibility * backfaceTest * trillinearWeight;
-
+                float weight = visibility * backfaceTest;
+                const float crushThreshold = 0.2f;
+                if (weight < crushThreshold) {
+                    weight *= weight * weight * (1.0f / square(crushThreshold)); 
+                }
+                weight *= trillinearWeight; 
 
                 vec3 irradiance = sampleProbeIrradiance(sampleProbeIndex, normal, irradianceSampler, irradiance);
                 accumulatedIrradiance += irradiance * weight;
