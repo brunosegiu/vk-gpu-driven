@@ -433,9 +433,18 @@ void Pipeline::Bind(
 }
 
 std::vector<vk::DescriptorSetLayout> Pipeline::GetDescriptorLayouts() {
-    return {
-        mParameters[ParameterUpdateFrequency::PerFrame].descriptorLayout,
-        mParameters[ParameterUpdateFrequency::Once].descriptorLayout};
+    std::vector<vk::DescriptorSetLayout> layouts;
+    const vk::DescriptorSetLayout perFrameLayout =
+        mParameters[ParameterUpdateFrequency::PerFrame].descriptorLayout;
+    const vk::DescriptorSetLayout onceLayout =
+        mParameters[ParameterUpdateFrequency::Once].descriptorLayout;
+    if (perFrameLayout != nullptr) {
+        layouts.push_back(perFrameLayout);
+    }
+    if (onceLayout != nullptr) {
+        layouts.push_back(onceLayout);
+    }
+    return layouts;
 }
 
 Pipeline::~Pipeline() {

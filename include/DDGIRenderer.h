@@ -22,6 +22,7 @@ struct DDGIData {
     glm::mat3 randomRotation;
     float hysteresis;
     uint32_t frameIndex;
+    float probeRadius;
 };
 
 class DDGIRenderer : public RefCountPtr {
@@ -31,7 +32,9 @@ public:
         ScopedRefPtr<Scene> scene,
         ScopedRefPtr<SettingsManager> settingsManager);
 
-    void AddRenderTargets();
+    void AddRenderTargets(
+        const ScopedRefPtr<RenderTarget>& mainRenderTarget,
+        const ScopedRefPtr<RenderTarget>& depthRenderTarget);
     void AddPipelines();
     void AddResources();
 
@@ -39,7 +42,7 @@ public:
     void RemovePipelines();
     void RemoveResources();
 
-    void Render(Camera* camera, vk::CommandBuffer commandBuffer, const uint32_t frameIndex);
+    void Render(vk::CommandBuffer commandBuffer, const uint32_t frameIndex);
 
     struct PersistentParameters {
         ScopedRefPtr<VulkanBuffer> mScenePersistentDataParameter;
@@ -78,6 +81,8 @@ public:
         return mProbeMomentsBuffers[(mCurrentFrame + 1) % mProbeMomentsBuffers.size()];
     }
 
+    void RenderProbes(vk::CommandBuffer commandBuffer, const uint32_t frameIndex);
+
     ~DDGIRenderer();
 
 private:
@@ -85,19 +90,22 @@ private:
     ScopedRefPtr<Context> mContext;
     ScopedRefPtr<Scene> mScene;
     ScopedRefPtr<SettingsManager> mSettingsManager;
-    uint32_t mCurrentFrame;
 
     // Probe rendering
     ScopedRefPtr<RaytracingPipeline> mProbeRaytracingPipeline;
     ScopedRefPtr<Texture> mProbeRayRadianceBuffer;
     ScopedRefPtr<Texture> mProbeRayDirectionDepthBuffer;
-
     ScopedRefPtr<ComputePipeline> mUpdateProbePipeline;
     std::array<ScopedRefPtr<Texture>, 2> mProbeIrradianceBuffers;
     std::array<ScopedRefPtr<Texture>, 2> mProbeMomentsBuffers;
-
     std::vector<ScopedRefPtr<VulkanBuffer>> mDDGIProbeData;
-
     DDGIData mDDGIData;
+    uint32_t mCurrentFrame;
+
+    // Debug visualization
+    ScopedRefPtr<RenderPass> mVisualizeProbesPass;
+    ScopedRefPtr<GraphicsPipeline> mVisualizeProbesPipeline;
+    ScopedRefPtr<VulkanBuffer> mSpherePositions;
+    ScopedRefPtr<VulkanBuffer> mSphereIndices;
 };
 }  // namespace VKRT

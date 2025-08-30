@@ -67,7 +67,9 @@ GraphicsPipeline::GraphicsPipeline(
             .setLineWidth(1.0f)
             .setCullMode(
                 optionals.enableCulling ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone)
-            .setFrontFace(vk::FrontFace::eCounterClockwise)
+            .setFrontFace(
+                optionals.reverseWindingOrder ? vk::FrontFace::eClockwise
+                                              : vk::FrontFace::eCounterClockwise)
             .setDepthBiasEnable(optionals.enableDepthBias)
             .setDepthBiasConstantFactor(optionals.depthBias)
             .setDepthBiasSlopeFactor(optionals.depthSlope);

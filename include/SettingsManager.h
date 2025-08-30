@@ -27,13 +27,15 @@ public:
     float& GetShadowFar() { return mShadowFar; }
 
     glm::uvec3& GetProbeGridCount() { return mProbeGridCount; }
-    glm::uvec2& GetProbeResolution() { return mProbeResolution; }
+    uint32_t& GetProbeResolution() { return mProbeResolution; }
     glm::vec3& GetProbeSpacing() { return mProbeSpacing; }
     glm::vec3& GetProbeGridOrigin() { return mProbeOrigin; }
     float& GetProbeMaxRayLength() { return mProbeMaxRayLength; }
     float& GetProbeMinRayLength() { return mProbeMinRayLength; }
     float& GetHysteresis() { return mHysteresis; }
+    float& GetProbeRadius() { return mProbeRadius; }
     uint32_t& GetProbeRayCount() { return mRaysPerProbe; }
+    bool& GetRenderProbes() { return mRenderProbes; }
 
     ~SettingsManager();
 
@@ -48,12 +50,14 @@ private:
 
     // DGGI
     glm::uvec3 mProbeGridCount;
-    glm::uvec2 mProbeResolution;
+    uint32_t mProbeResolution;
     glm::vec3 mProbeSpacing;
     glm::vec3 mProbeOrigin;
     float mProbeMaxRayLength;
     float mProbeMinRayLength;
     float mHysteresis;
+    float mProbeRadius;
     uint32_t mRaysPerProbe;
+    bool mRenderProbes;
 };
 }  // namespace VKRT

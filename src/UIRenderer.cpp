@@ -246,8 +246,16 @@ void UIRenderer::Update() {
                     128u,
                     8096u);
                 SliderUint("Shadow taps", &mSettingsManager->GetShadowTaps(), 1u, 51u);
-                ImGui::SliderFloat("Frustum width", &mSettingsManager->GetShadowFrustumWidth(), 0.0f, 100.0f);
-                ImGui::SliderFloat("Distance", &mSettingsManager->GetShadowDistance(), 0.0f, 1000.0f);
+                ImGui::SliderFloat(
+                    "Frustum width",
+                    &mSettingsManager->GetShadowFrustumWidth(),
+                    0.0f,
+                    100.0f);
+                ImGui::SliderFloat(
+                    "Distance",
+                    &mSettingsManager->GetShadowDistance(),
+                    0.0f,
+                    1000.0f);
                 ImGui::SliderFloat("Shadow far", &mSettingsManager->GetShadowFar(), 0.1f, 1500.0f);
                 ImGui::SliderFloat("Shadow near", &mSettingsManager->GetShadowNear(), 0.1f, 10.0f);
             }
@@ -277,7 +285,7 @@ void UIRenderer::Update() {
 
             if (ImGui::CollapsingHeader("DDGI", ImGuiTreeNodeFlags_DefaultOpen)) {
                 SliderUint3("Probe count", &mSettingsManager->GetProbeGridCount().x, 2, 32);
-                SliderUint2("Probe resolution", &mSettingsManager->GetProbeResolution().x, 8, 512);
+                SliderUint("Probe resolution", &mSettingsManager->GetProbeResolution(), 8, 512);
                 SliderUint("Rays per probe", &mSettingsManager->GetProbeRayCount(), 8, 512);
                 ImGui::SliderFloat3(
                     "Probe spacing",
@@ -287,8 +295,8 @@ void UIRenderer::Update() {
                 ImGui::SliderFloat3(
                     "Probe Grid Origin",
                     &mSettingsManager->GetProbeGridOrigin().x,
-                    0.0f,
-                    1000.0f);
+                    -100.0f,
+                    100.0f);
                 ImGui::SliderFloat("Hysteresis", &mSettingsManager->GetHysteresis(), 0.0f, 1.0f);
                 ImGui::SliderFloat(
                     "Ray max length",
@@ -300,6 +308,14 @@ void UIRenderer::Update() {
                     &mSettingsManager->GetProbeMinRayLength(),
                     0.01f,
                     10.0f);
+                ImGui::Checkbox("Draw probes", &mSettingsManager->GetRenderProbes());
+                if (mSettingsManager->GetRenderProbes()) {
+                    ImGui::SliderFloat(
+                        "Probe radius",
+                        &mSettingsManager->GetProbeRadius(),
+                        0.01f,
+                        1.0f);
+                }
             }
         }
         ImGui::End();

@@ -57,7 +57,9 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
         {Resource::Id::RaytraceProbeMissShader, VKRT_RESOURCE_RAYTRACE_PROBE_MISS_SHADER},
         {Resource::Id::RaytraceProbeShadowMissShader,
          VKRT_RESOURCE_RAYTRACE_PROBE_SHADOW_MISS_SHADER},
-        {Resource::Id::UpdateProbesShader, VKRT_RESOURCE_UPDATE_PROBES_SHADER}
+        {Resource::Id::UpdateProbesShader, VKRT_RESOURCE_UPDATE_PROBES_SHADER},
+        {Resource::Id::ProbeVertexShader, VKRT_RESOURCE_PROBE_VERTEX},
+        {Resource::Id::ProbeFragmentShader, VKRT_RESOURCE_PROBE_FRAGMENT},
     };
 
     HMODULE module = nullptr;

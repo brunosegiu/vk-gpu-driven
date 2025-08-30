@@ -34,6 +34,8 @@ struct Resource {
         RaytraceProbeMissShader,
         RaytraceProbeShadowMissShader,
         UpdateProbesShader,
+        ProbeVertexShader,
+        ProbeFragmentShader
     };
 };
 

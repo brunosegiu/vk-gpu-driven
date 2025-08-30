@@ -3,7 +3,7 @@
 #include <random>
 
 #include "DebugUtils.h"
-#include "Texture.h"
+#include "Utils.h"
 
 namespace VKRT {
 
@@ -24,12 +24,11 @@ DDGIRenderer::DDGIRenderer(
           .randomRotation = glm::mat3(1.0f),
           .hysteresis = mSettingsManager->GetHysteresis(),
           .frameIndex = 0,
-      } {
-    AddRenderTargets();
-    AddPipelines();
-}
+      } {}
 
-void DDGIRenderer::AddRenderTargets() {
+void DDGIRenderer::AddRenderTargets(
+    const ScopedRefPtr<RenderTarget>& mainRenderTarget,
+    const ScopedRefPtr<RenderTarget>& depthRenderTarget) {
     const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
     // Probes
     {
@@ -56,8 +55,8 @@ void DDGIRenderer::AddRenderTargets() {
         for (uint32_t index = 0; index < mProbeIrradianceBuffers.size(); ++index) {
             mProbeIrradianceBuffers[index] = new Texture(
                 mContext,
-                mSettingsManager->GetProbeResolution().x,
-                mSettingsManager->GetProbeResolution().y,
+                mSettingsManager->GetProbeResolution(),
+                mSettingsManager->GetProbeResolution(),
                 probeCount,
                 vk::Format::eB10G11R11UfloatPack32,
                 vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
@@ -67,13 +66,31 @@ void DDGIRenderer::AddRenderTargets() {
         for (uint32_t index = 0; index < mProbeMomentsBuffers.size(); ++index) {
             mProbeMomentsBuffers[index] = new Texture(
                 mContext,
-                mSettingsManager->GetProbeResolution().x,
-                mSettingsManager->GetProbeResolution().y,
+                mSettingsManager->GetProbeResolution(),
+                mSettingsManager->GetProbeResolution(),
                 probeCount,
                 vk::Format::eR16G16Sfloat,
                 vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
                 vk::ImageLayout::eShaderReadOnlyOptimal);
         }
+    }
+
+    // Visualization
+    {
+        mVisualizeProbesPass = new RenderPass(
+            mContext,
+            {
+                {.renderTarget = mainRenderTarget,
+                 .loadOp = vk::AttachmentLoadOp::eLoad,
+                 .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
+                 .storeOp = vk::AttachmentStoreOp::eStore,
+                 .finalLayout = vk::ImageLayout::eColorAttachmentOptimal},
+                {.renderTarget = depthRenderTarget,
+                 .loadOp = vk::AttachmentLoadOp::eLoad,
+                 .initialLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+                 .storeOp = vk::AttachmentStoreOp::eStore,
+                 .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal},
+            });
     }
 }
 
@@ -92,6 +109,17 @@ void DDGIRenderer::AddPipelines() {
     mUpdateProbePipeline = new ComputePipeline(
         mContext,
         {{vk::ShaderStageFlagBits::eCompute, {Resource::Id::UpdateProbesShader}}});
+
+    // Visualization
+    mVisualizeProbesPipeline = new GraphicsPipeline(
+        mContext,
+        {
+            {vk::ShaderStageFlagBits::eVertex, {Resource::Id::ProbeVertexShader}},
+            {vk::ShaderStageFlagBits::eFragment, {Resource::Id::ProbeFragmentShader}},
+        },
+        mVisualizeProbesPass,
+        {{.format = vk::Format::eR32G32B32A32Sfloat, .stride = sizeof(glm::vec3)}},
+        {.reverseWindingOrder = true});
 }
 
 void DDGIRenderer::AddResources() {
@@ -100,6 +128,18 @@ void DDGIRenderer::AddResources() {
         sizeof(DDGIData),
         vk::BufferUsageFlagBits::eUniformBuffer,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+    const Utils::Geometry sphere = Utils::BuildSphere(8, 8);
+    Utils::UploadBuffer(
+        mContext,
+        mSpherePositions,
+        sphere.positions,
+        vk::BufferUsageFlags{vk::BufferUsageFlagBits::eVertexBuffer});
+    Utils::UploadBuffer(
+        mContext,
+        mSphereIndices,
+        sphere.indices,
+        vk::BufferUsageFlags{vk::BufferUsageFlagBits::eIndexBuffer});
 }
 
 void DDGIRenderer::RemoveRenderTargets() {
@@ -136,6 +176,11 @@ void DDGIRenderer::UpdatePersistentUniforms(const PersistentParameters& paramete
             mUpdateProbePipeline->Bind(2, mProbeRayDirectionDepthBuffer);
         }
     }
+
+    // Visualization
+    {
+        mVisualizeProbesPipeline->Bind(0, parameters.mFrameBufferSampler);
+    }
 }
 
 void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t frameIndex) {
@@ -169,6 +214,7 @@ void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t
         mDDGIData.minRayLength = mSettingsManager->GetProbeMinRayLength();
         mDDGIData.maxRayLength = mSettingsManager->GetProbeMaxRayLength();
         mDDGIData.hysteresis = mSettingsManager->GetHysteresis();
+        mDDGIData.probeRadius = mSettingsManager->GetProbeRadius();
 
         mDDGIData.randomRotation = randomRotation();
         if (mDDGIData.probeGridOrigin != mSettingsManager->GetProbeGridOrigin() ||
@@ -179,12 +225,14 @@ void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t
 
         mDDGIData.frameIndex++;
     }
+
+    // Visualization
+    mVisualizeProbesPipeline->Bind(frameIndex, 0, parameters.mCameraUniform[frameIndex]);
+    mVisualizeProbesPipeline->Bind(frameIndex, 1, mDDGIProbeData[frameIndex]);
+    mVisualizeProbesPipeline->Bind(frameIndex, 2, GetIrradianceBuffer());
 }
 
-void DDGIRenderer::Render(
-    Camera* camera,
-    vk::CommandBuffer commandBuffer,
-    const uint32_t frameIndex) {
+void DDGIRenderer::Render(vk::CommandBuffer commandBuffer, const uint32_t frameIndex) {
     mContext->BeginMarker(commandBuffer, "DDGI");
     {
         mContext->BeginMarker(commandBuffer, "Trace rays");
@@ -309,11 +357,11 @@ void DDGIRenderer::Render(
                     nullptr);
 
                 VKRT_ASSERT(
-                    mSettingsManager->GetProbeResolution().x % 8 == 0 &&
-                    mSettingsManager->GetProbeResolution().y % 8 == 0);
+                    mSettingsManager->GetProbeResolution() % 8 == 0 &&
+                    mSettingsManager->GetProbeResolution() % 8 == 0);
                 commandBuffer.dispatch(
-                    mSettingsManager->GetProbeResolution().x / 8,
-                    mSettingsManager->GetProbeResolution().y / 8,
+                    mSettingsManager->GetProbeResolution() / 8,
+                    mSettingsManager->GetProbeResolution() / 8,
                     probeCount);
             }
 
@@ -341,6 +389,70 @@ void DDGIRenderer::Render(
         }
         mContext->EndMarker(commandBuffer);
     }
+    mContext->EndMarker(commandBuffer);
+}
+
+void DDGIRenderer::RenderProbes(vk::CommandBuffer commandBuffer, const uint32_t frameIndex) {
+    mContext->BeginMarker(commandBuffer, "Probe visualization pass");
+
+    const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
+
+    const std::vector<vk::ClearValue> clearValues{
+        vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
+        vk::ClearDepthStencilValue(1.0f, 0),
+    };
+    const vk::RenderPassBeginInfo renderPassBeginInfo =
+        vk::RenderPassBeginInfo()
+            .setRenderPass(mVisualizeProbesPass->GetRenderPassHandle())
+            .setFramebuffer(mVisualizeProbesPass->GetFramebufferHandle(
+                mContext->GetSwapchain()->GetCurrentIndex()))
+            .setRenderArea({vk::Offset2D{0, 0}, imageSize})
+            .setClearValues(clearValues);
+    commandBuffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+
+    {
+        const vk::Viewport viewport{
+            0.0f,
+            0.0f,
+            static_cast<float>(imageSize.width),
+            static_cast<float>(imageSize.height),
+            0.0f,
+            1.0f};
+        commandBuffer.setViewport(0, viewport);
+
+        const vk::Rect2D scissor =
+            vk::Rect2D().setOffset(0).setExtent(vk::Extent2D{imageSize.width, imageSize.height});
+        commandBuffer.setScissor(0, scissor);
+    }
+
+    commandBuffer.bindPipeline(
+        vk::PipelineBindPoint::eGraphics,
+        mVisualizeProbesPipeline->GetPipelineHandle());
+
+    std::vector<vk::DescriptorSet> descriptorSets =
+        mVisualizeProbesPipeline->GetDescriptorSets(frameIndex);
+
+    commandBuffer.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        mVisualizeProbesPipeline->GetPipelineLayout(),
+        0,
+        descriptorSets,
+        nullptr);
+
+    {
+        commandBuffer.bindVertexBuffers(0, mSpherePositions->GetBufferHandle(), {0});
+        commandBuffer.bindIndexBuffer(
+            mSphereIndices->GetBufferHandle(),
+            {0},
+            vk::IndexType::eUint32);
+        const uint32_t probeCount =
+            mDDGIData.probeGridCount.x * mDDGIData.probeGridCount.y * mDDGIData.probeGridCount.z;
+        commandBuffer
+            .drawIndexed(mSphereIndices->GetBufferSize() / sizeof(uint32_t), probeCount, 0, 0, 0);
+    }
+
+    commandBuffer.endRenderPass();
+
     mContext->EndMarker(commandBuffer);
 }
 

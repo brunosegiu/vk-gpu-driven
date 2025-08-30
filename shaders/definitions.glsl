@@ -101,6 +101,7 @@ struct DDGIData {
     mat3 randomRotation;
     float hysteresis;
     uint frameIndex;
+    float probeRadius;
 };
 
 #endif

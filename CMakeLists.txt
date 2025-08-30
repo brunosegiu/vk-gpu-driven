@@ -48,6 +48,7 @@ set(HEADERS
     include/ShadowRenderer.h
     include/PostProcessingRenderer.h
     include/SettingsManager.h
+    include/Utils.h
 )
 
 set(SOURCE
@@ -86,6 +87,7 @@ set(SOURCE
     src/ShadowRenderer.cpp
     src/PostProcessingRenderer.cpp
     src/SettingsManager.cpp
+    src/Utils.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
@@ -107,6 +109,7 @@ set(SHADER_HEADERS
     transparentPassParameters.glsl
     updateProbesParameters.glsl
     visibilityBufferShadeParameters.glsl
+    probeParameters.glsl
 )
 
 set(SHADERS
@@ -132,6 +135,8 @@ set(SHADERS
     raytraceProbe.rmiss
     raytraceProbeShadow.rmiss
     updateProbes.comp
+    probe.vert
+    probe.frag
 )
 
 if(WIN32)

@@ -111,7 +111,7 @@ void Renderer::AddRenderTargets() {
     }
 
     mUIRenderer->AddRenderTargets(mMainRenderTarget);
-    mDDGIRenderer->AddRenderTargets();
+    mDDGIRenderer->AddRenderTargets(mMainRenderTarget, mDepthRenderTarget);
     mShadowRenderer->AddRenderTargets();
     mPostProcessingRenderer->AddRenderTargets();
 }
@@ -424,14 +424,12 @@ void Renderer::UpdatePersistentUniforms() {
     mShadePassPipeline->Bind(5, mShadowRenderer->GetShadowMap());
     mShadePassPipeline->Bind(6, mVisibilityBuffer);
     mShadePassPipeline->Bind(7, mPostProcessingRenderer->GetSSAOBuffer());
-    mShadePassPipeline->Bind(8, mDDGIRenderer->GetIrradianceBuffer());
-    mShadePassPipeline->Bind(9, mDDGIRenderer->GetMomentsBuffer());
-    mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetIndexBuffer());
-    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetVertexBuffer());
-    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetTexCoordBuffer());
-    mShadePassPipeline->Bind(13, mScene->GetMeshSystem()->GetNormalBuffer());
-    mShadePassPipeline->Bind(14, mScene->GetMeshSystem()->GetTangentBuffer());
-    mShadePassPipeline->Bind(15, mSceneTextures);
+    mShadePassPipeline->Bind(8, mScene->GetMeshSystem()->GetIndexBuffer());
+    mShadePassPipeline->Bind(9, mScene->GetMeshSystem()->GetVertexBuffer());
+    mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetTexCoordBuffer());
+    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetNormalBuffer());
+    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetTangentBuffer());
+    mShadePassPipeline->Bind(13, mSceneTextures);
 }
 
 void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
@@ -476,6 +474,8 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
     mShadePassPipeline->Bind(frameIndex, 1, mShadowRenderer->GetShadowUniform()[frameIndex]);
     mShadePassPipeline->Bind(frameIndex, 2, mPerMeshBuffers[frameIndex]);
     mShadePassPipeline->Bind(frameIndex, 3, mDDGIRenderer->GetProbeData()[frameIndex]);
+    mShadePassPipeline->Bind(frameIndex, 4, mDDGIRenderer->GetIrradianceBuffer());
+    mShadePassPipeline->Bind(frameIndex, 5, mDDGIRenderer->GetMomentsBuffer());
 
     // Update content of per-draw parameters
     {
@@ -543,7 +543,7 @@ void Renderer::Render(Camera* camera) {
 
         const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
 
-        mDDGIRenderer->Render(camera, command.buffer, mCurrentFrameIndex);
+        mDDGIRenderer->Render(command.buffer, mCurrentFrameIndex);
 
         mContext->BeginMarker(command.buffer, "Basepass culling");
         for (auto& visEntry : mVisibilityManagers) {
@@ -814,6 +814,10 @@ void Renderer::Render(Camera* camera) {
             }
             command.buffer.endRenderPass();
             mContext->EndMarker(command.buffer);
+        }
+
+        if (mSettingsManager->GetRenderProbes()) {
+            mDDGIRenderer->RenderProbes(command.buffer, mCurrentFrameIndex);
         }
 
         {
