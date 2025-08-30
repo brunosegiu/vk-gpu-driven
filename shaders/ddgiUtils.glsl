@@ -71,6 +71,8 @@ vec2 sampleProbeMoments(uint probeIndex, vec3 direction, sampler nearSampler, te
     return texture(sampler2DArray(moments, nearSampler), vec3(uv, float(probeIndex))).rg;
 }
 
+const float EnergyPreservation = 0.95;
+
 vec3 ddgiIndirectDiffuse(
     vec3 worldSpacePosition,
     vec3 normal,
@@ -95,15 +97,15 @@ vec3 ddgiIndirectDiffuse(
                 uint sampleProbeIndex = gridIndexToProbeIndex(sampleProbeGridIndex, ddgi);
                 vec3 sampleProbePosition = gridIndexToWorldPos(sampleProbeGridIndex, ddgi);
 
-                vec3 dir = worldSpacePosition - sampleProbePosition + 0.15 * normal;
+                vec3 trueDir = worldSpacePosition - sampleProbePosition;
+                vec3 dir = trueDir + 0.15 * normal;
                 float r = max(length(dir), 1e-4);
                 dir /= r;
-
 
                 vec2 moments = sampleProbeMoments(sampleProbeIndex, dir, nearSampler, moments);
                 float visibility = visibilityFromMoments(r, moments);
 
-                float backfaceTest = (dot(-dir, normal) + 1.0f) * 0.5f;
+                float backfaceTest = square(max(1e-3, (dot(-trueDir, normal) + 1.0) * 0.5)) + 0.2;
 
                 float tx = (ox == 0) ? (1.0 - interpolators.x) : interpolators.x;
                 float ty = (oy == 0) ? (1.0 - interpolators.y) : interpolators.y;
@@ -111,6 +113,7 @@ vec3 ddgiIndirectDiffuse(
                 float trillinearWeight = tx * ty * tz;
 
                 float weight = visibility * backfaceTest;
+                weight = max(1e-6, weight);
                 const float crushThreshold = 0.2f;
                 if (weight < crushThreshold) {
                     weight *= weight * weight * (1.0f / square(crushThreshold)); 
@@ -124,7 +127,7 @@ vec3 ddgiIndirectDiffuse(
         }
     }
     vec3 toalIrradiance = (accumulatedWeight > EPSILON) ? (accumulatedIrradiance / accumulatedWeight) : vec3(0.0f);
-    return toalIrradiance * PI * 0.5f;
+    return toalIrradiance * PI * 0.5f * EnergyPreservation;
 }
 
 #endif

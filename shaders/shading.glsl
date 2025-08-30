@@ -205,24 +205,22 @@ vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 
     F0 = mix(F0, albedo.rgb, metallic);
 
     vec3 Lo = vec3(0.0);
-    {
-        vec3 H = normalize(V + L);
+    vec3 H = normalize(V + L);
 
-        float NDF = DistributionGGX(N, H, roughness);
-        float G = GeometrySmith(N, V, L, roughness);
-        vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    float NDF = DistributionGGX(N, H, roughness);
+    float G = GeometrySmith(N, V, L, roughness);
+    vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
         
-        vec3 kS = F;
-        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+    vec3 kS = F;
+    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
         
-        vec3 numerator    = NDF * G * F;
-        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
-        vec3 specular     = numerator / denominator;  
+    vec3 numerator    = NDF * G * F;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+    vec3 specular     = numerator / denominator;  
             
-        float NdotL = max(dot(N, L), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
         
-        Lo = (kD * albedo.rgb / PI + specular) * NdotL * radiance * shadowTerm;
-    }
+    Lo = (kD * albedo.rgb / PI + specular) * NdotL * radiance * shadowTerm;
 
     vec3 ambient = indirect * albedo.rgb * visibility;
 
