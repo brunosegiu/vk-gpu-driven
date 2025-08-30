@@ -212,11 +212,13 @@ void ShadowRenderer::UpdateUniforms(
 void ShadowRenderer::Render(vk::CommandBuffer commandBuffer, const uint32_t frameIndex) {
     // Shadow pass
     {
+        mContext->BeginMarker(commandBuffer, "Shadow culling");
         for (auto& visEntry : mVisibilityManagers) {
             visEntry.second->Dispatch(commandBuffer, frameIndex);
         }
+        mContext->EndMarker(commandBuffer);
 
-        mContext->BeginMarker(commandBuffer, "Shadowmap Rendering");
+        mContext->BeginMarker(commandBuffer, "Shadowmap rendering");
         {
             // Transition shadow map to depth attachment
             std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
