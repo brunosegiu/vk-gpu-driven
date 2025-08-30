@@ -61,4 +61,66 @@ float visibilityFromMoments(float distanceToSample, vec2 moments, float softness
 	return (distanceToSample <= mean) ? 1.0 : chebyshevWeight;
 }
 
+vec3 sampleProbeIrradiance(uint probeIndex, vec3 direction, sampler irradianceSampler, texture2DArray irradiance) {
+    vec2 uv = octEncode(normalize(direction));
+    return texture(sampler2DArray(irradiance, irradianceSampler), vec3(uv, float(probeIndex))).rgb;
+}
+
+vec2 sampleProbeMoments(uint probeIndex, vec3 direction, sampler nearSampler, texture2DArray moments) {
+    vec2 uv = octEncode(normalize(direction));
+    return texture(sampler2DArray(moments, nearSampler), vec3(uv, float(probeIndex))).rg;
+}
+
+vec3 ddgiIndirectDiffuse(
+    vec3 worldSpacePosition,
+    vec3 normal,
+    vec3 viewDir,
+    const DDGIData ddgi,
+    sampler irradianceSampler,
+    texture2DArray irradiance,
+    sampler nearSampler,
+    texture2DArray moments
+) {
+    ivec3 gridIndex = nearestProbeGridIndex(worldSpacePosition, ddgi);
+    vec3 gridPos = (worldSpacePosition - ddgi.probeGridOrigin) / ddgi.probeSpacing;
+    vec3 interpolators = clamp(gridPos - vec3(gridIndex), 0.0f, 1.0f);
+
+    vec3 accumulatedIrradiance = vec3(0.0f);
+    float accumulatedWeight = 0.0;
+
+    for (int oz = 0; oz <= 1; ++oz) {
+		for (int oy = 0; oy <= 1; ++oy) {
+            for (int ox = 0; ox <= 1; ++ox) {
+                ivec3 sampleProbeGridIndex = clamp(ivec3(gridIndex) + ivec3(ox, oy, oz), ivec3(0), ivec3(ddgi.probeGridCount) - 1);
+                uint sampleProbeIndex = gridIndexToProbeIndex(sampleProbeGridIndex, ddgi);
+                vec3 sampleProbePosition = gridIndexToWorldPos(sampleProbeGridIndex, ddgi);
+
+                vec3 dir = worldSpacePosition - sampleProbePosition + 0.15 * normal;
+                float r = max(length(dir), 1e-4);
+                dir /= r;
+
+
+                vec2 moments = sampleProbeMoments(sampleProbeIndex, dir, nearSampler, moments);
+                float visibility = visibilityFromMoments(r, moments, 0.02);
+
+                float backfaceTest = (dot(-dir, normal) + 1.0f) * 0.5f;
+
+                float tx = (ox == 0) ? (1.0 - interpolators.x) : interpolators.x;
+                float ty = (oy == 0) ? (1.0 - interpolators.y) : interpolators.y;
+                float tz = (oz == 0) ? (1.0 - interpolators.z) : interpolators.z;
+                float trillinearWeight = tx * ty * tz;
+
+                float weight = visibility * backfaceTest * trillinearWeight;
+
+
+                vec3 irradiance = sampleProbeIrradiance(sampleProbeIndex, normal, irradianceSampler, irradiance);
+                accumulatedIrradiance += irradiance * weight;
+                accumulatedWeight += weight;
+            }
+        }
+    }
+    vec3 toalIrradiance = (accumulatedWeight > EPSILON) ? (accumulatedIrradiance / accumulatedWeight) : vec3(0.0f);
+    return toalIrradiance * PI * 0.5f;
+}
+
 #endif

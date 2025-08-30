@@ -7,8 +7,8 @@
 namespace VKRT {
 
 struct SSAOControlData {
-    float radius = 2.0f;
-    float power = 2.0f;
+    float radius = 0.4f;
+    float power = 4.0f;
     uint32_t kernelSize = 32;
     int32_t blurRadius = 2;
 };

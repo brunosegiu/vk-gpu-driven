@@ -16,7 +16,7 @@ layout(binding = 3, set = UPDATE_PER_FRAME, scalar) uniform TDDGIData {
     DDGIData uDDGI;
 };
 layout(binding = 4, set = UPDATE_PER_FRAME) uniform texture2DArray uPrevProbeIrradianceTargets;
-layout(binding = 5, set = UPDATE_PER_FRAME) uniform texture2DArray uPrevProbeDepthTargets;
+layout(binding = 5, set = UPDATE_PER_FRAME) uniform texture2DArray uPrevProbeMomentTargets;
 
 layout(binding = 0, set = UPDATE_ONCE, scalar) readonly buffer TSceneData {
     DrawData uPersistentSceneData[];

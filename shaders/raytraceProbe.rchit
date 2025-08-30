@@ -6,6 +6,7 @@
 #include "definitions.glsl"
 #include "shading.glsl"
 #include "raytraceProbeParameters.glsl"
+#include "ddgiUtils.glsl"
 
 layout(location = ColorPayloadIndex) rayPayloadInEXT RayPayload rayPayload;
 layout(location = ShadowPayloadIndex) rayPayloadEXT float shadowAttenuation;
@@ -128,7 +129,9 @@ void main() {
 
     vec3 viewVector = normalize(gl_WorldRayOriginEXT - worldSpacePosition);
 
-    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0f, vec3(0.0f));
+    vec3 indirect = ddgiIndirectDiffuse(worldSpacePosition, normal, viewVector, uDDGI, uFrameBufferTextureSampler, uPrevProbeIrradianceTargets, uFrameBufferTextureSampler, uPrevProbeMomentTargets); 
+
+    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0f, indirect);
 
     rayPayload.depth += 1;
     rayPayload.color += color;
