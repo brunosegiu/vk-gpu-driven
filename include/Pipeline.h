@@ -29,26 +29,29 @@ public:
     std::vector<vk::DescriptorSet> GetDescriptorSets(uint32_t frameIndex);
 
     // Persistent parameters
-    void Bind(uint32_t binding, ScopedRefPtr<VulkanBuffer> buffer);
-    void Bind(uint32_t binding, std::vector<ScopedRefPtr<VulkanBuffer>> buffers);
-    void Bind(uint32_t binding, ScopedRefPtr<Texture> texture);
-    void Bind(uint32_t binding, std::vector<ScopedRefPtr<Texture>> textures);
-    void Bind(uint32_t binding, vk::Sampler sampler);
-    void Bind(uint32_t binding, vk::AccelerationStructureKHR accelerationStructure);
+    void Bind(uint32_t binding, const ScopedRefPtr<VulkanBuffer>& buffer);
+    void Bind(uint32_t binding, const std::vector<ScopedRefPtr<VulkanBuffer>>& buffers);
+    void Bind(uint32_t binding, const ScopedRefPtr<Texture>& texture);
+    void Bind(uint32_t binding, const std::vector<ScopedRefPtr<Texture>>& textures);
+    void Bind(uint32_t binding, const vk::Sampler& sampler);
+    void Bind(uint32_t binding, const vk::AccelerationStructureKHR& accelerationStructure);
 
     // Per-frame parameters
-    void Bind(uint32_t frameIndex, uint32_t binding, ScopedRefPtr<VulkanBuffer> buffer);
+    void Bind(uint32_t frameIndex, uint32_t binding, const ScopedRefPtr<VulkanBuffer>& buffer);
     void Bind(
         uint32_t frameIndex,
         uint32_t binding,
-        std::vector<ScopedRefPtr<VulkanBuffer>> buffers);
-    void Bind(uint32_t frameIndex, uint32_t binding, ScopedRefPtr<Texture> texture);
-    void Bind(uint32_t frameIndex, uint32_t binding, std::vector<ScopedRefPtr<Texture>> textures);
-    void Bind(uint32_t frameIndex, uint32_t binding, vk::Sampler sampler);
+        const std::vector<ScopedRefPtr<VulkanBuffer>>& buffers);
+    void Bind(uint32_t frameIndex, uint32_t binding, const ScopedRefPtr<Texture>& texture);
     void Bind(
         uint32_t frameIndex,
         uint32_t binding,
-        vk::AccelerationStructureKHR accelerationStructure);
+        const std::vector<ScopedRefPtr<Texture>>& textures);
+    void Bind(uint32_t frameIndex, uint32_t binding, const vk::Sampler& sampler);
+    void Bind(
+        uint32_t frameIndex,
+        uint32_t binding,
+        const vk::AccelerationStructureKHR& accelerationStructure);
 
     std::vector<vk::DescriptorSetLayout> GetDescriptorLayouts();
 
@@ -66,35 +69,35 @@ protected:
         ParameterUpdateFrequency frequency,
         uint32_t binding,
         uint32_t frameIndex,
-        ScopedRefPtr<VulkanBuffer> buffer);
+        const ScopedRefPtr<VulkanBuffer>& buffer);
     void Bind(
         ParameterUpdateFrequency frequency,
         uint32_t binding,
         uint32_t frameIndex,
-        std::vector<ScopedRefPtr<VulkanBuffer>> buffers);
+        const std::vector<ScopedRefPtr<VulkanBuffer>>& buffers);
 
     void Bind(
         ParameterUpdateFrequency frequency,
         uint32_t frameIndex,
         uint32_t binding,
-        ScopedRefPtr<Texture> texture);
+        const ScopedRefPtr<Texture>& texture);
     void Bind(
         ParameterUpdateFrequency frequency,
         uint32_t frameIndex,
         uint32_t binding,
-        std::vector<ScopedRefPtr<Texture>> textures);
+        const std::vector<ScopedRefPtr<Texture>>& textures);
 
     void Bind(
         ParameterUpdateFrequency frequency,
         uint32_t frameIndex,
         uint32_t binding,
-        vk::Sampler sampler);
+        const vk::Sampler& sampler);
 
     void Bind(
         ParameterUpdateFrequency frequency,
         uint32_t frameIndex,
         uint32_t binding,
-        vk::AccelerationStructureKHR accelerationStructure);
+        const vk::AccelerationStructureKHR& accelerationStructure);
 
     ScopedRefPtr<Context> mContext;
     vk::PipelineLayout mLayout;

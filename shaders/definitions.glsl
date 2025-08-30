@@ -99,6 +99,8 @@ struct DDGIData {
     float minRayLength;
     float maxRayLength;
     mat3 randomRotation;
+    float hysteresis;
+    uint frameIndex;
 };
 
 #endif

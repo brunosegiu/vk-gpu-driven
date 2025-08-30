@@ -7,14 +7,15 @@
 
 namespace VKRT {
 
-constexpr uint32_t raysPerProbe = 512;
-constexpr glm::uvec3 probeGridCount(24u, 11u, 24u);
+constexpr uint32_t raysPerProbe = 32;
+constexpr glm::uvec3 probeGridCount(4u, 4u, 4u);
 constexpr glm::uvec2 probeResolution(32u, 32u);
-constexpr glm::vec3 probeSpacing(2.0f, 2.0f, 2.0f);
+constexpr glm::vec3 probeSpacing(1.0f, 1.0f, 2.0f);
 const glm::vec3 probeOrigin =
-    glm::vec3(1.0f, 11.5f, 1.0f) - glm::vec3(probeGridCount) * probeSpacing * 0.5f;
+    glm::vec3(0.0f, 0.5f, 0.0f) - glm::vec3(probeGridCount) * probeSpacing * 0.5f;
 constexpr float probeMaxRayLength = 1000.0f;
 constexpr float probeMinRayLength = 0.01f;
+constexpr float hysteresis = 0.75f;
 
 DDGIData ddgiData{
     .probeGridCount = probeGridCount,
@@ -22,10 +23,13 @@ DDGIData ddgiData{
     .probeSpacing = probeSpacing,
     .minRayLength = probeMinRayLength,
     .maxRayLength = probeMaxRayLength,
+    .randomRotation = glm::mat3(1.0f),
+    .hysteresis = hysteresis,
+    .frameIndex = 0,
 };
 
 DDGIRenderer::DDGIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
-    : mContext(context), mScene(scene) {
+    : mContext(context), mScene(scene), mCurrentFrame(0) {
     AddRenderTargets();
     AddPipelines();
 }
@@ -54,23 +58,27 @@ void DDGIRenderer::AddRenderTargets() {
             vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
             vk::ImageLayout::eShaderReadOnlyOptimal);
 
-        mProbeIrradianceBuffer = new Texture(
-            mContext,
-            probeResolution.x,
-            probeResolution.y,
-            probeCount,
-            vk::Format::eB10G11R11UfloatPack32,
-            vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-            vk::ImageLayout::eShaderReadOnlyOptimal);
+        for (uint32_t index = 0; index < mProbeIrradianceBuffers.size(); ++index) {
+            mProbeIrradianceBuffers[index] = new Texture(
+                mContext,
+                probeResolution.x,
+                probeResolution.y,
+                probeCount,
+                vk::Format::eB10G11R11UfloatPack32,
+                vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+                vk::ImageLayout::eShaderReadOnlyOptimal);
+        }
 
-        mProbeDepthBuffer = new Texture(
-            mContext,
-            probeResolution.x,
-            probeResolution.y,
-            probeCount,
-            vk::Format::eR16G16Sfloat,
-            vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-            vk::ImageLayout::eShaderReadOnlyOptimal);
+        for (uint32_t index = 0; index < mProbeMomentsBuffers.size(); ++index) {
+            mProbeMomentsBuffers[index] = new Texture(
+                mContext,
+                probeResolution.x,
+                probeResolution.y,
+                probeCount,
+                vk::Format::eR16G16Sfloat,
+                vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+                vk::ImageLayout::eShaderReadOnlyOptimal);
+        }
     }
 }
 
@@ -100,9 +108,7 @@ void DDGIRenderer::AddResources() {
 }
 
 void DDGIRenderer::RemoveRenderTargets() {
-    mProbeDepthBuffer = nullptr;
     mProbeRayRadianceBuffer = nullptr;
-    mProbeIrradianceBuffer = nullptr;
 }
 
 void DDGIRenderer::RemovePipelines() {}
@@ -133,19 +139,25 @@ void DDGIRenderer::UpdatePersistentUniforms(const PersistentParameters& paramete
             mUpdateProbePipeline->Bind(0, parameters.mFrameBufferSampler);
             mUpdateProbePipeline->Bind(1, mProbeRayRadianceBuffer);
             mUpdateProbePipeline->Bind(2, mProbeRayDirectionDepthBuffer);
-            mUpdateProbePipeline->Bind(3, mProbeIrradianceBuffer);
-            mUpdateProbePipeline->Bind(4, mProbeDepthBuffer);
         }
     }
 }
 
 void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t frameIndex) {
+    mCurrentFrame = (mCurrentFrame + 1) % mProbeMomentsBuffers.size();
+
     mProbeRaytracingPipeline->Bind(frameIndex, 0, parameters.mCameraUniform[frameIndex]);
     mProbeRaytracingPipeline->Bind(frameIndex, 1, parameters.mShadowCameraUniform[frameIndex]);
     mProbeRaytracingPipeline->Bind(frameIndex, 2, parameters.mPerMeshParameters[frameIndex]);
     mProbeRaytracingPipeline->Bind(frameIndex, 3, mDDGIProbeData[frameIndex]);
+    mProbeRaytracingPipeline->Bind(frameIndex, 4, GetPreviousIrradianceBuffer());
+    mProbeRaytracingPipeline->Bind(frameIndex, 5, GetPreviousMomentsBuffer());
 
     mUpdateProbePipeline->Bind(frameIndex, 0, mDDGIProbeData[frameIndex]);
+    mUpdateProbePipeline->Bind(frameIndex, 1, GetPreviousIrradianceBuffer());
+    mUpdateProbePipeline->Bind(frameIndex, 2, GetPreviousMomentsBuffer());
+    mUpdateProbePipeline->Bind(frameIndex, 3, GetIrradianceBuffer());
+    mUpdateProbePipeline->Bind(frameIndex, 4, GetMomentsBuffer());
 
     // DDGI
     {
@@ -161,6 +173,7 @@ void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t
 
         ddgiData.randomRotation = randomRotation();
         mDDGIProbeData[frameIndex]->Write(reinterpret_cast<uint8_t*>(&ddgiData), sizeof(DDGIData));
+        ddgiData.frameIndex++;
     }
 }
 
@@ -176,12 +189,20 @@ void DDGIRenderer::Render(
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
                     vk::PipelineStageFlagBits::eFragmentShader,
                     vk::PipelineStageFlagBits::eRayTracingShaderKHR,
-                    {{mProbeRayRadianceBuffer,
-                      vk::ImageLayout::eShaderReadOnlyOptimal,
-                      vk::ImageLayout::eGeneral},
-                     {mProbeRayDirectionDepthBuffer,
-                      vk::ImageLayout::eShaderReadOnlyOptimal,
-                      vk::ImageLayout::eGeneral}});
+                    {
+                        {mProbeRayRadianceBuffer,
+                         vk::ImageLayout::eShaderReadOnlyOptimal,
+                         vk::ImageLayout::eGeneral},
+                        {mProbeRayDirectionDepthBuffer,
+                         vk::ImageLayout::eShaderReadOnlyOptimal,
+                         vk::ImageLayout::eGeneral},
+                        {GetPreviousIrradianceBuffer(),
+                         vk::ImageLayout::eShaderReadOnlyOptimal,
+                         vk::ImageLayout::eShaderReadOnlyOptimal},
+                        {GetPreviousMomentsBuffer(),
+                         vk::ImageLayout::eShaderReadOnlyOptimal,
+                         vk::ImageLayout::eShaderReadOnlyOptimal},
+                    });
 
                 commandBuffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eFragmentShader,
@@ -223,12 +244,14 @@ void DDGIRenderer::Render(
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
                     vk::PipelineStageFlagBits::eRayTracingShaderKHR,
                     vk::PipelineStageFlagBits::eComputeShader,
-                    {{mProbeRayRadianceBuffer,
-                      vk::ImageLayout::eGeneral,
-                      vk::ImageLayout::eShaderReadOnlyOptimal},
-                     {mProbeRayDirectionDepthBuffer,
-                      vk::ImageLayout::eGeneral,
-                      vk::ImageLayout::eShaderReadOnlyOptimal}});
+                    {
+                        {mProbeRayRadianceBuffer,
+                         vk::ImageLayout::eGeneral,
+                         vk::ImageLayout::eShaderReadOnlyOptimal},
+                        {mProbeRayDirectionDepthBuffer,
+                         vk::ImageLayout::eGeneral,
+                         vk::ImageLayout::eShaderReadOnlyOptimal},
+                    });
 
                 commandBuffer.pipelineBarrier(
                     vk::PipelineStageFlagBits::eRayTracingShaderKHR,
@@ -248,10 +271,16 @@ void DDGIRenderer::Render(
                     vk::PipelineStageFlagBits::eFragmentShader,
                     vk::PipelineStageFlagBits::eComputeShader,
                     {
-                        {mProbeIrradianceBuffer,
+                        {GetIrradianceBuffer(),
                          vk::ImageLayout::eShaderReadOnlyOptimal,
                          vk::ImageLayout::eGeneral},
-                        {mProbeDepthBuffer,
+                        {GetMomentsBuffer(),
+                         vk::ImageLayout::eShaderReadOnlyOptimal,
+                         vk::ImageLayout::eGeneral},
+                        {GetPreviousIrradianceBuffer(),
+                         vk::ImageLayout::eShaderReadOnlyOptimal,
+                         vk::ImageLayout::eGeneral},
+                        {GetPreviousMomentsBuffer(),
                          vk::ImageLayout::eShaderReadOnlyOptimal,
                          vk::ImageLayout::eGeneral},
                     });
@@ -290,10 +319,16 @@ void DDGIRenderer::Render(
                     vk::PipelineStageFlagBits::eComputeShader,
                     vk::PipelineStageFlagBits::eFragmentShader,
                     {
-                        {mProbeIrradianceBuffer,
+                        {GetIrradianceBuffer(),
                          vk::ImageLayout::eGeneral,
                          vk::ImageLayout::eShaderReadOnlyOptimal},
-                        {mProbeDepthBuffer,
+                        {GetMomentsBuffer(),
+                         vk::ImageLayout::eGeneral,
+                         vk::ImageLayout::eShaderReadOnlyOptimal},
+                        {GetPreviousIrradianceBuffer(),
+                         vk::ImageLayout::eGeneral,
+                         vk::ImageLayout::eShaderReadOnlyOptimal},
+                        {GetPreviousMomentsBuffer(),
                          vk::ImageLayout::eGeneral,
                          vk::ImageLayout::eShaderReadOnlyOptimal},
                     });

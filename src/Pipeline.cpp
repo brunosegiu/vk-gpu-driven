@@ -291,61 +291,64 @@ std::vector<vk::DescriptorSet> Pipeline::GetDescriptorSets(uint32_t frameIndex) 
 }
 
 // Persistent parameters
-void Pipeline::Bind(uint32_t binding, ScopedRefPtr<VulkanBuffer> buffer) {
+void Pipeline::Bind(uint32_t binding, const ScopedRefPtr<VulkanBuffer>& buffer) {
     Bind(ParameterUpdateFrequency::Once, 0, binding, buffer);
 }
 
-void Pipeline::Bind(uint32_t binding, std::vector<ScopedRefPtr<VulkanBuffer>> buffers) {
+void Pipeline::Bind(uint32_t binding, const std::vector<ScopedRefPtr<VulkanBuffer>>& buffers) {
     Bind(ParameterUpdateFrequency::Once, 0, binding, buffers);
 }
 
-void Pipeline::Bind(uint32_t binding, ScopedRefPtr<Texture> texture) {
+void Pipeline::Bind(uint32_t binding, const ScopedRefPtr<Texture>& texture) {
     Bind(ParameterUpdateFrequency::Once, 0, binding, texture);
 }
 
-void Pipeline::Bind(uint32_t binding, std::vector<ScopedRefPtr<Texture>> textures) {
+void Pipeline::Bind(uint32_t binding, const std::vector<ScopedRefPtr<Texture>>& textures) {
     Bind(ParameterUpdateFrequency::Once, 0, binding, textures);
 }
 
-void Pipeline::Bind(uint32_t binding, vk::Sampler sampler) {
+void Pipeline::Bind(uint32_t binding, const vk::Sampler& sampler) {
     Bind(ParameterUpdateFrequency::Once, 0, binding, sampler);
 }
 
-void Pipeline::Bind(uint32_t binding, vk::AccelerationStructureKHR accelerationStructure) {
+void Pipeline::Bind(uint32_t binding, const vk::AccelerationStructureKHR& accelerationStructure) {
     Bind(ParameterUpdateFrequency::Once, 0, binding, accelerationStructure);
 }
 
 // Per-frame parameters
-void Pipeline::Bind(uint32_t frameIndex, uint32_t binding, ScopedRefPtr<VulkanBuffer> buffer) {
+void Pipeline::Bind(
+    uint32_t frameIndex,
+    uint32_t binding,
+    const ScopedRefPtr<VulkanBuffer>& buffer) {
     Bind(ParameterUpdateFrequency::PerFrame, frameIndex, binding, buffer);
 }
 
 void Pipeline::Bind(
     uint32_t frameIndex,
     uint32_t binding,
-    std::vector<ScopedRefPtr<VulkanBuffer>> buffers) {
+    const std::vector<ScopedRefPtr<VulkanBuffer>>& buffers) {
     Bind(ParameterUpdateFrequency::PerFrame, frameIndex, binding, buffers);
 }
 
-void Pipeline::Bind(uint32_t frameIndex, uint32_t binding, ScopedRefPtr<Texture> texture) {
+void Pipeline::Bind(uint32_t frameIndex, uint32_t binding, const ScopedRefPtr<Texture>& texture) {
     Bind(ParameterUpdateFrequency::PerFrame, frameIndex, binding, texture);
 }
 
 void Pipeline::Bind(
     uint32_t binding,
     uint32_t frameIndex,
-    std::vector<ScopedRefPtr<Texture>> textures) {
+    const std::vector<ScopedRefPtr<Texture>>& textures) {
     Bind(ParameterUpdateFrequency::PerFrame, frameIndex, binding, textures);
 }
 
-void Pipeline::Bind(uint32_t frameIndex, uint32_t binding, vk::Sampler sampler) {
+void Pipeline::Bind(uint32_t frameIndex, uint32_t binding, const vk::Sampler& sampler) {
     Bind(ParameterUpdateFrequency::PerFrame, frameIndex, binding, sampler);
 }
 
 void Pipeline::Bind(
     uint32_t frameIndex,
     uint32_t binding,
-    vk::AccelerationStructureKHR accelerationStructure) {
+    const vk::AccelerationStructureKHR& accelerationStructure) {
     Bind(ParameterUpdateFrequency::PerFrame, frameIndex, binding, accelerationStructure);
 }
 
@@ -353,7 +356,7 @@ void Pipeline::Bind(
     ParameterUpdateFrequency frequency,
     uint32_t frameIndex,
     uint32_t binding,
-    ScopedRefPtr<VulkanBuffer> buffer) {
+    const ScopedRefPtr<VulkanBuffer>& buffer) {
     Bind(frequency, frameIndex, binding, std::vector<ScopedRefPtr<VulkanBuffer>>{buffer});
 }
 
@@ -361,7 +364,7 @@ void Pipeline::Bind(
     ParameterUpdateFrequency frequency,
     uint32_t frameIndex,
     uint32_t binding,
-    std::vector<ScopedRefPtr<VulkanBuffer>> buffers) {
+    const std::vector<ScopedRefPtr<VulkanBuffer>>& buffers) {
     ParameterData& parameter = mParameters[frequency].parameters[binding];
     VKRT_ASSERT(
         parameter.descriptorType == vk::DescriptorType::eUniformBuffer ||
@@ -378,7 +381,7 @@ void Pipeline::Bind(
     ParameterUpdateFrequency frequency,
     uint32_t frameIndex,
     uint32_t binding,
-    ScopedRefPtr<Texture> texture) {
+    const ScopedRefPtr<Texture>& texture) {
     Bind(frequency, frameIndex, binding, std::vector<ScopedRefPtr<Texture>>{texture});
 }
 
@@ -386,7 +389,7 @@ void Pipeline::Bind(
     ParameterUpdateFrequency frequency,
     uint32_t frameIndex,
     uint32_t binding,
-    std::vector<ScopedRefPtr<Texture>> textures) {
+    const std::vector<ScopedRefPtr<Texture>>& textures) {
     ParameterData& parameter = mParameters[frequency].parameters[binding];
     VKRT_ASSERT(
         parameter.descriptorType == vk::DescriptorType::eSampledImage ||
@@ -407,7 +410,7 @@ void Pipeline::Bind(
     ParameterUpdateFrequency frequency,
     uint32_t frameIndex,
     uint32_t binding,
-    vk::Sampler sampler) {
+    const vk::Sampler& sampler) {
     ParameterData& parameter = mParameters[frequency].parameters[binding];
     VKRT_ASSERT(parameter.descriptorType == vk::DescriptorType::eSampler);
     frameIndex = frequency == ParameterUpdateFrequency::Once ? 0 : frameIndex;
@@ -419,7 +422,7 @@ void Pipeline::Bind(
     ParameterUpdateFrequency frequency,
     uint32_t frameIndex,
     uint32_t binding,
-    vk::AccelerationStructureKHR accelerationStructure) {
+    const vk::AccelerationStructureKHR& accelerationStructure) {
     ParameterData& parameter = mParameters[frequency].parameters[binding];
     VKRT_ASSERT(parameter.descriptorType == vk::DescriptorType::eAccelerationStructureKHR);
     frameIndex = frequency == ParameterUpdateFrequency::Once ? 0 : frameIndex;

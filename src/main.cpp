@@ -71,7 +71,7 @@ int main() {
         if (contextResult == Result::Success) {
             ScopedRefPtr<Scene> scene = new Scene(context);
 
-            scene->Load("./assets/Bistro.vkrt");
+            scene->Load("./assets/testScene.vkrt");
 
             ScopedRefPtr<Camera> camera = new Camera(window);
             camera->SetTranslation(glm::vec3(-14.0f, 5.0f, -1.0f));

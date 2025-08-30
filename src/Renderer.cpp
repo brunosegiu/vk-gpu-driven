@@ -425,7 +425,7 @@ void Renderer::UpdatePersistentUniforms() {
     mShadePassPipeline->Bind(6, mVisibilityBuffer);
     mShadePassPipeline->Bind(7, mPostProcessingRenderer->GetSSAOBuffer());
     mShadePassPipeline->Bind(8, mDDGIRenderer->GetIrradianceBuffer());
-    mShadePassPipeline->Bind(9, mDDGIRenderer->GetDepthBuffer());
+    mShadePassPipeline->Bind(9, mDDGIRenderer->GetMomentsBuffer());
     mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetIndexBuffer());
     mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetVertexBuffer());
     mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetTexCoordBuffer());

@@ -20,6 +20,8 @@ struct DDGIData {
     float minRayLength;
     float maxRayLength;
     glm::mat3 randomRotation;
+    float hysteresis;
+    uint32_t frameIndex;
 };
 
 class DDGIRenderer : public RefCountPtr {
@@ -59,8 +61,19 @@ public:
 
     const std::vector<ScopedRefPtr<VulkanBuffer>>& GetProbeData() { return mDDGIProbeData; }
 
-    ScopedRefPtr<Texture> GetIrradianceBuffer() { return mProbeIrradianceBuffer; }
-    ScopedRefPtr<Texture> GetDepthBuffer() { return mProbeDepthBuffer; }
+    const ScopedRefPtr<Texture>& GetIrradianceBuffer() {
+        return mProbeIrradianceBuffers[mCurrentFrame % mProbeMomentsBuffers.size()];
+    }
+    const ScopedRefPtr<Texture>& GetMomentsBuffer() {
+        return mProbeMomentsBuffers[mCurrentFrame % mProbeMomentsBuffers.size()];
+    }
+
+    const ScopedRefPtr<Texture>& GetPreviousIrradianceBuffer() {
+        return mProbeIrradianceBuffers[(mCurrentFrame + 1) % mProbeMomentsBuffers.size()];
+    }
+    const ScopedRefPtr<Texture>& GetPreviousMomentsBuffer() {
+        return mProbeMomentsBuffers[(mCurrentFrame + 1) % mProbeMomentsBuffers.size()];
+    }
 
     ~DDGIRenderer();
 
@@ -68,6 +81,7 @@ private:
     // Shared resources
     ScopedRefPtr<Context> mContext;
     ScopedRefPtr<Scene> mScene;
+    uint32_t mCurrentFrame;
 
     // Probe rendering
     ScopedRefPtr<RaytracingPipeline> mProbeRaytracingPipeline;
@@ -75,8 +89,8 @@ private:
     ScopedRefPtr<Texture> mProbeRayDirectionDepthBuffer;
 
     ScopedRefPtr<ComputePipeline> mUpdateProbePipeline;
-    ScopedRefPtr<Texture> mProbeIrradianceBuffer;
-    ScopedRefPtr<Texture> mProbeDepthBuffer;
+    std::array<ScopedRefPtr<Texture>, 2> mProbeIrradianceBuffers;
+    std::array<ScopedRefPtr<Texture>, 2> mProbeMomentsBuffers;
 
     std::vector<ScopedRefPtr<VulkanBuffer>> mDDGIProbeData;
 };

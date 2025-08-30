@@ -27,7 +27,7 @@ void main() {
     const uvec3 gridIndex = probeIndexToGridIndex(probeIndex, uDDGI);
 
     vec3 origin = gridIndexToWorldPos(ivec3(gridIndex), uDDGI);
-    vec3 direction = sphericalFibonacci(rayIndex, gl_LaunchSizeEXT.x);
+    vec3 direction = uDDGI.randomRotation * sphericalFibonacci(rayIndex, gl_LaunchSizeEXT.x);
 
     rayPayload.color = vec3(0.0f);
     rayPayload.depth = 0;
