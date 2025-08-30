@@ -37,7 +37,7 @@ Renderer::Renderer(
         mVisibilityManagers[alphaMode] = new VisibilityManager(mContext, mScene, alphaMode);
     }
     mUIRenderer = new UIRenderer(mContext, mSettingsManager);
-    mDDGIRenderer = new DDGIRenderer(mContext, mScene);
+    mDDGIRenderer = new DDGIRenderer(mContext, mScene, mSettingsManager);
     mShadowRenderer = new ShadowRenderer(mContext, mScene, mSettingsManager);
     mPostProcessingRenderer = new PostProcessingRenderer(mContext, mScene, mSettingsManager);
 

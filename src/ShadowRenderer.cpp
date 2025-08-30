@@ -5,8 +5,6 @@
 
 namespace VKRT {
 
-constexpr uint32_t ShadowMapResolution = 4096;
-
 struct LightData {
     glm::vec3 radiance;
     glm::vec3 direction;
@@ -32,8 +30,8 @@ void ShadowRenderer::AddRenderTargets() {
     {
         mShadowMap = new Texture(
             mContext,
-            ShadowMapResolution,
-            ShadowMapResolution,
+            mSettingsManager->GetShadowMapResolution(),
+            mSettingsManager->GetShadowMapResolution(),
             vk::Format::eD16Unorm,
             vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled,
             vk::ImageLayout::eShaderReadOnlyOptimal);
@@ -92,7 +90,8 @@ void ShadowRenderer::AddPipelines() {
                 GraphicsPipelineOptionals{
                     .enableDepthBias = true,
                     .depthBias = 1.0f,
-                    .depthSlope = 1.0f * (2 + 1)});
+                    .depthSlope = 1.0f * (2 + 1),
+                });
         }
     }
 }
@@ -152,6 +151,12 @@ void ShadowRenderer::UpdateUniforms(
     const PerFrameParameters& parameters) {
     // Shadow camera parameters
     {
+        const glm::mat4 shadowMatrix = mScene->GetLight().ComputeShadowMatrix(
+            mSettingsManager->GetShadowFrustumWidth(),
+            mSettingsManager->GetShadowDistance(),
+            mSettingsManager->GetShadowNear(),
+            mSettingsManager->GetShadowFar());
+
         for (const Material::AlphaMode alphaMode : Material::AlphaModes) {
             uint32_t drawCallCount = mScene->GetDrawCallCount(alphaMode);
             if (alphaMode == Material::AlphaMode::Blended || drawCallCount == 0) {
@@ -161,7 +166,7 @@ void ShadowRenderer::UpdateUniforms(
             VisibilityManager::CullData shadowCullingData{
                 .ortho = 1,
                 .viewDirectionOrCameraPos = mScene->GetLight().GetDirection(),
-                .frustumPlanes = ViewFrustum(mScene->GetLight().ComputeShadowMatrix()).GetPlanes(),
+                .frustumPlanes = ViewFrustum(shadowMatrix).GetPlanes(),
                 .globalDrawOffset = static_cast<uint32_t>(mScene->GetDrawCallOffset(alphaMode)),
                 .maxDrawCount = static_cast<uint32_t>(mScene->GetDrawCallCount(alphaMode))};
 
@@ -172,7 +177,6 @@ void ShadowRenderer::UpdateUniforms(
         }
 
         DirectionalLight& light = mScene->GetLight();
-        glm::mat4 shadowMatrix = light.ComputeShadowMatrix();
         LightData cameraMatrices{
             .radiance = light.GetRadiance(),
             .direction = light.GetDirection(),

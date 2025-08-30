@@ -31,9 +31,6 @@ vec3 ddgiIndirectDiffuse(vec3 worldSpacePosition, vec3 normal, vec3 viewDir, con
     vec3 accumulatedRadiance = vec3(0.0f);
     float accumulatedWeight = 0.0;
 
-    uint fallbackSampleProbeIndex = gridIndexToProbeIndex(gridIndex, ddgi);
-    vec3 fallbackIrradiance = sampleProbeIrradiance(fallbackSampleProbeIndex, normal);
-
     for (int oz = 0; oz <= 1; ++oz) {
 		for (int oy = 0; oy <= 1; ++oy) {
             for (int ox = 0; ox <= 1; ++ox) {
@@ -41,10 +38,10 @@ vec3 ddgiIndirectDiffuse(vec3 worldSpacePosition, vec3 normal, vec3 viewDir, con
                 uint sampleProbeIndex = gridIndexToProbeIndex(sampleProbeGridIndex, ddgi);
                 vec3 sampleProbePosition = gridIndexToWorldPos(sampleProbeGridIndex, ddgi);
 
-                vec3 bias = 0.1f * (normal + 3.0f * viewDir);
-                vec3 dir = worldSpacePosition - sampleProbePosition + bias;
-                float r = length(dir);
-                dir = normalize(dir);
+                vec3 dir = worldSpacePosition - sampleProbePosition + 0.15 * normal;
+                float r = max(length(dir), 1e-4);
+                dir /= r;
+
 
                 vec2 moments = sampleProbeMoments(sampleProbeIndex, dir);
                 float visibility = visibilityFromMoments(r, moments, 0.02);
@@ -58,9 +55,6 @@ vec3 ddgiIndirectDiffuse(vec3 worldSpacePosition, vec3 normal, vec3 viewDir, con
 
                 float weight = visibility * backfaceTest * trillinearWeight;
 
-                const float crushThreshold = 0.2f;
-                if (weight < crushThreshold)
-                    weight *= weight * weight * (1.0f / (crushThreshold * crushThreshold)); 
 
                 vec3 irradiance = sampleProbeIrradiance(sampleProbeIndex, normal);
                 accumulatedRadiance += irradiance * weight;
@@ -68,7 +62,7 @@ vec3 ddgiIndirectDiffuse(vec3 worldSpacePosition, vec3 normal, vec3 viewDir, con
             }
         }
     }
-    vec3 irradiance = (accumulatedWeight > EPSILON) ? (accumulatedRadiance / accumulatedWeight) : vec3(0.01f);
+    vec3 irradiance = (accumulatedWeight > EPSILON) ? (accumulatedRadiance / accumulatedWeight) : vec3(0.0f);
     return irradiance * PI * 0.5f;
 }
 

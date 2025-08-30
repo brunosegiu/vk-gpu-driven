@@ -202,6 +202,26 @@ bool SliderUint(
     return ImGui::SliderScalar(label, ImGuiDataType_U32, v, &v_min, &v_max, format, flags);
 }
 
+bool SliderUint2(
+    const char* label,
+    uint32_t* v,
+    uint32_t v_min,
+    uint32_t v_max,
+    const char* format = "%d",
+    ImGuiSliderFlags flags = 0) {
+    return ImGui::SliderScalarN(label, ImGuiDataType_U32, v, 2, &v_min, &v_max, format, flags);
+}
+
+bool SliderUint3(
+    const char* label,
+    uint32_t* v,
+    uint32_t v_min,
+    uint32_t v_max,
+    const char* format = "%d",
+    ImGuiSliderFlags flags = 0) {
+    return ImGui::SliderScalarN(label, ImGuiDataType_U32, v, 3, &v_min, &v_max, format, flags);
+}
+
 void UIRenderer::Update() {
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
@@ -209,7 +229,7 @@ void UIRenderer::Update() {
         ImVec2 windowSize{
             static_cast<float>(mUITarget->GetWidth()),
             static_cast<float>(mUITarget->GetHeight())};
-        ImVec2 panelSize{windowSize.x / 6.0f, windowSize.y};
+        ImVec2 panelSize{windowSize.x / 4.0f, windowSize.y};
         ImVec2 panelPos{windowSize.x - panelSize.x, 0.0f};
         ImGui::SetNextWindowSize(panelSize);
         ImGui::SetNextWindowPos(panelPos);
@@ -219,6 +239,19 @@ void UIRenderer::Update() {
             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                 ImGuiWindowFlags_NoDecoration);
         {
+            if (ImGui::CollapsingHeader("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
+                SliderUint(
+                    "Shadow map res",
+                    &mSettingsManager->GetShadowMapResolution(),
+                    128u,
+                    8096u);
+                SliderUint("Shadow taps", &mSettingsManager->GetShadowTaps(), 1u, 51u);
+                ImGui::SliderFloat("Frustum width", &mSettingsManager->GetShadowFrustumWidth(), 0.0f, 100.0f);
+                ImGui::SliderFloat("Distance", &mSettingsManager->GetShadowDistance(), 0.0f, 1000.0f);
+                ImGui::SliderFloat("Shadow far", &mSettingsManager->GetShadowFar(), 0.1f, 1500.0f);
+                ImGui::SliderFloat("Shadow near", &mSettingsManager->GetShadowNear(), 0.1f, 10.0f);
+            }
+
             if (ImGui::CollapsingHeader("SSAO", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::SliderFloat(
                     "Radius",
@@ -241,8 +274,32 @@ void UIRenderer::Update() {
                     1,
                     10);
             }
-            if (ImGui::CollapsingHeader("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
-                SliderUint("Shadow taps", &mSettingsManager->GetShadowTaps(), 1u, 51u);
+
+            if (ImGui::CollapsingHeader("DDGI", ImGuiTreeNodeFlags_DefaultOpen)) {
+                SliderUint3("Probe count", &mSettingsManager->GetProbeGridCount().x, 2, 32);
+                SliderUint2("Probe resolution", &mSettingsManager->GetProbeResolution().x, 8, 512);
+                SliderUint("Rays per probe", &mSettingsManager->GetProbeRayCount(), 8, 512);
+                ImGui::SliderFloat3(
+                    "Probe spacing",
+                    &mSettingsManager->GetProbeSpacing().x,
+                    0.02f,
+                    10.0f);
+                ImGui::SliderFloat3(
+                    "Probe Grid Origin",
+                    &mSettingsManager->GetProbeGridOrigin().x,
+                    0.0f,
+                    1000.0f);
+                ImGui::SliderFloat("Hysteresis", &mSettingsManager->GetHysteresis(), 0.0f, 1.0f);
+                ImGui::SliderFloat(
+                    "Ray max length",
+                    &mSettingsManager->GetProbeMaxRayLength(),
+                    0.01f,
+                    2000.0f);
+                ImGui::SliderFloat(
+                    "Ray min length",
+                    &mSettingsManager->GetProbeMinRayLength(),
+                    0.01f,
+                    10.0f);
             }
         }
         ImGui::End();

@@ -26,7 +26,10 @@ struct DDGIData {
 
 class DDGIRenderer : public RefCountPtr {
 public:
-    DDGIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene);
+    DDGIRenderer(
+        ScopedRefPtr<Context> context,
+        ScopedRefPtr<Scene> scene,
+        ScopedRefPtr<SettingsManager> settingsManager);
 
     void AddRenderTargets();
     void AddPipelines();
@@ -81,6 +84,7 @@ private:
     // Shared resources
     ScopedRefPtr<Context> mContext;
     ScopedRefPtr<Scene> mScene;
+    ScopedRefPtr<SettingsManager> mSettingsManager;
     uint32_t mCurrentFrame;
 
     // Probe rendering
@@ -93,5 +97,7 @@ private:
     std::array<ScopedRefPtr<Texture>, 2> mProbeMomentsBuffers;
 
     std::vector<ScopedRefPtr<VulkanBuffer>> mDDGIProbeData;
+
+    DDGIData mDDGIData;
 };
 }  // namespace VKRT

@@ -7,29 +7,24 @@
 
 namespace VKRT {
 
-constexpr uint32_t raysPerProbe = 32;
-constexpr glm::uvec3 probeGridCount(4u, 4u, 4u);
-constexpr glm::uvec2 probeResolution(32u, 32u);
-constexpr glm::vec3 probeSpacing(1.0f, 1.0f, 2.0f);
-const glm::vec3 probeOrigin =
-    glm::vec3(0.0f, 0.5f, 0.0f) - glm::vec3(probeGridCount) * probeSpacing * 0.5f;
-constexpr float probeMaxRayLength = 1000.0f;
-constexpr float probeMinRayLength = 0.01f;
-constexpr float hysteresis = 0.75f;
-
-DDGIData ddgiData{
-    .probeGridCount = probeGridCount,
-    .probeGridOrigin = probeOrigin,
-    .probeSpacing = probeSpacing,
-    .minRayLength = probeMinRayLength,
-    .maxRayLength = probeMaxRayLength,
-    .randomRotation = glm::mat3(1.0f),
-    .hysteresis = hysteresis,
-    .frameIndex = 0,
-};
-
-DDGIRenderer::DDGIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<Scene> scene)
-    : mContext(context), mScene(scene), mCurrentFrame(0) {
+DDGIRenderer::DDGIRenderer(
+    ScopedRefPtr<Context> context,
+    ScopedRefPtr<Scene> scene,
+    ScopedRefPtr<SettingsManager> settingsManager)
+    : mContext(context),
+      mScene(scene),
+      mSettingsManager(settingsManager),
+      mCurrentFrame(0),
+      mDDGIData{
+          .probeGridCount = mSettingsManager->GetProbeGridCount(),
+          .probeGridOrigin = mSettingsManager->GetProbeGridOrigin(),
+          .probeSpacing = mSettingsManager->GetProbeSpacing(),
+          .minRayLength = mSettingsManager->GetProbeMinRayLength(),
+          .maxRayLength = mSettingsManager->GetProbeMaxRayLength(),
+          .randomRotation = glm::mat3(1.0f),
+          .hysteresis = mSettingsManager->GetHysteresis(),
+          .frameIndex = 0,
+      } {
     AddRenderTargets();
     AddPipelines();
 }
@@ -39,10 +34,10 @@ void DDGIRenderer::AddRenderTargets() {
     // Probes
     {
         const uint32_t probeCount =
-            ddgiData.probeGridCount.x * ddgiData.probeGridCount.y * ddgiData.probeGridCount.z;
+            mDDGIData.probeGridCount.x * mDDGIData.probeGridCount.y * mDDGIData.probeGridCount.z;
         mProbeRayRadianceBuffer = new Texture(
             mContext,
-            raysPerProbe,
+            mSettingsManager->GetProbeRayCount(),
             probeCount,
             1,
             vk::Format::eB10G11R11UfloatPack32,
@@ -51,7 +46,7 @@ void DDGIRenderer::AddRenderTargets() {
 
         mProbeRayDirectionDepthBuffer = new Texture(
             mContext,
-            raysPerProbe,
+            mSettingsManager->GetProbeRayCount(),
             probeCount,
             1,
             vk::Format::eR16G16B16A16Sfloat,
@@ -61,8 +56,8 @@ void DDGIRenderer::AddRenderTargets() {
         for (uint32_t index = 0; index < mProbeIrradianceBuffers.size(); ++index) {
             mProbeIrradianceBuffers[index] = new Texture(
                 mContext,
-                probeResolution.x,
-                probeResolution.y,
+                mSettingsManager->GetProbeResolution().x,
+                mSettingsManager->GetProbeResolution().y,
                 probeCount,
                 vk::Format::eB10G11R11UfloatPack32,
                 vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
@@ -72,8 +67,8 @@ void DDGIRenderer::AddRenderTargets() {
         for (uint32_t index = 0; index < mProbeMomentsBuffers.size(); ++index) {
             mProbeMomentsBuffers[index] = new Texture(
                 mContext,
-                probeResolution.x,
-                probeResolution.y,
+                mSettingsManager->GetProbeResolution().x,
+                mSettingsManager->GetProbeResolution().y,
                 probeCount,
                 vk::Format::eR16G16Sfloat,
                 vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
@@ -161,19 +156,28 @@ void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t
 
     // DDGI
     {
-        auto randomRotation = []() {
-            static std::mt19937 gen{std::random_device{}()};
-            static std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-            float u1 = dist(gen);
-            float u2 = dist(gen);
-            float u3 = dist(gen);
-            glm::quat quat = glm::quat(glm::vec3(u1, u2, u3) * 2.0f * glm::pi<float>());
-            return glm::toMat3(quat);
+        auto randomRotation = [&]() {
+            float angle =
+                2.0f * glm::pi<float>() * glm::fract(0.61803398875 * float(mDDGIData.frameIndex));
+            glm::vec3 axis = glm::normalize(glm::vec3(1.0, 1.0, 1.0));
+            return glm::toMat3(glm::angleAxis(angle, axis));
         };
 
-        ddgiData.randomRotation = randomRotation();
-        mDDGIProbeData[frameIndex]->Write(reinterpret_cast<uint8_t*>(&ddgiData), sizeof(DDGIData));
-        ddgiData.frameIndex++;
+        mDDGIData.probeGridCount = mSettingsManager->GetProbeGridCount();
+        mDDGIData.probeGridOrigin = mSettingsManager->GetProbeGridOrigin();
+        mDDGIData.probeSpacing = mSettingsManager->GetProbeSpacing();
+        mDDGIData.minRayLength = mSettingsManager->GetProbeMinRayLength();
+        mDDGIData.maxRayLength = mSettingsManager->GetProbeMaxRayLength();
+        mDDGIData.hysteresis = mSettingsManager->GetHysteresis();
+
+        mDDGIData.randomRotation = randomRotation();
+        if (mDDGIData.probeGridOrigin != mSettingsManager->GetProbeGridOrigin() ||
+            mDDGIData.probeSpacing != mSettingsManager->GetProbeSpacing()) {
+            mDDGIData.frameIndex = 0;
+        }
+        mDDGIProbeData[frameIndex]->Write(reinterpret_cast<uint8_t*>(&mDDGIData), sizeof(DDGIData));
+
+        mDDGIData.frameIndex++;
     }
 }
 
@@ -225,8 +229,8 @@ void DDGIRenderer::Render(
                 descriptorSets,
                 nullptr);
 
-            const uint32_t probeCount =
-                ddgiData.probeGridCount.x * ddgiData.probeGridCount.y * ddgiData.probeGridCount.z;
+            const uint32_t probeCount = mDDGIData.probeGridCount.x * mDDGIData.probeGridCount.y *
+                                        mDDGIData.probeGridCount.z;
 
             const RaytracingPipeline::RayTracingTablesRef& tableRef =
                 mProbeRaytracingPipeline->GetTablesRef();
@@ -235,7 +239,7 @@ void DDGIRenderer::Render(
                 tableRef.rayMiss,
                 tableRef.rayHit,
                 tableRef.callable,
-                raysPerProbe,
+                mSettingsManager->GetProbeRayCount(),
                 probeCount,
                 1,
                 mContext->GetDevice()->GetDispatcher());
@@ -287,8 +291,8 @@ void DDGIRenderer::Render(
                     {},
                     imageBarriers);
             }
-            const uint32_t probeCount =
-                ddgiData.probeGridCount.x * ddgiData.probeGridCount.y * ddgiData.probeGridCount.z;
+            const uint32_t probeCount = mDDGIData.probeGridCount.x * mDDGIData.probeGridCount.y *
+                                        mDDGIData.probeGridCount.z;
             {
                 commandBuffer.bindPipeline(
                     vk::PipelineBindPoint::eCompute,
@@ -304,8 +308,13 @@ void DDGIRenderer::Render(
                     updateProbeDescriptors,
                     nullptr);
 
-                static_assert(probeResolution.x % 8 == 0 && probeResolution.y % 8 == 0);
-                commandBuffer.dispatch(probeResolution.x / 8, probeResolution.y / 8, probeCount);
+                VKRT_ASSERT(
+                    mSettingsManager->GetProbeResolution().x % 8 == 0 &&
+                    mSettingsManager->GetProbeResolution().y % 8 == 0);
+                commandBuffer.dispatch(
+                    mSettingsManager->GetProbeResolution().x / 8,
+                    mSettingsManager->GetProbeResolution().y / 8,
+                    probeCount);
             }
 
             {

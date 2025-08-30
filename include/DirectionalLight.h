@@ -17,7 +17,11 @@ class DirectionalLight : public RefCountPtr {
 public:
     DirectionalLight();
 
-    glm::mat4 ComputeShadowMatrix();
+    glm::mat4 ComputeShadowMatrix(
+        const float frustumWidth,
+        const float shadowDistance,
+        const float near,
+        const float far);
 
     const glm::vec3& GetRadiance() const { return mRadiance; }
     const glm::vec3& GetDirection() const { return mDirection; }
@@ -30,9 +34,5 @@ public:
 private:
     glm::vec3 mRadiance;
     glm::vec3 mDirection;
-    float mFrustumWidth;
-    float mDistance;
-    float mNear;
-    float mFar;
 };
 }  // namespace VKRT
