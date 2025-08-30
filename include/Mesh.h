@@ -29,10 +29,19 @@ struct Meshlet {
 
 class Mesh : public RefCountPtr {
 public:
-    Mesh(ScopedRefPtr<Material> material, const std::vector<Meshlet>& meshlets);
+    Mesh(
+        ScopedRefPtr<Material> material,
+        const std::vector<Meshlet>& meshlets,
+        uint32_t indexCount,
+        uint32_t vertexOffset,
+        uint32_t indexOffset);
 
     const ScopedRefPtr<Material> GetMaterial() const { return mMaterial; }
     ScopedRefPtr<Material> GetMaterial() { return mMaterial; }
+
+    uint32_t GetIndexCount() { return mIndexCount; }
+    uint32_t GetVertexOffset() { return mVertexOffset; }
+    uint32_t GetIndexOffset() { return mIndexOffset; }
 
     ~Mesh();
 
@@ -40,6 +49,8 @@ public:
 
 private:
     uint32_t mIndexCount;
+    uint32_t mVertexOffset;
+    uint32_t mIndexOffset;
 
     ScopedRefPtr<Material> mMaterial;
 };

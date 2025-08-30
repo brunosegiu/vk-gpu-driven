@@ -14,9 +14,9 @@ layout(location = 3) in uint inPackedTangent;
 layout(location = 0) out vec3 outWorldSpacePos;
 layout(location = 1) out vec2 outTexCoord;
 layout(location = 2) out vec3 outNormal;
-layout(location = 3) out flat Material outMaterial;  // uses 3..8
-layout(location = 9) out vec4 outShadowCoord;
-layout(location = 10) out mat3 outTBN;
+layout(location = 3) out flat Material outMaterial; // uses 3..10
+layout(location = 11) out vec4 outShadowCoord;
+layout(location = 12) out mat3 outTBN;
 
 void main() {
     uint globalDrawIndex = uDrawData[gl_DrawID];

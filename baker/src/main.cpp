@@ -139,7 +139,17 @@ MeshData loadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& 
     return ret;
 }
 
-std::vector<uint32_t> generateMeshlets(MeshData& mesh) {
+std::vector<uint32_t> generateMeshlets(
+    MeshData& mesh,
+    uint32_t& outVertexOffset,
+    uint32_t& outIndexOffset,
+    uint32_t& outIndexCount) {
+    MeshData& ugb = gBakedFile.unifiedGeometryBuffer;
+
+    outVertexOffset = ugb.positions.size();
+    outIndexOffset = ugb.indices.size();
+    outIndexCount = 0;
+
     std::vector<uint32_t> outMeshletIndices;
 
     const size_t maxVertices = 64;
@@ -168,8 +178,6 @@ std::vector<uint32_t> generateMeshlets(MeshData& mesh) {
     meshletVertices.resize(last.vertex_offset + last.vertex_count);
     meshletTriangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
     meshlets.resize(meshletCount);
-
-    MeshData& ugb = gBakedFile.unifiedGeometryBuffer;
 
     const uint32_t vertexOffset = gBakedFile.unifiedGeometryBuffer.positions.size();
     {
@@ -229,6 +237,8 @@ std::vector<uint32_t> generateMeshlets(MeshData& mesh) {
         outMeshlet.coneAxis = Vec3{bounds.cone_axis[0], bounds.cone_axis[1], bounds.cone_axis[2]};
         outMeshlet.coneCutoff = bounds.cone_cutoff;
 
+        outIndexCount += 3 * meshlet.triangle_count;
+
         for (uint32_t t = 0; t < meshlet.triangle_count; ++t) {
             const uint8_t i0 = tris[t * 3 + 0];
             const uint8_t i1 = tris[t * 3 + 1];
@@ -280,6 +290,8 @@ uint32_t loadMaterial(const tinygltf::Model& model, const tinygltf::Primitive& p
         Vec3 albedo = Vec3(baseColor[0], baseColor[1], baseColor[2]);
         const float roughness = gltfMaterial.pbrMetallicRoughness.roughnessFactor;
         const float metallic = gltfMaterial.pbrMetallicRoughness.metallicFactor;
+        const std::vector<double>& emissiveFactor = gltfMaterial.emissiveFactor;
+        Vec3 emissive = Vec3(emissiveFactor[0], emissiveFactor[1], emissiveFactor[2]);
 
         const int32_t albedoTextureIndex = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index;
         if (albedoTextureIndex >= 0) {
@@ -301,6 +313,12 @@ uint32_t loadMaterial(const tinygltf::Model& model, const tinygltf::Primitive& p
             outMaterial.normalTextureIndex = getOrCreateTexture(model, texture.source);
         }
 
+        const int32_t emissiveTextureIndex = gltfMaterial.emissiveTexture.index;
+        if (emissiveTextureIndex >= 0) {
+            const tinygltf::Texture& texture = model.textures[emissiveTextureIndex];
+            outMaterial.emissiveTextureIndex = getOrCreateTexture(model, texture.source);
+        }
+
         MaterialType alphaMode = MaterialType::Opaque;
         if (gltfMaterial.alphaMode == "OPAQUE") {
             alphaMode = MaterialType::Opaque;
@@ -314,6 +332,7 @@ uint32_t loadMaterial(const tinygltf::Model& model, const tinygltf::Primitive& p
         outMaterial.albedo = albedo;
         outMaterial.roughness = roughness;
         outMaterial.metallic = metallic;
+        outMaterial.emissive = emissive;
     }
 
     return outMaterialIndex;
@@ -325,7 +344,8 @@ std::vector<uint32_t> loadMeshes(const tinygltf::Model& model, const tinygltf::M
         meshes.push_back(gBakedFile.meshes.size());
         Mesh& mesh = gBakedFile.meshes.emplace_back();
         MeshData meshPrimitive = loadPrimitive(model, primitive);
-        mesh.meshlets = generateMeshlets(meshPrimitive);
+        mesh.meshlets =
+            generateMeshlets(meshPrimitive, mesh.vertexOffset, mesh.indexOffset, mesh.indexCount);
         mesh.material = loadMaterial(model, primitive);
     }
     return meshes;

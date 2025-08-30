@@ -31,6 +31,7 @@ void Scene::Load(std::string path) {
     };
 
     // Upload textures to GPU
+    mSceneMaterials.textures.reserve(fileIn.textures.size());
     for (VKRTBaker::Texture& unpackedTexture : fileIn.textures) {
         ScopedRefPtr<Texture> texture = new Texture(
             mContext,
@@ -47,6 +48,8 @@ void Scene::Load(std::string path) {
     }
 
     // Create material proxies
+    mMaterials.reserve(fileIn.materials.size());
+    mSceneMaterials.materials.reserve(fileIn.materials.size());
     for (VKRTBaker::Material& unpackedMaterial : fileIn.materials) {
         ScopedRefPtr<Texture> albedoTexture =
             unpackedMaterial.albedoTextureIndex >= 0
@@ -60,15 +63,21 @@ void Scene::Load(std::string path) {
             unpackedMaterial.normalTextureIndex >= 0
                 ? mSceneMaterials.textures[unpackedMaterial.normalTextureIndex]
                 : nullptr;
+        ScopedRefPtr<Texture> emissiveTexture =
+            unpackedMaterial.emissiveTextureIndex >= 0
+                ? mSceneMaterials.textures[unpackedMaterial.emissiveTextureIndex]
+                : nullptr;
 
         ScopedRefPtr<Material> material = new Material(
             static_cast<Material::AlphaMode>(unpackedMaterial.materialType),
             toVec3(unpackedMaterial.albedo),
             unpackedMaterial.roughness,
             unpackedMaterial.metallic,
+            toVec3(unpackedMaterial.emissive),
             albedoTexture,
             metallicRoughnessTexture,
-            normalTexture);
+            normalTexture,
+            emissiveTexture);
         material->SetMaterialId(mMaterials.size());
         mMaterials.push_back(material);
 
@@ -76,14 +85,17 @@ void Scene::Load(std::string path) {
             .albedo = material->GetAlbedo(),
             .roughness = material->GetRoughness(),
             .metallic = material->GetMetallic(),
+            .emissive = material->GetEmissive(),
             .albedoTextureIndex = unpackedMaterial.albedoTextureIndex,
             .metallicRoughnessTextureIndex = unpackedMaterial.metallicRoughnessTextureIndex,
             .normalTextureIndex = unpackedMaterial.normalTextureIndex,
+            .emissiveTextureIndex = unpackedMaterial.emissiveTextureIndex,
         };
 
         mSceneMaterials.materials.push_back(proxy);
     }
 
+    mMeshes.reserve(fileIn.meshes.size());
     for (const VKRTBaker::Mesh& unpackedMesh : fileIn.meshes) {
         std::vector<Meshlet> meshlets;
         for (const uint32_t& unpackedMeshletIndex : unpackedMesh.meshlets) {
@@ -99,7 +111,12 @@ void Scene::Load(std::string path) {
                 .coneCutoff = unpackedMeshlet.coneCutoff,
             });
         }
-        ScopedRefPtr<Mesh> mesh = new Mesh(mMaterials[unpackedMesh.material], meshlets);
+        ScopedRefPtr<Mesh> mesh = new Mesh(
+            mMaterials[unpackedMesh.material],
+            meshlets,
+            unpackedMesh.indexCount,
+            unpackedMesh.vertexOffset,
+            unpackedMesh.indexOffset);
         mMeshes.push_back(mesh);
     }
 
@@ -172,6 +189,9 @@ void Scene::PackDrawData() {
                 .transform = object->GetAbsoluteTransform(),
                 .materialId = mesh->GetMaterial()->GetMaterialId(),
                 .normalTransform = normalTransform,
+                .indexCount = mesh->GetIndexCount(),
+                .vertexOffset = mesh->GetVertexOffset(),
+                .indexOffset = mesh->GetIndexOffset(),
             };
             mPackedDrawData.perMeshData.push_back(meshData);
             for (Meshlet& meshlet : mesh->mMeshlets) {
@@ -237,26 +257,22 @@ void Scene::PackDrawData() {
                     accelerationStructureBuildGeometryInfo;
                 vk::AccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo;
             };
-            std::vector<TemporaryBlasBuildData> blasBuildData(mPackedDrawData.persistentDrawData.size());
+            std::vector<TemporaryBlasBuildData> blasBuildData(mPackedDrawData.perMeshData.size());
             mRaytracingScene.blasResources =
-                std::vector<BlasResources>(mPackedDrawData.persistentDrawData.size());
+                std::vector<BlasResources>(mPackedDrawData.perMeshData.size());
 
             size_t blasBufferSize = 0;
             vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
             VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
-            for (uint32_t index = 0; index < mPackedDrawData.persistentDrawData.size(); ++index) {
+            for (uint32_t index = 0; index < mPackedDrawData.perMeshData.size(); ++index) {
                 BlasResources& blasResources = mRaytracingScene.blasResources[index];
                 TemporaryBlasBuildData& tempBlasData = blasBuildData[index];
-                const PersistentDrawData& drawData = mPackedDrawData.persistentDrawData[index];
-
-                if (drawData.alphaMode == static_cast<uint32_t>(Material::AlphaMode::Blended)) {
-                    continue;
-                }
+                const MeshData& drawData = mPackedDrawData.perMeshData[index];
 
                 const uint32_t primitiveCount = drawData.indexCount / 3;
 
                 vk::DeviceAddress indexAddress = mMeshSystem->GetIndexBuffer()->GetDeviceAddress() +
-                                                 drawData.firstIndex * sizeof(uint32_t);
+                                                 drawData.indexOffset * sizeof(uint32_t);
                 tempBlasData.triangleData =
                     vk::AccelerationStructureGeometryTrianglesDataKHR()
                         .setVertexFormat(vk::Format::eR32G32B32Sfloat)
@@ -306,13 +322,11 @@ void Scene::PackDrawData() {
             std::vector<vk::AccelerationStructureBuildRangeInfoKHR*>
                 accelerationStructureBuildRangeInfos;
 
-            for (uint32_t index = 0; index < mPackedDrawData.persistentDrawData.size(); ++index) {
+            for (uint32_t index = 0; index < mPackedDrawData.perMeshData.size(); ++index) {
                 BlasResources& blasResources = mRaytracingScene.blasResources[index];
-                const PersistentDrawData& drawData = mPackedDrawData.persistentDrawData[index];
+                const MeshData& drawData = mPackedDrawData.perMeshData[index];
                 TemporaryBlasBuildData& tempBlasData = blasBuildData[index];
-                if (drawData.alphaMode == static_cast<uint32_t>(Material::AlphaMode::Blended)) {
-                    continue;
-                }
+
                 vk::AccelerationStructureCreateInfoKHR accelerationStructureCreateInfo =
                     vk::AccelerationStructureCreateInfoKHR()
                         .setBuffer(mRaytracingScene.mBLASBuffer->GetBufferHandle())
@@ -367,14 +381,10 @@ void Scene::PackDrawData() {
             VKRT_ASSERT_VK(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
 
             std::vector<vk::AccelerationStructureInstanceKHR> instances;
-            instances.reserve(mPackedDrawData.persistentDrawData.size());
-            for (uint32_t index = 0; index < mPackedDrawData.persistentDrawData.size(); ++index) {
+            instances.reserve(mPackedDrawData.perMeshData.size());
+            for (uint32_t index = 0; index < mPackedDrawData.perMeshData.size(); ++index) {
                 BlasResources& blasResources = mRaytracingScene.blasResources[index];
-                const PersistentDrawData& drawData = mPackedDrawData.persistentDrawData[index];
-                const MeshData& meshData = mPackedDrawData.perMeshData[drawData.meshIndex];
-                if (drawData.alphaMode == static_cast<uint32_t>(Material::AlphaMode::Blended)) {
-                    continue;
-                }
+                const MeshData& meshData = mPackedDrawData.perMeshData[index];
 
                 vk::AccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo =
                     vk::AccelerationStructureDeviceAddressInfoKHR().setAccelerationStructure(

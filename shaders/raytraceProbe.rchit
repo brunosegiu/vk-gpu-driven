@@ -60,15 +60,14 @@ void main() {
 
     const vec3 barycentricCoords = vec3(1.0f - hitAttributes.x - hitAttributes.y, hitAttributes.x, hitAttributes.y);
 
-    uint drawId = gl_InstanceCustomIndexEXT;
-    const DrawData drawData = uPersistentSceneData[drawId];
-    const MeshData meshData = uMeshData[drawData.meshIndex];
+    uint meshId = gl_InstanceCustomIndexEXT;
+    const MeshData meshData = uMeshData[meshId];
 
-    uint triangleIndex = gl_PrimitiveID * 3 + drawData.firstIndex;
+    uint triangleIndex = gl_PrimitiveID * 3 + meshData.indexOffset;
 
-    uint vertexIndexA = uIndices[triangleIndex] + drawData.vertexOffset;
-    uint vertexIndexB = uIndices[triangleIndex + 1] + drawData.vertexOffset;
-    uint vertexIndexC = uIndices[triangleIndex + 2] + drawData.vertexOffset;
+    uint vertexIndexA = uIndices[triangleIndex] + meshData.vertexOffset;
+    uint vertexIndexB = uIndices[triangleIndex + 1] + meshData.vertexOffset;
+    uint vertexIndexC = uIndices[triangleIndex + 2] + meshData.vertexOffset;
 
     vec3 posA = uPositions[vertexIndexA];
     vec3 posB = uPositions[vertexIndexB];

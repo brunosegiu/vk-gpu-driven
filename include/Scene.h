@@ -26,9 +26,11 @@ public:
         glm::vec3 albedo;
         float roughness;
         float metallic;
+        glm::vec3 emissive;
         int32_t albedoTextureIndex;
         int32_t metallicRoughnessTextureIndex;
         int32_t normalTextureIndex;
+        int32_t emissiveTextureIndex;
     };
     struct SceneMaterials {
         std::vector<MaterialProxy> materials;
@@ -52,6 +54,9 @@ public:
         glm::mat4 transform;
         uint32_t materialId;
         glm::mat3 normalTransform;
+        uint32_t indexCount;
+        uint32_t vertexOffset;
+        uint32_t indexOffset;
     };
 
     struct PackedDrawData {

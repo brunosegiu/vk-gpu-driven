@@ -38,15 +38,20 @@ struct MeshData {
 	mat4 modelMatrix;
     uint materialId;
     mat3 normalTransform;
+    uint indexCount;
+    uint vertexOffset;
+    uint indexOffset;
 };
 
 struct Material {
     vec3 albedo;
     float roughness;
     float metallic;
+    vec3 emissive;
     int albedoTextureIndex;
     int metallicRoughnessTextureIndex;
     int normalTextureIndex;
+    int emissiveTextureIndex;
 };
 
 struct CameraData {

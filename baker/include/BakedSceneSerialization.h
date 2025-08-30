@@ -107,14 +107,23 @@ struct Object {
 
 struct Mesh {
     uint32_t material = 0;
+    uint32_t vertexOffset = 0;
+    uint32_t indexOffset = 0;
+    uint32_t indexCount = 0;
     std::vector<uint32_t> meshlets;
 
     void serialize(std::ostream& os) const {
         writeBinary(os, material);
+        writeBinary(os, vertexOffset);
+        writeBinary(os, indexOffset);
+        writeBinary(os, indexCount);
         writeVector(os, meshlets);
     }
     void deserialize(std::istream& is) {
         readBinary(is, material);
+        readBinary(is, vertexOffset);
+        readBinary(is, indexOffset);
+        readBinary(is, indexCount);
         readVector(is, meshlets);
     }
 };
@@ -126,27 +135,33 @@ struct Material {
     Vec3 albedo{0.0f, 0.0f, 0.0f};
     float roughness = 0.0f;
     float metallic = 0.0f;
+    Vec3 emissive{0.0f, 0.0f, 0.0f};
     int32_t albedoTextureIndex = -1;
     int32_t metallicRoughnessTextureIndex = -1;
     int32_t normalTextureIndex = -1;
+    int32_t emissiveTextureIndex = -1;
 
     void serialize(std::ostream& os) const {
         writeBinary(os, materialType);
         albedo.serialize(os);
         writeBinary(os, roughness);
         writeBinary(os, metallic);
+        emissive.serialize(os);
         writeBinary(os, albedoTextureIndex);
         writeBinary(os, metallicRoughnessTextureIndex);
         writeBinary(os, normalTextureIndex);
+        writeBinary(os, emissiveTextureIndex);
     }
     void deserialize(std::istream& is) {
         readBinary(is, materialType);
         albedo.deserialize(is);
         readBinary(is, roughness);
         readBinary(is, metallic);
+        emissive.deserialize(is);
         readBinary(is, albedoTextureIndex);
         readBinary(is, metallicRoughnessTextureIndex);
         readBinary(is, normalTextureIndex);
+        readBinary(is, emissiveTextureIndex);
     }
 };
 

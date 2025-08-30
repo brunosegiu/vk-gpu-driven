@@ -10,9 +10,9 @@
 layout(location = 0) in vec3 inWorldSpacePos;
 layout(location = 1) in vec2 inTexCoord;
 layout(location = 2) in vec3 inNormal;
-layout(location = 3) in flat Material inMaterial; // uses 3..8
-layout(location = 9) in vec4 inShadowCoord;
-layout(location = 10) in mat3 inTBN;
+layout(location = 3) in flat Material inMaterial; // uses 3..10
+layout(location = 11) in vec4 inShadowCoord;
+layout(location = 12) in mat3 inTBN;
 
 layout(location = 0) out vec4 outColor;
 
