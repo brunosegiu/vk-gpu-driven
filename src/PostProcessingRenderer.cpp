@@ -92,6 +92,22 @@ void PostProcessingRenderer::AddResources() {
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
 }
 
+void PostProcessingRenderer::RemoveRenderTargets() {
+    mSSAOBuffer = nullptr;
+    mSSAOPass = nullptr;
+    mSSAOBlurredBuffer = nullptr;
+    mSSAOBlurPass = nullptr;
+}
+
+void PostProcessingRenderer::RemovePipelines() {
+    mSSAOPipeline = nullptr;
+    mSSAOBlurPipeline = nullptr;
+}
+
+void PostProcessingRenderer::RemoveResources() {
+    mSSAOControlBuffer.clear();
+}
+
 void PostProcessingRenderer::UpdatePersistentUniforms(const PersistentParameters& parameters) {
     mSSAOPipeline->Bind(0, parameters.mFrameBufferSampler);
     mSSAOPipeline->Bind(1, parameters.mDepthBuffer);

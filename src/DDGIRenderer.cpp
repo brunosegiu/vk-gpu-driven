@@ -153,6 +153,8 @@ void DDGIRenderer::RemoveResources() {}
 void DDGIRenderer::UpdatePersistentUniforms(const PersistentParameters& parameters) {
     // DDGI
     {
+        mDDGIData.frameIndex = 0;
+        mCurrentFrame = 0;
         {
             mProbeRaytracingPipeline->Bind(0, parameters.mScenePersistentDataParameter);
             mProbeRaytracingPipeline->Bind(1, mScene->GetTLAS());

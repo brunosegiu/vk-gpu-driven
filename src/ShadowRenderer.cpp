@@ -96,6 +96,16 @@ void ShadowRenderer::AddPipelines() {
     }
 }
 
+void ShadowRenderer::RemoveRenderTargets() {
+    mDepthOnlyPass = nullptr;
+    mDepthOnlyPassRenderTarget = nullptr;
+    mShadowMap = nullptr;
+}
+
+void ShadowRenderer::RemovePipelines() {
+    mShadowPassPipelines.clear();
+}
+
 void ShadowRenderer::AddResources() {
     // Shadow pass parameters
 

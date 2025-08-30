@@ -322,9 +322,28 @@ void Renderer::RemoveRenderTargets() {
 
     mDepthRenderTarget = nullptr;
     mDepthBuffer = nullptr;
+
+    mDDGIRenderer->RemoveRenderTargets();
+
+    mShadowRenderer->RemoveRenderTargets();
+
+    mPostProcessingRenderer->RemoveRenderTargets();
 }
 
-void Renderer::RemovePipelines() {}
+void Renderer::RemovePipelines() {
+    mGeometryPassPipelines.clear();
+    mShadePassPipeline = nullptr;
+
+    for (auto& visEntry : mVisibilityManagers) {
+        visEntry.second->RemovePipelines();
+    }
+
+    mDDGIRenderer->RemovePipelines();
+
+    mShadowRenderer->RemovePipelines();
+
+    mPostProcessingRenderer->RemovePipelines();
+}
 
 void Renderer::RemoveResources() {}
 
@@ -523,6 +542,19 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
 }
 
 void Renderer::Render(Camera* camera) {
+    if (mShadowRenderer->GetShadowMap()->GetWidth() != mSettingsManager->GetShadowMapResolution() ||
+        mDDGIRenderer->GetIrradianceBuffer()->GetWidth() !=
+            mSettingsManager->GetProbeResolution() ||
+        mDDGIRenderer->GetProbeRayCount() != mSettingsManager->GetProbeRayCount()) {
+        mCommandRing->WaitPreviousFrame();
+        RemovePipelines();
+        RemoveRenderTargets();
+
+        AddRenderTargets();
+        AddPipelines();
+        mHasBoundResources = false;
+    }
+
     mCurrentFrameIndex = (mCurrentFrameIndex + 1) % mContext->GetMaxInFlightFrameCount();
     CommandRing::CommandResources command = mCommandRing->Cycle();
 

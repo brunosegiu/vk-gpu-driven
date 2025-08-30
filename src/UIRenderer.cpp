@@ -132,8 +132,42 @@ void ApplyFlatStyle() {
 }
 
 UIRenderer::UIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<SettingsManager> settingsManager)
-    : mContext(context), mSettingsManager(settingsManager) {
+    : mContext(context),
+      mSettingsManager(settingsManager),
+      mSelectedShadowResolutionIndex(0),
+      mSelectedProbeResolutionIndex(0),
+      mSelectedRaysPerProbeIndex(0) {
     ApplyFlatStyle();
+
+    for (uint32_t resolution : SettingsManager::ShadowMapResolutions) {
+        mShadowResolutionOptions.push_back(std::to_string(resolution));
+    }
+    for (uint32_t resolution : SettingsManager::ShadowMapResolutions) {
+        if (resolution == mSettingsManager->GetShadowMapResolution()) {
+            break;
+        }
+        ++mSelectedShadowResolutionIndex;
+    }
+
+    for (uint32_t resolution : SettingsManager::ProbeResolutions) {
+        mProbeResolutionOptions.push_back(std::to_string(resolution));
+    }
+    for (uint32_t resolution : SettingsManager::ProbeResolutions) {
+        if (resolution == mSettingsManager->GetProbeResolution()) {
+            break;
+        }
+        ++mSelectedProbeResolutionIndex;
+    }
+
+    for (uint32_t resolution : SettingsManager::RaysPerProbe) {
+        mRaysPerProbeOptions.push_back(std::to_string(resolution));
+    }
+    for (uint32_t resolution : SettingsManager::RaysPerProbe) {
+        if (resolution == mSettingsManager->GetProbeRayCount()) {
+            break;
+        }
+        ++mSelectedRaysPerProbeIndex;
+    }
 }
 
 void UIRenderer::AddRenderTargets(ScopedRefPtr<RenderTarget> uiTarget) {
@@ -154,6 +188,10 @@ void UIRenderer::AddRenderTargets(ScopedRefPtr<RenderTarget> uiTarget) {
                  .finalLayout = vk::ImageLayout::ePresentSrcKHR},
             });
     }
+}
+
+void UIRenderer::RemoveRenderTargets() {
+    mRenderPass = nullptr;
 }
 
 void UIRenderer::AddResources() {
@@ -240,22 +278,41 @@ void UIRenderer::Update() {
                 ImGuiWindowFlags_NoDecoration);
         {
             if (ImGui::CollapsingHeader("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
-                SliderUint(
-                    "Shadow map res",
-                    &mSettingsManager->GetShadowMapResolution(),
-                    128u,
-                    8096u);
+                const char* comboPreviewValue =
+                    mShadowResolutionOptions[mSelectedShadowResolutionIndex].c_str();
+                if (ImGui::BeginCombo("Shadow map res", comboPreviewValue)) {
+                    for (uint32_t index = 0; index < mShadowResolutionOptions.size(); index++) {
+                        const bool isSelected = (mSelectedShadowResolutionIndex == index);
+                        if (ImGui::Selectable(
+                                mShadowResolutionOptions[index].c_str(),
+                                isSelected)) {
+                            mSelectedShadowResolutionIndex = index;
+                            mSettingsManager->SetShadowMapResolution(
+                                SettingsManager::ShadowMapResolutions
+                                    [mSelectedShadowResolutionIndex]);
+                        }
+                        if (isSelected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+
                 SliderUint("Shadow taps", &mSettingsManager->GetShadowTaps(), 1u, 51u);
                 ImGui::SliderFloat(
                     "Frustum width",
                     &mSettingsManager->GetShadowFrustumWidth(),
                     0.0f,
-                    100.0f);
+                    100.0f,
+                    "%.3f",
+                    ImGuiSliderFlags_Logarithmic);
                 ImGui::SliderFloat(
                     "Distance",
                     &mSettingsManager->GetShadowDistance(),
                     0.0f,
-                    1000.0f);
+                    1000.0f,
+                    "%.3f",
+                    ImGuiSliderFlags_Logarithmic);
                 ImGui::SliderFloat("Shadow far", &mSettingsManager->GetShadowFar(), 0.1f, 1500.0f);
                 ImGui::SliderFloat("Shadow near", &mSettingsManager->GetShadowNear(), 0.1f, 10.0f);
             }
@@ -285,18 +342,62 @@ void UIRenderer::Update() {
 
             if (ImGui::CollapsingHeader("DDGI", ImGuiTreeNodeFlags_DefaultOpen)) {
                 SliderUint3("Probe count", &mSettingsManager->GetProbeGridCount().x, 2, 32);
-                SliderUint("Probe resolution", &mSettingsManager->GetProbeResolution(), 8, 512);
-                SliderUint("Rays per probe", &mSettingsManager->GetProbeRayCount(), 8, 512);
+                {
+                    const char* comboPreviewValue =
+                        mProbeResolutionOptions[mSelectedProbeResolutionIndex].c_str();
+                    if (ImGui::BeginCombo("Probe resolution", comboPreviewValue)) {
+                        for (uint32_t index = 0; index < mProbeResolutionOptions.size(); index++) {
+                            const bool isSelected = (mSelectedProbeResolutionIndex == index);
+                            if (ImGui::Selectable(
+                                    mProbeResolutionOptions[index].c_str(),
+                                    isSelected)) {
+                                mSelectedProbeResolutionIndex = index;
+                                mSettingsManager->SetProbeResolution(
+                                    SettingsManager::ProbeResolutions
+                                        [mSelectedProbeResolutionIndex]);
+                            }
+                            if (isSelected) {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
+
+                {
+                    const char* comboPreviewValue =
+                        mRaysPerProbeOptions[mSelectedRaysPerProbeIndex].c_str();
+                    if (ImGui::BeginCombo("Rays per probe", comboPreviewValue)) {
+                        for (uint32_t index = 0; index < mRaysPerProbeOptions.size(); index++) {
+                            const bool isSelected = (mSelectedRaysPerProbeIndex == index);
+                            if (ImGui::Selectable(
+                                    mRaysPerProbeOptions[index].c_str(),
+                                    isSelected)) {
+                                mSelectedRaysPerProbeIndex = index;
+                                mSettingsManager->SetRaysPerProbe(
+                                    SettingsManager::RaysPerProbe[mSelectedRaysPerProbeIndex]);
+                            }
+                            if (isSelected) {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
                 ImGui::SliderFloat3(
                     "Probe spacing",
                     &mSettingsManager->GetProbeSpacing().x,
                     0.02f,
-                    10.0f);
+                    10.0f,
+                    "%.2f",
+                    ImGuiSliderFlags_Logarithmic);
                 ImGui::SliderFloat3(
                     "Probe Grid Origin",
                     &mSettingsManager->GetProbeGridOrigin().x,
                     -100.0f,
-                    100.0f);
+                    100.0f,
+                    "%.2f",
+                    ImGuiSliderFlags_Logarithmic);
                 ImGui::SliderFloat("Hysteresis", &mSettingsManager->GetHysteresis(), 0.0f, 1.0f);
                 ImGui::SliderFloat(
                     "Ray max length",

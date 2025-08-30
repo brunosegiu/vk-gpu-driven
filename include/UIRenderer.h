@@ -9,12 +9,12 @@ namespace VKRT {
 
 class UIRenderer : public RefCountPtr, public InputEventListener {
 public:
-    UIRenderer(
-        ScopedRefPtr<Context> context,
-        ScopedRefPtr<SettingsManager> settingsManager);
+    UIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<SettingsManager> settingsManager);
 
     void AddRenderTargets(ScopedRefPtr<RenderTarget> uiTarget);
     void AddResources();
+
+    void RemoveRenderTargets();
 
     void Update();
 
@@ -28,5 +28,14 @@ private:
     vk::DescriptorPool mDescriptorPool;
     ScopedRefPtr<RenderTarget> mUITarget;
     ScopedRefPtr<RenderPass> mRenderPass;
+
+    std::vector<std::string> mShadowResolutionOptions;
+    int32_t mSelectedShadowResolutionIndex;
+
+    std::vector<std::string> mProbeResolutionOptions;
+    int32_t mSelectedProbeResolutionIndex;
+
+    std::vector<std::string> mRaysPerProbeOptions;
+    int32_t mSelectedRaysPerProbeIndex;
 };
 }  // namespace VKRT

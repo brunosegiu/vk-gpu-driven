@@ -17,6 +17,8 @@ public:
     };
     CommandResources& Cycle();
 
+    void WaitPreviousFrame();
+
     void Flush();
     ~CommandRing();
 

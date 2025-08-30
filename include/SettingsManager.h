@@ -20,24 +20,34 @@ public:
     SSAOControlData& GetSSAOControlData() { return mSSAOControlData; }
 
     uint32_t& GetShadowTaps() { return mShadowTaps; }
-    uint32_t& GetShadowMapResolution() { return mShadowMapResolution; }
+    uint32_t GetShadowMapResolution() { return mShadowMapResolution; }
     float& GetShadowFrustumWidth() { return mShadowFrustumWidth; }
     float& GetShadowDistance() { return mShadowDistance; }
     float& GetShadowNear() { return mShadowNear; }
     float& GetShadowFar() { return mShadowFar; }
 
+    void SetShadowMapResolution(const uint32_t shadowMapResolution) {
+        mShadowMapResolution = shadowMapResolution;
+    }
+    void SetProbeResolution(const uint32_t probeResolution) { mProbeResolution = probeResolution; }
+    void SetRaysPerProbe(const uint32_t raysPerProbe) { mRaysPerProbe = raysPerProbe; }
+
     glm::uvec3& GetProbeGridCount() { return mProbeGridCount; }
-    uint32_t& GetProbeResolution() { return mProbeResolution; }
+    uint32_t GetProbeResolution() { return mProbeResolution; }
     glm::vec3& GetProbeSpacing() { return mProbeSpacing; }
     glm::vec3& GetProbeGridOrigin() { return mProbeOrigin; }
     float& GetProbeMaxRayLength() { return mProbeMaxRayLength; }
     float& GetProbeMinRayLength() { return mProbeMinRayLength; }
     float& GetHysteresis() { return mHysteresis; }
     float& GetProbeRadius() { return mProbeRadius; }
-    uint32_t& GetProbeRayCount() { return mRaysPerProbe; }
+    uint32_t GetProbeRayCount() { return mRaysPerProbe; }
     bool& GetRenderProbes() { return mRenderProbes; }
 
     ~SettingsManager();
+
+    static const std::array<uint32_t, 6> ShadowMapResolutions;
+    static const std::array<uint32_t, 5> ProbeResolutions;
+    static const std::array<uint32_t, 7> RaysPerProbe;
 
 private:
     SSAOControlData mSSAOControlData;

@@ -29,6 +29,10 @@ public:
     void AddPipelines();
     void AddResources();
 
+    void RemoveRenderTargets();
+    void RemovePipelines();
+    void RemoveResources();
+
     struct PersistentParameters {
         vk::Sampler mFrameBufferSampler;
         ScopedRefPtr<Texture> mDepthBuffer;

@@ -81,6 +81,8 @@ public:
         return mProbeMomentsBuffers[(mCurrentFrame + 1) % mProbeMomentsBuffers.size()];
     }
 
+    uint32_t GetProbeRayCount() { return mProbeRayRadianceBuffer->GetWidth(); }
+
     void RenderProbes(vk::CommandBuffer commandBuffer, const uint32_t frameIndex);
 
     ~DDGIRenderer();

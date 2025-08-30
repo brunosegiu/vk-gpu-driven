@@ -27,6 +27,8 @@ public:
     void AddPipelines();
     void AddResources();
 
+    void RemovePipelines();
+
     void UpdatePersistentUniforms(const ScopedRefPtr<VulkanBuffer>& scenePersistentDataBuffer);
     void UpdateUniforms(
         const CullData& cullData,

@@ -50,6 +50,10 @@ void VisibilityManager::AddResources() {
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
 }
 
+void VisibilityManager::RemovePipelines() {
+    mCullingPipeline = nullptr;
+}
+
 void VisibilityManager::UpdatePersistentUniforms(
     const ScopedRefPtr<VulkanBuffer>& scenePersistentDataBuffer) {
     mCullingPipeline->Bind(0, scenePersistentDataBuffer);

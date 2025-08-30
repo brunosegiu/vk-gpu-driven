@@ -22,6 +22,9 @@ public:
     void AddPipelines();
     void AddResources();
 
+    void RemoveRenderTargets();
+    void RemovePipelines();
+
     struct PersistentParameters {
         ScopedRefPtr<VulkanBuffer> scenePersistentDataBuffer;
         vk::Sampler materialSampler;
@@ -56,7 +59,6 @@ private:
     ScopedRefPtr<RenderTarget> mDepthOnlyPassRenderTarget;
     ScopedRefPtr<Texture> mShadowMap;
     std::unordered_map<Material::AlphaMode, ScopedRefPtr<GraphicsPipeline>> mShadowPassPipelines;
-    ScopedRefPtr<GraphicsPipeline> mShadowPassAlphaMaskedPipeline;
     std::vector<ScopedRefPtr<VulkanBuffer>> mShadowCameraUniform;
     std::unordered_map<Material::AlphaMode, ScopedRefPtr<VisibilityManager>> mVisibilityManagers;
     vk::Sampler mShadowSampler;
