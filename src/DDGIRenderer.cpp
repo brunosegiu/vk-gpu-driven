@@ -277,12 +277,6 @@ void DDGIRenderer::Render(
                         {GetMomentsBuffer(),
                          vk::ImageLayout::eShaderReadOnlyOptimal,
                          vk::ImageLayout::eGeneral},
-                        {GetPreviousIrradianceBuffer(),
-                         vk::ImageLayout::eShaderReadOnlyOptimal,
-                         vk::ImageLayout::eGeneral},
-                        {GetPreviousMomentsBuffer(),
-                         vk::ImageLayout::eShaderReadOnlyOptimal,
-                         vk::ImageLayout::eGeneral},
                     });
 
                 commandBuffer.pipelineBarrier(
@@ -323,12 +317,6 @@ void DDGIRenderer::Render(
                          vk::ImageLayout::eGeneral,
                          vk::ImageLayout::eShaderReadOnlyOptimal},
                         {GetMomentsBuffer(),
-                         vk::ImageLayout::eGeneral,
-                         vk::ImageLayout::eShaderReadOnlyOptimal},
-                        {GetPreviousIrradianceBuffer(),
-                         vk::ImageLayout::eGeneral,
-                         vk::ImageLayout::eShaderReadOnlyOptimal},
-                        {GetPreviousMomentsBuffer(),
                          vk::ImageLayout::eGeneral,
                          vk::ImageLayout::eShaderReadOnlyOptimal},
                     });

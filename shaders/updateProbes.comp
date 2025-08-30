@@ -8,6 +8,14 @@
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
+vec3 sampleProbeIrradiance(uvec3 coordinates) {
+    return texelFetch(sampler2DArray(uPrevIrradianceTargets, uFramebufferSampler), ivec3(coordinates), 0).rgb;
+}
+
+vec2 sampleProbeMoments(uvec3 coordinates) {
+    return texelFetch(sampler2DArray(uPrevProbeMoments, uFramebufferSampler), ivec3(coordinates), 0).rg;
+}
+
 void main() {
     const uint probeIndex = gl_GlobalInvocationID.z;
 
@@ -56,8 +64,8 @@ void main() {
         moments /= sumWeight;
     }
 
-    vec3 prevFrameIrradiance = uDDGI.frameIndex == 0 ? vec3(0.0f) : imageLoad(uPrevIrradianceTargets, ivec3(gl_GlobalInvocationID)).rgb;
-    vec2 prevFrameMoments = uDDGI.frameIndex == 0 ? vec2(0.0f) : imageLoad(uPrevProbeMoments, ivec3(gl_GlobalInvocationID)).xy;
+    vec3 prevFrameIrradiance = uDDGI.frameIndex == 0 ? vec3(0.0f) : sampleProbeIrradiance(gl_GlobalInvocationID);
+    vec2 prevFrameMoments = uDDGI.frameIndex == 0 ? vec2(0.0f) : sampleProbeMoments(gl_GlobalInvocationID);
 
     irradiance = mix(prevFrameIrradiance, irradiance, uDDGI.hysteresis);
     moments = mix(prevFrameMoments, moments, uDDGI.hysteresis);

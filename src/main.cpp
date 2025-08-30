@@ -84,6 +84,7 @@ int main() {
             Timer timer;
             double elapsedSeconds = 0.0;
             double totalSeconds = 0.0;
+
             while (window->Update()) {
                 timer.Start();
                 {
