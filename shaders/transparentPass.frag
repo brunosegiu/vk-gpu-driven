@@ -25,9 +25,14 @@ vec4 sampleTexture(int index, vec2 uv) {
 void main() {
     const Material material = inMaterial;
 
-    vec4 albedo = vec4(material.albedo.rgb, 0.5f);
+    vec4 albedo = vec4(material.albedo.rgb, 1.0f);
     if (material.albedoTextureIndex >= 0) {
-        albedo = sampleTexture(material.albedoTextureIndex, inTexCoord);
+        albedo *= sampleTexture(material.albedoTextureIndex, inTexCoord);
+    }
+
+    vec3 emissive = material.emissive.rgb;
+    if (material.emissiveTextureIndex >= 0) {
+        emissive = sampleTexture(material.emissiveTextureIndex, inTexCoord).rgb;
     }
 
     float roughness = material.roughness;
@@ -54,7 +59,7 @@ void main() {
 
     vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - inWorldSpacePos);
 
-    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0, vec3(0.0f));
+    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0, vec3(0.0f), emissive);
 
     outColor = vec4(gammaCorrection(color), albedo.a);
 }

@@ -109,6 +109,11 @@ void main() {
         albedo = sampleTexture(material.albedoTextureIndex, uvWithDerivs);
     }
 
+    vec3 emissive = material.emissive.rgb;
+    if (material.emissiveTextureIndex >= 0) {
+        emissive = sampleTexture(material.emissiveTextureIndex, uvWithDerivs).rgb;
+    }
+
     float roughness = material.roughness;
     float metallic = material.metallic;
     if (material.metallicRoughnessTextureIndex >= 0) {
@@ -131,7 +136,7 @@ void main() {
 
     vec3 indirect = ddgiIndirectDiffuse(worldPos, normal, viewVector, uDDGI, uIrradianceSampler, uProbeIrradianceTargets, uFrameBufferTextureSampler, uProbeMomentTargets); 
 
-    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, visibility, indirect);
+    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, visibility, indirect, emissive);
 
     outColor = vec4(gammaCorrection(color), 1.0);
 }
