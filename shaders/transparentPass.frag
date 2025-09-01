@@ -50,12 +50,13 @@ void main() {
         normal = normalize(inTBN * normalTangentSpace);
     }
 
-	vec4 shadowCoord = inShadowCoord / inShadowCoord.w;
-    float shadowTerm = 0.0f;
-    {
-		shadowTerm = filterPCF(shadowCoord, uLightParameters.shadowTaps, uTextureSampler, uShadowMap);
-	    shadowTerm = clamp(shadowTerm, 0.0f, 1.0f);
-    }
+    vec4 shadowCoord = (ShadowBiasMat * uLightParameters.viewProjection) * vec4(inWorldSpacePos, 1.0f);
+    float shadowDepth = encodeViewDepth(
+        inWorldSpacePos.xyz,
+        uLightParameters.view,
+        uLightParameters.shadowNear,
+        uLightParameters.shadowFar);
+    float shadowTerm = filterVSM(shadowCoord.xy / shadowCoord.w, shadowDepth, uTextureSampler, uShadowMap);
 
     vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - inWorldSpacePos);
 

@@ -32,7 +32,7 @@ void main() {
 
     outWorldSpacePos = (meshData.modelMatrix * vec4(inPosition, 1.0)).xyz;
 
-    outShadowCoord =  (ShadowBiasMat * uLightParameters.viewProjection * meshData.modelMatrix) * vec4(inPosition, 1.0f);
+    outShadowCoord =  (uLightParameters.viewProjection * meshData.modelMatrix) * vec4(inPosition, 1.0f);
 
     outMaterial = uMaterials[meshData.materialId];
 

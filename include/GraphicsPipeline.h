@@ -21,6 +21,7 @@ struct GraphicsPipelineOptionals {
     bool enableDepthTest = true;
     bool enableDepthBias = false;
     bool enableCulling = true;
+    bool reverseCulling = false;
     float depthBias = 0.0f;
     float depthSlope = 1.0f;
     bool enableBlending = false;

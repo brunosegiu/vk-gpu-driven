@@ -66,7 +66,9 @@ GraphicsPipeline::GraphicsPipeline(
             .setPolygonMode(vk::PolygonMode::eFill)
             .setLineWidth(1.0f)
             .setCullMode(
-                optionals.enableCulling ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone)
+                optionals.enableCulling ? (optionals.reverseCulling ? vk::CullModeFlagBits::eFront
+                                                                    : vk::CullModeFlagBits::eBack)
+                                        : vk::CullModeFlagBits::eNone)
             .setFrontFace(
                 optionals.reverseWindingOrder ? vk::FrontFace::eClockwise
                                               : vk::FrontFace::eCounterClockwise)

@@ -204,54 +204,53 @@ void PostProcessingRenderer::Render(
 
             commandBuffer.endRenderPass();
             mContext->EndMarker(commandBuffer);
-        }
-
-        mContext->BeginMarker(commandBuffer, "SSAO blur");
-        {
-            const std::vector<vk::ClearValue> clearValues{
-                vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
-            };
-            const vk::RenderPassBeginInfo renderPassBeginInfo =
-                vk::RenderPassBeginInfo()
-                    .setRenderPass(mSSAOBlurPass->GetRenderPassHandle())
-                    .setFramebuffer(mSSAOBlurPass->GetFramebufferHandle())
-                    .setRenderArea({vk::Offset2D{0, 0}, imageSize})
-                    .setClearValues(clearValues);
-            commandBuffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
-
+            mContext->BeginMarker(commandBuffer, "SSAO blur");
             {
-                const vk::Viewport viewport{
-                    0.0f,
-                    0.0f,
-                    static_cast<float>(imageSize.width),
-                    static_cast<float>(imageSize.height),
-                    0.0f,
-                    1.0f};
-                commandBuffer.setViewport(0, viewport);
+                const std::vector<vk::ClearValue> clearValues{
+                    vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
+                };
+                const vk::RenderPassBeginInfo renderPassBeginInfo =
+                    vk::RenderPassBeginInfo()
+                        .setRenderPass(mSSAOBlurPass->GetRenderPassHandle())
+                        .setFramebuffer(mSSAOBlurPass->GetFramebufferHandle())
+                        .setRenderArea({vk::Offset2D{0, 0}, imageSize})
+                        .setClearValues(clearValues);
+                commandBuffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
 
-                const vk::Rect2D scissor = vk::Rect2D().setOffset(0).setExtent(
-                    vk::Extent2D{imageSize.width, imageSize.height});
-                commandBuffer.setScissor(0, scissor);
+                {
+                    const vk::Viewport viewport{
+                        0.0f,
+                        0.0f,
+                        static_cast<float>(imageSize.width),
+                        static_cast<float>(imageSize.height),
+                        0.0f,
+                        1.0f};
+                    commandBuffer.setViewport(0, viewport);
+
+                    const vk::Rect2D scissor = vk::Rect2D().setOffset(0).setExtent(
+                        vk::Extent2D{imageSize.width, imageSize.height});
+                    commandBuffer.setScissor(0, scissor);
+                }
+
+                commandBuffer.bindPipeline(
+                    vk::PipelineBindPoint::eGraphics,
+                    mSSAOBlurPipeline->GetPipelineHandle());
+
+                std::vector<vk::DescriptorSet> descriptorSets =
+                    mSSAOBlurPipeline->GetDescriptorSets(frameIndex);
+
+                commandBuffer.bindDescriptorSets(
+                    vk::PipelineBindPoint::eGraphics,
+                    mSSAOBlurPipeline->GetPipelineLayout(),
+                    0,
+                    descriptorSets,
+                    nullptr);
+
+                commandBuffer.draw(3, 1, 0, 0);
+
+                commandBuffer.endRenderPass();
+                mContext->EndMarker(commandBuffer);
             }
-
-            commandBuffer.bindPipeline(
-                vk::PipelineBindPoint::eGraphics,
-                mSSAOBlurPipeline->GetPipelineHandle());
-
-            std::vector<vk::DescriptorSet> descriptorSets =
-                mSSAOBlurPipeline->GetDescriptorSets(frameIndex);
-
-            commandBuffer.bindDescriptorSets(
-                vk::PipelineBindPoint::eGraphics,
-                mSSAOBlurPipeline->GetPipelineLayout(),
-                0,
-                descriptorSets,
-                nullptr);
-
-            commandBuffer.draw(3, 1, 0, 0);
-
-            commandBuffer.endRenderPass();
-            mContext->EndMarker(commandBuffer);
         }
         mContext->EndMarker(commandBuffer);
     }

@@ -1,9 +1,10 @@
 #include "UIRenderer.h"
 
-#include "DebugUtils.h"
-
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
+#include <glm/gtx/rotate_vector.hpp>
+
+#include "DebugUtils.h"
 
 namespace VKRT {
 
@@ -136,7 +137,8 @@ UIRenderer::UIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<SettingsManag
       mSettingsManager(settingsManager),
       mSelectedShadowResolutionIndex(0),
       mSelectedProbeResolutionIndex(0),
-      mSelectedRaysPerProbeIndex(0) {
+      mSelectedRaysPerProbeIndex(0),
+      mLightPitchYaw(-0.3f, 0.0f) {
     ApplyFlatStyle();
 
     for (uint32_t resolution : SettingsManager::ShadowMapResolutions) {
@@ -168,6 +170,13 @@ UIRenderer::UIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<SettingsManag
         }
         ++mSelectedRaysPerProbeIndex;
     }
+
+    const float pitch = glm::pi<float>() * mLightPitchYaw.x;
+    const float yaw = -glm::pi<float>() * mLightPitchYaw.y;
+    mSettingsManager->GetLightDir() = glm::vec3(
+        glm::cos(pitch) * glm::cos(yaw),
+        glm::sin(pitch),
+        glm::cos(pitch) * glm::sin(-yaw));
 }
 
 void UIRenderer::AddRenderTargets(ScopedRefPtr<RenderTarget> uiTarget) {
@@ -315,6 +324,19 @@ void UIRenderer::Update() {
                     ImGuiSliderFlags_Logarithmic);
                 ImGui::SliderFloat("Shadow far", &mSettingsManager->GetShadowFar(), 0.1f, 1500.0f);
                 ImGui::SliderFloat("Shadow near", &mSettingsManager->GetShadowNear(), 0.1f, 10.0f);
+                if (ImGui::SliderFloat2("Light direction", &mLightPitchYaw.x, -1.0f, 1.0f)) {
+                    const float pitch = glm::pi<float>() * mLightPitchYaw.x;
+                    const float yaw = -glm::pi<float>() * mLightPitchYaw.y;
+                    mSettingsManager->GetLightDir() = glm::vec3(
+                        glm::cos(pitch) * glm::cos(yaw),
+                        glm::sin(pitch),
+                        glm::cos(pitch) * glm::sin(-yaw));
+                }
+                ImGui::SliderFloat3(
+                    "Light radiance",
+                    &mSettingsManager->GetLightRadiance().x,
+                    0.1f,
+                    100.0f);
             }
 
             if (ImGui::CollapsingHeader("SSAO", ImGuiTreeNodeFlags_DefaultOpen)) {

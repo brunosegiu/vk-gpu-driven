@@ -123,12 +123,12 @@ void main() {
     }
 
     vec4 shadowCoord = (ShadowBiasMat * uLightParameters.viewProjection) * vec4(worldPos, 1.0f);
-	shadowCoord = shadowCoord / shadowCoord.w;
-    float shadowTerm = 0.0f;
-    {
-		shadowTerm = filterPCF(shadowCoord, uLightParameters.shadowTaps, uIrradianceSampler, uShadowMap);
-	    shadowTerm = clamp(shadowTerm, 0.0f, 1.0f);
-    }
+    float shadowDepth = encodeViewDepth(
+        worldPos.xyz,
+        uLightParameters.view,
+        uLightParameters.shadowNear,
+        uLightParameters.shadowFar);
+    float shadowTerm = filterVSM(shadowCoord.xy / shadowCoord.w, shadowDepth, uMaterialTextureSampler, uShadowMap);
 
     vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - worldPos);
 

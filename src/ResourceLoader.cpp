@@ -60,6 +60,14 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
         {Resource::Id::UpdateProbesShader, VKRT_RESOURCE_UPDATE_PROBES_SHADER},
         {Resource::Id::ProbeVertexShader, VKRT_RESOURCE_PROBE_VERTEX},
         {Resource::Id::ProbeFragmentShader, VKRT_RESOURCE_PROBE_FRAGMENT},
+        {Resource::Id::ShadowMomentsBlurVerticalVertexShader,
+         VKRT_RESOURCE_SHADOW_MOMENTS_BLUR_VERTICAL_VERTEX},
+        {Resource::Id::ShadowMomentsBlurVerticalFragmentShader,
+         VKRT_RESOURCE_SHADOW_MOMENTS_BLUR_VERTICAL_FRAGMENT},
+        {Resource::Id::ShadowMomentsBlurHorizontalVertexShader,
+         VKRT_RESOURCE_SHADOW_MOMENTS_BLUR_HORIZONTAL_VERTEX},
+        {Resource::Id::ShadowMomentsBlurHorizontalFragmentShader,
+         VKRT_RESOURCE_SHADOW_MOMENTS_BLUR_HORIZONTAL_FRAGMENT},
     };
 
     HMODULE module = nullptr;

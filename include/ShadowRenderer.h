@@ -6,8 +6,8 @@
 #include "RefCountPtr.h"
 #include "RenderPass.h"
 #include "Scene.h"
-#include "VisibilityManager.h"
 #include "SettingsManager.h"
+#include "VisibilityManager.h"
 
 namespace VKRT {
 
@@ -36,13 +36,16 @@ public:
     struct PerFrameParameters {
         std::vector<ScopedRefPtr<VulkanBuffer>> meshDataBuffer;
     };
-    void UpdateUniforms(const uint32_t frameIndex, const PerFrameParameters& parameters);
+    void UpdateUniforms(
+        const uint32_t frameIndex,
+        Camera* camera,
+        const PerFrameParameters& parameters);
 
     const std::vector<ScopedRefPtr<VulkanBuffer>>& GetShadowUniform() {
         return mShadowCameraUniform;
     }
 
-    const ScopedRefPtr<Texture>& GetShadowMap() { return mShadowMap; }
+    const ScopedRefPtr<Texture>& GetShadowMap() { return (mShadowMap[1]); }
 
     void Render(vk::CommandBuffer commandBuffer, const uint32_t frameIndex);
 
@@ -57,10 +60,16 @@ private:
     // Shadow pass resources
     ScopedRefPtr<RenderPass> mDepthOnlyPass;
     ScopedRefPtr<RenderTarget> mDepthOnlyPassRenderTarget;
-    ScopedRefPtr<Texture> mShadowMap;
+    ScopedRefPtr<Texture> mShadowDepth;
     std::unordered_map<Material::AlphaMode, ScopedRefPtr<GraphicsPipeline>> mShadowPassPipelines;
     std::vector<ScopedRefPtr<VulkanBuffer>> mShadowCameraUniform;
     std::unordered_map<Material::AlphaMode, ScopedRefPtr<VisibilityManager>> mVisibilityManagers;
     vk::Sampler mShadowSampler;
+
+    std::array<ScopedRefPtr<RenderPass>, 2> mBlurPass;
+    std::array<ScopedRefPtr<RenderTarget>, 2> mShadowMapRenderTarget;
+    std::array<ScopedRefPtr<Texture>, 2> mShadowMap;
+    std::array<ScopedRefPtr<GraphicsPipeline>, 2> mBlurPipeline;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mShadowBlurUniform;
 };
 }  // namespace VKRT

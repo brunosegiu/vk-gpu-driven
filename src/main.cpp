@@ -20,47 +20,6 @@ struct Timer {
     std::chrono::steady_clock::time_point beginTime;
 };
 
-// From chatgpt
-struct SunLight {
-    glm::vec3 direction;  // Unit vector pointing from scene origin toward the sun
-    glm::vec3 radiance;   // RGB color/intensity of the sunlight
-};
-
-SunLight GetSunDirectionAndRadiance(
-    float elapsedSeconds,
-    float dayDurationSeconds = 60.0f,
-    float latitudeDegrees = 35.0f) {
-    // Wrap to [0, dayDuration)
-    float t = fmod(elapsedSeconds, dayDurationSeconds);
-
-    constexpr float pi = glm::pi<float>();
-    float angle =
-        pi * (0.75 * (t / dayDurationSeconds));  // θ = pi/4 at sunrise, 3 * pi / 4 at sunset
-
-    // Sun arc in XZ plane (Y = up): arc from east (−Z), through +Y, to west (+Z)
-    glm::vec3 sunDir =
-        glm::normalize(glm::vec3(0.0f, sin(angle), -cos(angle)));  // at θ=0: horizon, +Z
-
-    // Apply tilt by latitude (optional, rotate around X axis)
-    float tiltRad = glm::radians(latitudeDegrees);
-    sunDir = glm::rotateX(sunDir, tiltRad);
-
-    // Compute elevation from Y component
-    float elevation = glm::clamp(sunDir.y, 0.0f, 1.0f);
-    float t_elev = elevation;
-
-    // Color gradient: warm at horizon white at zenith
-    glm::vec3 horizonColor = glm::vec3(1.0f, 0.5f, 0.2f);  // sunrise/sunset
-    glm::vec3 zenithColor = glm::vec3(1.0f, 1.0f, 0.9f);   // noon
-    glm::vec3 color = glm::mix(horizonColor, zenithColor, t_elev);
-
-    // Intensity: dim at horizon, bright at zenith
-    float intensity = glm::mix(0.1f, 1.0f, t_elev);
-    glm::vec3 radiance = color * intensity;
-
-    return {sunDir, radiance};
-}
-
 int main() {
     using namespace VKRT;
     auto [windowResult, window] = Window::Create(1920, 1080);
@@ -79,8 +38,6 @@ int main() {
             ScopedRefPtr<SettingsManager> settingsManager = new SettingsManager();
             ScopedRefPtr<Renderer> renderer = new Renderer(context, scene, settingsManager);
 
-            DirectionalLight& light = scene->GetLight();
-
             Timer timer;
             double elapsedSeconds = 0.0;
             double totalSeconds = 0.0;
@@ -89,11 +46,6 @@ int main() {
                 timer.Start();
                 {
                     camera->Update(elapsedSeconds);
-                    {
-                        SunLight lightProperties = GetSunDirectionAndRadiance(totalSeconds);
-                        light.SetDirection(-lightProperties.direction);
-                        light.SetRadiance(lightProperties.radiance);
-                    }
                     renderer->Render(camera);
                 }
                 elapsedSeconds = timer.ElapsedSeconds();

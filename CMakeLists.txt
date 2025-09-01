@@ -110,6 +110,8 @@ set(SHADER_HEADERS
     updateProbesParameters.glsl
     visibilityBufferShadeParameters.glsl
     probeParameters.glsl
+    shadowMomentsBlurVerticalParameters.glsl
+    shadowMomentsBlurHorizontalParameters.glsl
 )
 
 set(SHADERS
@@ -137,6 +139,10 @@ set(SHADERS
     updateProbes.comp
     probe.vert
     probe.frag
+    shadowMomentsBlurVertical.vert
+    shadowMomentsBlurVertical.frag
+    shadowMomentsBlurHorizontal.vert
+    shadowMomentsBlurHorizontal.frag
 )
 
 if(WIN32)

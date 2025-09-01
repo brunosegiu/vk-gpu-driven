@@ -17,11 +17,12 @@ class DirectionalLight : public RefCountPtr {
 public:
     DirectionalLight();
 
-    glm::mat4 ComputeShadowMatrix(
+    glm::mat4 ComputeShadowProjection(
         const float frustumWidth,
-        const float shadowDistance,
-        const float near,
-        const float far);
+        const float _near,
+        const float _far);
+
+    glm::mat4 ComputeShadowView(const glm::vec3& cameraOrigin, const float shadowDistance);
 
     const glm::vec3& GetRadiance() const { return mRadiance; }
     const glm::vec3& GetDirection() const { return mDirection; }

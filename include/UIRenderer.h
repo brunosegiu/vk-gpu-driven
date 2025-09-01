@@ -37,5 +37,7 @@ private:
 
     std::vector<std::string> mRaysPerProbeOptions;
     int32_t mSelectedRaysPerProbeIndex;
+
+    glm::vec2 mLightPitchYaw;
 };
 }  // namespace VKRT

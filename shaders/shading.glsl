@@ -38,91 +38,45 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-const mat4 ShadowBiasMat = mat4( 
-	0.5, 0.0, 0.0, 0.0,
-	0.0, 0.5, 0.0, 0.0,
-	0.0, 0.0, 1.0, 0.0,
-	0.5, 0.5, 0.0, 1.0 
+const mat4 ShadowBiasMat = mat4(
+    vec4(0.5, 0.0, 0.0, 0.0),
+    vec4(0.0, 0.5, 0.0, 0.0),
+    vec4(0.0, 0.0, 1.0, 0.0),
+    vec4(0.5, 0.5, 0.0, 1.0)
 );
 
-// From Sascha Willem's examples
-float textureProj(vec4 shadowCoord, vec2 offset, sampler shadowSampler, texture2D shadowMap) {
-	float shadow = 1.0;
-	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
-        float shadowDepth = texture(sampler2D(shadowMap, shadowSampler), shadowCoord.st + offset ).r;
-		if (shadowCoord.w > 0.0 && shadowDepth < shadowCoord.z) {
-			shadow = 0.0f;
-		}
-	}
-	return shadow;
+// Chebysheb + anti-bleeding from: https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps
+float linstep(float _min, float _max, float v) {
+  return clamp((v-_min) / (_max - _min), 0.0f, 1.0f);
 }
 
-// https://github.com/GPUOpen-Effects/ShadowFX/blob/master/amd_shadowfx/src/Shaders/AMD_SHADOWFX_FILTER_SIZE_15_POISSON.inc
-const int POISSON_COUNT = 51;
-const vec2 PoissonDisk[POISSON_COUNT] = vec2[](
-  vec2(0.272153, 0.147179),
-  vec2(0.282677, 0.277615),
-  vec2(0.111645, 0.268837),
-  vec2(0.400319, 0.047563),
-  vec2(0.408985, 0.194408),
-  vec2(0.534191, 0.030173),
-  vec2(0.556673, 0.135536),
-  vec2(0.334234, 0.402806),
-  vec2(0.146173, 0.166826),
-  vec2(0.199067, 0.360825),
-  vec2(0.437338, 0.328581),
-  vec2(0.699799, 0.089076),
-  vec2(0.044831, 0.445143),
-  vec2(0.087581, 0.557190),
-  vec2(0.183368, 0.600518),
-  vec2(0.174441, 0.496664),
-  vec2(0.356468, 0.686440),
-  vec2(0.234973, 0.715005),
-  vec2(0.280913, 0.525297),
-  vec2(0.081819, 0.713120),
-  vec2(0.437340, 0.572705),
-  vec2(0.688016, 0.193690),
-  vec2(0.807257, 0.105998),
-  vec2(0.321767, 0.802520),
-  vec2(0.271984, 0.914389),
-  vec2(0.154543, 0.802825),
-  vec2(0.538678, 0.378504),
-  vec2(0.525553, 0.233833),
-  vec2(0.518190, 0.774127),
-  vec2(0.519246, 0.651308),
-  vec2(0.408107, 0.867631),
-  vec2(0.818168, 0.233048),
-  vec2(0.441349, 0.451439),
-  vec2(0.666632, 0.454801),
-  vec2(0.578477, 0.556066),
-  vec2(0.702981, 0.323121),
-  vec2(0.665180, 0.678351),
-  vec2(0.930022, 0.288821),
-  vec2(0.828204, 0.422613),
-  vec2(0.948008, 0.414735),
-  vec2(0.804097, 0.772157),
-  vec2(0.720558, 0.849087),
-  vec2(0.770057, 0.628413),
-  vec2(0.594638, 0.852394),
-  vec2(0.934051, 0.562872),
-  vec2(0.868392, 0.686201),
-  vec2(0.689193, 0.560781),
-  vec2(0.677183, 0.947311),
-  vec2(0.561896, 0.966587),
-  vec2(0.823353, 0.881428),
-  vec2(0.827946, 0.541060)
-);
+float reduceBleeding(float pMax, float amount) {
+    return linstep(amount, 1, pMax);
+}
 
-float filterPCF(vec4 sc, uint taps, sampler shadowSampler, texture2D shadowMap) {
-	ivec2 texDim = textureSize(sampler2D(shadowMap, shadowSampler), 0);
-	vec2 texelSize = 1.2 / vec2(texDim);
+float chebyshevUpperBound(vec2 moments, float depth) {
+    float p = step(depth, moments.x + 0.1f);
+    float variance = max(moments.y - moments.x * moments.x, 1e-3) ;
+    float delta = depth - moments.x;
+    float pMax = clamp(variance / (variance + delta * delta), 0.0f, 1.0f);
+    return max(p, reduceBleeding(pMax, 0.1));
+}
 
-    uint samples = clamp(taps, 1, POISSON_COUNT);
-	float shadowFactor = 0.0;
-	for (int i = 0; i < samples; ++i) {
-		shadowFactor += textureProj(sc, texelSize * PoissonDisk[i], shadowSampler, shadowMap);
-	}
-	return shadowFactor / float(samples);
+float filterVSM(vec2 shadowCoord, float viewSpaceDepth, sampler shadowSampler, texture2D shadowMap) {	
+    vec2 shadowUv = shadowCoord.xy;
+    if (any(lessThan(shadowCoord, vec2(0.0))) ||
+        any(greaterThan(shadowCoord, vec2(1.0)))) {
+        return 1.0;
+    }
+    vec2 moments = texture(sampler2D(shadowMap, shadowSampler), shadowCoord).rg;
+    return chebyshevUpperBound(moments, viewSpaceDepth);
+}
+
+float encodeViewDepth(vec3 worldPosition, mat4 lightViewMatrix,
+                       float lightNear, float lightFar) {
+    vec4 lightViewPos = lightViewMatrix * vec4(worldPosition, 1.0);
+    float lightForward = -lightViewPos.z;
+    return clamp(lightForward, 0.0, lightFar);
 }
 
 // From: https://github.com/nvpro-samples/nvpro_core/blob/master/nvvkhl/shaders/dh_sky.h
@@ -148,7 +102,7 @@ ProceduralSkyShaderParameters initSkyShaderParameters(vec3 directionToLight) {
     parameters.lightColor = vec3(1.0F, 1.0F, 1.0F);
     parameters.skyColor = vec3(0.17F, 0.37F, 0.65F);
     parameters.horizonColor = vec3(0.50F, 0.70F, 0.92F);
-    parameters.groundColor = vec3(0.62F, 0.59F, 0.55F);
+    parameters.groundColor = vec3(0.0F, 0.0F, 0.0F);
     parameters.directionUp = vec3(0.F, 1.F, 0.F);
     parameters.horizonSize = 0.5F;
     parameters.glowSize = 0.091F;

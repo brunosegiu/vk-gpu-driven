@@ -74,7 +74,9 @@ struct LightData {
     vec3 radiance;
     vec3 direction;
     mat4 viewProjection;
-    uint shadowTaps;
+    mat4 view;
+    float shadowFar;
+    float shadowNear;
 };
 
 const int ColorPayloadIndex = 0;
@@ -107,6 +109,11 @@ struct DDGIData {
     float hysteresis;
     uint frameIndex;
     float probeRadius;
+};
+
+struct ShadowControlData {
+    float blurriness;
+    float radius;
 };
 
 #endif

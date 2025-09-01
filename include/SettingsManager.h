@@ -7,9 +7,9 @@
 namespace VKRT {
 
 struct SSAOControlData {
-    float radius = 0.4f;
+    float radius = 0.1f;
     float power = 4.0f;
-    uint32_t kernelSize = 32;
+    uint32_t kernelSize = 16;
     int32_t blurRadius = 2;
 };
 
@@ -25,6 +25,8 @@ public:
     float& GetShadowDistance() { return mShadowDistance; }
     float& GetShadowNear() { return mShadowNear; }
     float& GetShadowFar() { return mShadowFar; }
+    glm::vec3& GetLightDir() { return mLightDir; }
+    glm::vec3& GetLightRadiance() { return mLightRadiance; }
 
     void SetShadowMapResolution(const uint32_t shadowMapResolution) {
         mShadowMapResolution = shadowMapResolution;
@@ -57,6 +59,8 @@ private:
     float mShadowDistance;
     float mShadowNear;
     float mShadowFar;
+    glm::vec3 mLightDir;
+    glm::vec3 mLightRadiance;
 
     // DGGI
     glm::uvec3 mProbeGridCount;

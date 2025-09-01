@@ -523,7 +523,7 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
         mCameraUniform[frameIndex]->Write(cameraMatrices);
     }
 
-    mShadowRenderer->UpdateUniforms(frameIndex, {.meshDataBuffer = mPerMeshBuffers});
+    mShadowRenderer->UpdateUniforms(frameIndex, camera, {.meshDataBuffer = mPerMeshBuffers});
     mPostProcessingRenderer->UpdateUniforms({.mCameraUniform = mCameraUniform}, frameIndex);
 
     // DDGI
@@ -553,6 +553,12 @@ void Renderer::Render(Camera* camera) {
         AddRenderTargets();
         AddPipelines();
         mHasBoundResources = false;
+    }
+
+    // TODO: Where?
+    {
+        mScene->GetLight().SetDirection(glm::normalize(mSettingsManager->GetLightDir()));
+        mScene->GetLight().SetRadiance(mSettingsManager->GetLightRadiance());
     }
 
     mCurrentFrameIndex = (mCurrentFrameIndex + 1) % mContext->GetMaxInFlightFrameCount();
@@ -691,10 +697,7 @@ void Renderer::Render(Camera* camera) {
                 std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
                     vk::PipelineStageFlagBits::eColorAttachmentOutput,
                     vk::PipelineStageFlagBits::eFragmentShader,
-                    {{mShadowRenderer->GetShadowMap(),
-                      vk::ImageLayout::eDepthAttachmentOptimal,
-                      vk::ImageLayout::eShaderReadOnlyOptimal},
-                     {mVisibilityBuffer,
+                    {{mVisibilityBuffer,
                       vk::ImageLayout::eColorAttachmentOptimal,
                       vk::ImageLayout::eShaderReadOnlyOptimal}});
 

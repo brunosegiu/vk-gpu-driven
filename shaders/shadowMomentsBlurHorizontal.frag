@@ -1,0 +1,41 @@
+#version 460
+
+#include "definitions.glsl"
+#include "shadowMomentsBlurHorizontalParameters.glsl"
+
+layout(location = 0) in vec2 inTexCoord;
+
+layout(location = 0) out vec2 outMoments;
+
+vec2 readMoments(vec2 uv) {
+    return texture(sampler2D(uDepthBuffer, uLinearSampler), uv).rg;
+}
+
+// From: https://www.shadertoy.com/view/Xd33Rf
+vec2 blurGaussianHorizontal(vec2 uv, vec2 resolution, float radius) {
+    vec2 blr = vec2(0.0);
+    blr += 0.026109 * readMoments(uv + vec2(-15.5,0.0) * radius / resolution);
+    blr += 0.034202 * readMoments(uv + vec2(-13.5,0.0) * radius / resolution);
+    blr += 0.043219 * readMoments(uv + vec2(-11.5,0.0) * radius / resolution);
+    blr += 0.052683 * readMoments(uv + vec2( -9.5,0.0) * radius / resolution);
+    blr += 0.061948 * readMoments(uv + vec2( -7.5,0.0) * radius / resolution);
+    blr += 0.070266 * readMoments(uv + vec2( -5.5,0.0) * radius / resolution);
+    blr += 0.076883 * readMoments(uv + vec2( -3.5,0.0) * radius / resolution);
+    blr += 0.081149 * readMoments(uv + vec2( -1.5,0.0) * radius / resolution);
+    blr += 0.041312 * readMoments(uv + vec2(  0.0,0.0) * radius / resolution);
+    blr += 0.081149 * readMoments(uv + vec2(  1.5,0.0) * radius / resolution);
+    blr += 0.076883 * readMoments(uv + vec2(  3.5,0.0) * radius / resolution);
+    blr += 0.070266 * readMoments(uv + vec2(  5.5,0.0) * radius / resolution);
+    blr += 0.061948 * readMoments(uv + vec2(  7.5,0.0) * radius / resolution);
+    blr += 0.052683 * readMoments(uv + vec2(  9.5,0.0) * radius / resolution);
+    blr += 0.043219 * readMoments(uv + vec2( 11.5,0.0) * radius / resolution);
+    blr += 0.034202 * readMoments(uv + vec2( 13.5,0.0) * radius / resolution);
+    blr += 0.026109 * readMoments(uv + vec2( 15.5,0.0) * radius / resolution);
+    blr /= 0.93423;
+   return blr;
+}
+
+void main() {
+    vec2 shadowMapSize = vec2(textureSize(sampler2D(uDepthBuffer, uLinearSampler), 0));
+	outMoments = blurGaussianHorizontal(inTexCoord, shadowMapSize, 0.3f);
+}
