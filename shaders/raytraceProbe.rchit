@@ -135,7 +135,22 @@ void main() {
 
     vec3 indirect = ddgiIndirectDiffuse(worldSpacePosition, normal, viewVector, uDDGI, uFrameBufferTextureSampler, uPrevProbeIrradianceTargets, uFrameBufferTextureSampler, uPrevProbeMomentTargets); 
 
-    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0f, indirect, emissive);
+    ShadingParams params;
+    params.N = normal;
+    params.V = viewVector;
+    params.L = -uLightParameters.direction;
+    params.radiance = uLightParameters.radiance;
+    params.shadowTerm = shadowTerm;
+    params.albedo = albedo;
+    params.metallic = metallic;
+    params.roughness = roughness;
+    params.emissive = emissive;
+    params.visibility = 1.0f;
+    params.indirect = indirect;
+    params.directWeight = 1.0f;
+    params.indirectWeight = 1.0f;
+
+    vec3 color = evalLighting(params);
 
     rayPayload.depth += 1;
     rayPayload.color += color;

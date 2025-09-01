@@ -128,7 +128,7 @@ void main() {
         uLightParameters.view,
         uLightParameters.shadowNear,
         uLightParameters.shadowFar);
-    float shadowTerm = filterVSM(shadowCoord.xy / shadowCoord.w, shadowDepth, uMaterialTextureSampler, uShadowMap);
+    float shadowTerm = filterESM(shadowCoord / shadowCoord.w, uLightParameters.esmControl, uMaterialTextureSampler, uShadowMap);
 
     vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - worldPos);
 
@@ -136,7 +136,21 @@ void main() {
 
     vec3 indirect = ddgiIndirectDiffuse(worldPos, normal, viewVector, uDDGI, uIrradianceSampler, uProbeIrradianceTargets, uFrameBufferTextureSampler, uProbeMomentTargets); 
 
-    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, visibility, indirect, emissive);
+    ShadingParams params;
+    params.N = normal;
+    params.V = viewVector;
+    params.L = -uLightParameters.direction;
+    params.radiance = uLightParameters.radiance;
+    params.shadowTerm = shadowTerm;
+    params.albedo = albedo;
+    params.metallic = metallic;
+    params.roughness = roughness;
+    params.emissive = emissive;
+    params.visibility = visibility;
+    params.indirect = indirect;
+    params.directWeight = uLightParameters.directWeight;
+    params.indirectWeight = uLightParameters.indirectWeight;
+    vec3 color = evalLighting(params);
 
     outColor = vec4(gammaCorrection(color), 1.0);
 }

@@ -11,7 +11,6 @@ layout(location = 1) in uint inPackedTexCoord;
 
 layout(location = 0) out vec2 outTexCoord;
 layout(location = 1) out flat uint outDrawID;
-layout(location = 2) out float outViewSpaceDepth;
 
 void main() {
     uint globalDrawIndex = uDrawData[gl_DrawID];
@@ -25,10 +24,4 @@ void main() {
     outTexCoord = unpackHalf2x16(inPackedTexCoord);
 
     outDrawID = globalDrawIndex;
-
-    outViewSpaceDepth = encodeViewDepth(
-        worldSpacePos.xyz,
-        uLightParameters.view,
-        uLightParameters.shadowNear,
-        uLightParameters.shadowFar);
 }

@@ -307,7 +307,32 @@ void UIRenderer::Update() {
                     ImGui::EndCombo();
                 }
 
-                SliderUint("Shadow taps", &mSettingsManager->GetShadowTaps(), 1u, 51u);
+                if (ImGui::SliderFloat2("Light direction", &mLightPitchYaw.x, -1.0f, 1.0f)) {
+                    const float pitch = glm::pi<float>() * mLightPitchYaw.x;
+                    const float yaw = -glm::pi<float>() * mLightPitchYaw.y;
+                    mSettingsManager->GetLightDir() = glm::vec3(
+                        glm::cos(pitch) * glm::cos(yaw),
+                        glm::sin(pitch),
+                        glm::cos(pitch) * glm::sin(-yaw));
+                }
+                ImGui::SliderFloat3(
+                    "Light radiance",
+                    &mSettingsManager->GetLightRadiance().x,
+                    0.1f,
+                    100.0f);
+
+                ImGui::Separator();
+
+                ImGui::SliderFloat(
+                    "ESM exponent",
+                    &mSettingsManager->GetESMControl(),
+                    1.0f,
+                    1000.0f);
+                ImGui::SliderFloat(
+                    "Shadow blur",
+                    &mSettingsManager->GetShadowBlurRadius(),
+                    0.0f,
+                    1.0f);
                 ImGui::SliderFloat(
                     "Frustum width",
                     &mSettingsManager->GetShadowFrustumWidth(),
@@ -324,19 +349,6 @@ void UIRenderer::Update() {
                     ImGuiSliderFlags_Logarithmic);
                 ImGui::SliderFloat("Shadow far", &mSettingsManager->GetShadowFar(), 0.1f, 1500.0f);
                 ImGui::SliderFloat("Shadow near", &mSettingsManager->GetShadowNear(), 0.1f, 10.0f);
-                if (ImGui::SliderFloat2("Light direction", &mLightPitchYaw.x, -1.0f, 1.0f)) {
-                    const float pitch = glm::pi<float>() * mLightPitchYaw.x;
-                    const float yaw = -glm::pi<float>() * mLightPitchYaw.y;
-                    mSettingsManager->GetLightDir() = glm::vec3(
-                        glm::cos(pitch) * glm::cos(yaw),
-                        glm::sin(pitch),
-                        glm::cos(pitch) * glm::sin(-yaw));
-                }
-                ImGui::SliderFloat3(
-                    "Light radiance",
-                    &mSettingsManager->GetLightRadiance().x,
-                    0.1f,
-                    100.0f);
             }
 
             if (ImGui::CollapsingHeader("SSAO", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -439,6 +451,11 @@ void UIRenderer::Update() {
                         0.01f,
                         1.0f);
                 }
+            }
+
+            if (ImGui::CollapsingHeader("Debug")) {
+                ImGui::SliderFloat("Direct", &mSettingsManager->GetDirectWeight(), 0.00f, 1.0f);
+                ImGui::SliderFloat("Indirect", &mSettingsManager->GetIndirectWeight(), 0.0f, 1.0f);
             }
         }
         ImGui::End();

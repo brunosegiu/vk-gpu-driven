@@ -77,6 +77,10 @@ struct LightData {
     mat4 view;
     float shadowFar;
     float shadowNear;
+    float esmControl;
+    float shadowMapBlurRadius;
+    float directWeight;
+    float indirectWeight;
 };
 
 const int ColorPayloadIndex = 0;
@@ -109,11 +113,6 @@ struct DDGIData {
     float hysteresis;
     uint frameIndex;
     float probeRadius;
-};
-
-struct ShadowControlData {
-    float blurriness;
-    float radius;
 };
 
 #endif

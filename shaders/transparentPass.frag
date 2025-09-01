@@ -51,16 +51,26 @@ void main() {
     }
 
     vec4 shadowCoord = (ShadowBiasMat * uLightParameters.viewProjection) * vec4(inWorldSpacePos, 1.0f);
-    float shadowDepth = encodeViewDepth(
-        inWorldSpacePos.xyz,
-        uLightParameters.view,
-        uLightParameters.shadowNear,
-        uLightParameters.shadowFar);
-    float shadowTerm = filterVSM(shadowCoord.xy / shadowCoord.w, shadowDepth, uTextureSampler, uShadowMap);
+    float shadowTerm = filterESM(shadowCoord / shadowCoord.w, uLightParameters.esmControl, uTextureSampler, uShadowMap);
 
     vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - inWorldSpacePos);
 
-    vec3 color = evalLighting(normal, viewVector, -uLightParameters.direction, uLightParameters.radiance, shadowTerm, albedo, metallic, roughness, 1.0, vec3(0.0f), emissive);
+    ShadingParams params;
+    params.N = normal;
+    params.V = viewVector;
+    params.L = -uLightParameters.direction;
+    params.radiance = uLightParameters.radiance;
+    params.shadowTerm = shadowTerm;
+    params.albedo = albedo;
+    params.metallic = metallic;
+    params.roughness = roughness;
+    params.emissive = emissive;
+    params.visibility = 1.0f;
+    params.indirect = vec3(0.0f);
+    params.directWeight = uLightParameters.directWeight;
+    params.indirectWeight = uLightParameters.indirectWeight;
+
+    vec3 color = evalLighting(params);
 
     outColor = vec4(gammaCorrection(color), albedo.a);
 }

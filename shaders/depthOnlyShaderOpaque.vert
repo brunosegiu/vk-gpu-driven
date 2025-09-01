@@ -8,8 +8,6 @@
 
 layout(location = 0) in vec3 inPosition;
 
-layout(location = 0) out float outViewSpaceDepth;
-
 void main() {
     uint globalDrawIndex = uDrawData[gl_DrawID];
     const DrawData drawData = uPersistentSceneData[globalDrawIndex];
@@ -18,10 +16,4 @@ void main() {
     vec4 worldSpacePos = meshData.modelMatrix * vec4(inPosition, 1.0);
 
     gl_Position = uLightParameters.viewProjection * worldSpacePos;
-
-    outViewSpaceDepth = encodeViewDepth(
-        worldSpacePos.xyz,
-        uLightParameters.view,
-        uLightParameters.shadowNear,
-        uLightParameters.shadowFar);
 }

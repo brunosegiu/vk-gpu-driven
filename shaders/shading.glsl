@@ -45,31 +45,16 @@ const mat4 ShadowBiasMat = mat4(
     vec4(0.5, 0.5, 0.0, 1.0)
 );
 
-// Chebysheb + anti-bleeding from: https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps
-float linstep(float _min, float _max, float v) {
-  return clamp((v-_min) / (_max - _min), 0.0f, 1.0f);
-}
-
-float reduceBleeding(float pMax, float amount) {
-    return linstep(amount, 1, pMax);
-}
-
-float chebyshevUpperBound(vec2 moments, float depth) {
-    float p = step(depth, moments.x + 0.1f);
-    float variance = max(moments.y - moments.x * moments.x, 1e-3) ;
-    float delta = depth - moments.x;
-    float pMax = clamp(variance / (variance + delta * delta), 0.0f, 1.0f);
-    return max(p, reduceBleeding(pMax, 0.1));
-}
-
-float filterVSM(vec2 shadowCoord, float viewSpaceDepth, sampler shadowSampler, texture2D shadowMap) {	
+float filterESM(vec4 shadowCoord, float expScale, sampler shadowSampler, texture2D shadowMap) {	
     vec2 shadowUv = shadowCoord.xy;
-    if (any(lessThan(shadowCoord, vec2(0.0))) ||
-        any(greaterThan(shadowCoord, vec2(1.0)))) {
+    if (any(lessThan(shadowUv, vec2(0.0))) ||
+        any(greaterThan(shadowUv, vec2(1.0)))) {
         return 1.0;
     }
-    vec2 moments = texture(sampler2D(shadowMap, shadowSampler), shadowCoord).rg;
-    return chebyshevUpperBound(moments, viewSpaceDepth);
+    float moment = texture(sampler2D(shadowMap, shadowSampler), shadowUv).r;
+    float visibility = moment * exp(-expScale * shadowCoord.z);
+    const float bleedK = 0.2;
+    return clamp((visibility - bleedK) / (1.0 - bleedK), 0.0, 1.0);
 }
 
 float encodeViewDepth(vec3 worldPosition, mat4 lightViewMatrix,
@@ -145,8 +130,7 @@ vec3 getProceduralSkyColor(
     return environment + light;
 }
 
-vec3 fakeSkyReflectionFast(vec3 N, vec3 V, float roughness, vec3 F0, ProceduralSkyShaderParameters params)
-{
+vec3 fakeSkyReflectionFast(vec3 N, vec3 V, float roughness, vec3 F0, ProceduralSkyShaderParameters params) {
     vec3  R = reflect(-V, N);
     vec3 specularLight = getProceduralSkyColor(params, R, 0);
     specularLight *= (roughness < 0.2) ? (1.0 - roughness) * (1.0 - roughness) : 0;
@@ -154,31 +138,47 @@ vec3 fakeSkyReflectionFast(vec3 N, vec3 V, float roughness, vec3 F0, ProceduralS
     return specularLight;
 }
 
-vec3 evalLighting(vec3 N, vec3 V, vec3 L, vec3 radiance, float shadowTerm, vec4 albedo, float metallic, float roughness, float visibility, vec3 indirect, vec3 emissive) {
+struct ShadingParams {
+    vec3 N;
+    vec3 V;
+    vec3 L;
+    vec3 radiance;
+    float shadowTerm;
+    vec4 albedo;
+    float metallic;
+    float roughness;
+    vec3 emissive;
+    float visibility; // AO
+    vec3 indirect;
+    float directWeight;
+    float indirectWeight;
+};
+
+vec3 evalLighting(ShadingParams params) {
     vec3 F0 = vec3(0.04); 
-    F0 = mix(F0, albedo.rgb, metallic);
+    F0 = mix(F0, params.albedo.rgb, params.metallic);
 
     vec3 Lo = vec3(0.0);
-    vec3 H = normalize(V + L);
+    vec3 H = normalize(params.V + params.L);
 
-    float NDF = DistributionGGX(N, H, roughness);
-    float G = GeometrySmith(N, V, L, roughness);
-    vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    float NDF = DistributionGGX(params.N, H, params.roughness);
+    float G = GeometrySmith(params.N, params.V, params.L, params.roughness);
+    vec3 F = FresnelSchlick(max(dot(H, params.V), 0.0), F0);
         
     vec3 kS = F;
-    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+    vec3 kD = (vec3(1.0) - kS) * (1.0 - params.metallic);
         
     vec3 numerator    = NDF * G * F;
-    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+    float denominator = 4.0 * max(dot(params.N, params.V), 0.0) * max(dot(params.N, params.L), 0.0) + 0.0001;
     vec3 specular     = numerator / denominator;  
             
-    float NdotL = max(dot(N, L), 0.0);
+    float NdotL = max(dot(params.N, params.L), 0.0);
         
-    Lo = (kD * albedo.rgb / PI + specular) * NdotL * radiance * shadowTerm;
+    Lo = (kD * params.albedo.rgb / PI + specular) * NdotL * params.radiance * params.shadowTerm;
 
-    vec3 ambient = indirect * albedo.rgb * visibility;
+    vec3 ambient = params.indirect * params.albedo.rgb * params.visibility;
 
-    return ambient + Lo + emissive;
+    return ambient * params.indirectWeight + Lo * params.directWeight + params.emissive;
 }
 
 vec3 gammaCorrection(vec3 color) {

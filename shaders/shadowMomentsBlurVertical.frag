@@ -5,15 +5,15 @@
 
 layout(location = 0) in vec2 inTexCoord;
 
-layout(location = 0) out vec2 outMoments;
+layout(location = 0) out float outMoments;
 
-vec2 readMoments(vec2 uv) {
-    return texture(sampler2D(uDepthBuffer, uLinearSampler), uv).rg;
+float readMoments(vec2 uv) {
+    return texture(sampler2D(uDepthBuffer, uLinearSampler), uv).r;
 }
 
 // From: https://www.shadertoy.com/view/Xd33Rf
-vec2 blurGaussianVertical(vec2 uv, vec2 resolution, float radius) {
-    vec2 blr = vec2(0.0);
+float blurGaussianVertical(vec2 uv, vec2 resolution, float radius) {
+    float blr = float(0.0);
     blr += 0.026109 * readMoments(uv + vec2(0.0,-15.5) * radius / resolution);
     blr += 0.034202 * readMoments(uv + vec2(0.0,-13.5) * radius / resolution);
     blr += 0.043219 * readMoments(uv + vec2(0.0,-11.5) * radius / resolution);
@@ -32,10 +32,10 @@ vec2 blurGaussianVertical(vec2 uv, vec2 resolution, float radius) {
     blr += 0.034202 * readMoments(uv + vec2(0.0, 13.5) * radius / resolution);
     blr += 0.026109 * readMoments(uv + vec2(0.0, 15.5) * radius / resolution);
     blr /= 0.93423;
-   return blr;
+    return blr;
 }
 
 void main() {
     vec2 shadowMapSize = vec2(textureSize(sampler2D(uDepthBuffer, uLinearSampler), 0));
-	outMoments = blurGaussianVertical(inTexCoord, shadowMapSize, 0.3f);
+	outMoments = blurGaussianVertical(inTexCoord, shadowMapSize, uLightParameters.shadowMapBlurRadius);
 }

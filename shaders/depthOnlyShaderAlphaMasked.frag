@@ -8,9 +8,8 @@
 
 layout(location = 0) in vec2 inTexCoord;
 layout(location = 1) in flat uint inDrawID;
-layout(location = 2) in float inViewSpaceDepth;
 
-layout(location = 0) out vec2 outMoments;
+layout(location = 0) out float outMoment;
 
 void main() {
     const DrawData drawData = uPersistentSceneData[inDrawID];
@@ -29,8 +28,5 @@ void main() {
         }
     }
 
-    float dx = dFdx(inViewSpaceDepth);
-    float dy = dFdy(inViewSpaceDepth);
-    float depth2 = inViewSpaceDepth * inViewSpaceDepth + 0.25f * (dx * dx + dy * dy);
-    outMoments = vec2(inViewSpaceDepth, depth2);
+    outMoment = exp(uLightParameters.esmControl * gl_FragCoord.z);
 }

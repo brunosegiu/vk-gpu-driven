@@ -4,7 +4,7 @@
 #include "definitions.glsl"
 
 layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TCameraParameters {
-    ShadowControlData uShadowBlurData;
+    LightData uLightParameters;
 };
 
 layout(binding = 0, set = UPDATE_ONCE) uniform sampler uLinearSampler;

@@ -70,6 +70,5 @@ private:
     std::array<ScopedRefPtr<RenderTarget>, 2> mShadowMapRenderTarget;
     std::array<ScopedRefPtr<Texture>, 2> mShadowMap;
     std::array<ScopedRefPtr<GraphicsPipeline>, 2> mBlurPipeline;
-    std::vector<ScopedRefPtr<VulkanBuffer>> mShadowBlurUniform;
 };
 }  // namespace VKRT

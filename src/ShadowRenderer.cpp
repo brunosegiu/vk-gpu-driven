@@ -12,6 +12,10 @@ struct LightData {
     glm::mat4 view;
     float shadowFar;
     float shadowNear;
+    float esmExp;
+    float shadowMapBlurRadius;
+    float directWeight;
+    float indirectWeight;
 };
 
 struct ShadowControlData {
@@ -48,7 +52,7 @@ void ShadowRenderer::AddRenderTargets() {
             mContext,
             mSettingsManager->GetShadowMapResolution(),
             mSettingsManager->GetShadowMapResolution(),
-            vk::Format::eR32G32Sfloat,
+            vk::Format::eR32Sfloat,
             vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
             vk::ImageLayout::eShaderReadOnlyOptimal);
         mShadowMapRenderTarget[passIndex] = new RenderTarget(mContext, mShadowMap[passIndex]);
@@ -118,8 +122,9 @@ void ShadowRenderer::AddPipelines() {
                 geometryLayout,
                 GraphicsPipelineOptionals{
                     .enableDepthBias = true,
-                    .depthBias = 1.0f / (mShadowMap[0]->GetWidth()),
-                    .depthSlope = 2.0,
+                    .enableCulling = true,
+                    .depthBias = 0.01,
+                    .depthSlope = 1.3,
                 });
         }
     }
@@ -182,15 +187,6 @@ void ShadowRenderer::AddResources() {
         mShadowCameraUniform = mContext->GetDevice()->CreateBuffers(
             mContext->GetMaxInFlightFrameCount(),
             sizeof(LightData),
-            vk::BufferUsageFlagBits::eUniformBuffer,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                VMA_ALLOCATION_CREATE_MAPPED_BIT);
-    }
-
-    {
-        mShadowBlurUniform = mContext->GetDevice()->CreateBuffers(
-            mContext->GetMaxInFlightFrameCount(),
-            sizeof(ShadowControlData),
             vk::BufferUsageFlagBits::eUniformBuffer,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                 VMA_ALLOCATION_CREATE_MAPPED_BIT);
@@ -277,7 +273,12 @@ void ShadowRenderer::UpdateUniforms(
             .viewProjection = shadowProjection * shadowView,
             .view = shadowView,
             .shadowFar = mSettingsManager->GetShadowFar(),
-            .shadowNear = mSettingsManager->GetShadowNear()};
+            .shadowNear = mSettingsManager->GetShadowNear(),
+            .esmExp = mSettingsManager->GetESMControl(),
+            .shadowMapBlurRadius = mSettingsManager->GetShadowBlurRadius(),
+            .directWeight = mSettingsManager->GetDirectWeight(),
+            .indirectWeight = mSettingsManager->GetIndirectWeight(),
+        };
         mShadowCameraUniform[frameIndex]->Write(cameraMatrices);
     }
 
@@ -295,8 +296,8 @@ void ShadowRenderer::UpdateUniforms(
     }
 
     {
-        mBlurPipeline[0]->Bind(frameIndex, 0, mShadowBlurUniform[frameIndex]);
-        mBlurPipeline[1]->Bind(frameIndex, 0, mShadowBlurUniform[frameIndex]);
+        mBlurPipeline[0]->Bind(frameIndex, 0, mShadowCameraUniform[frameIndex]);
+        mBlurPipeline[1]->Bind(frameIndex, 0, mShadowCameraUniform[frameIndex]);
     }
 }
 
@@ -329,11 +330,7 @@ void ShadowRenderer::Render(vk::CommandBuffer commandBuffer, const uint32_t fram
         }
 
         const std::vector<vk::ClearValue> clearValues{
-            vk::ClearColorValue(
-                mSettingsManager->GetShadowFar(),
-                mSettingsManager->GetShadowFar() * mSettingsManager->GetShadowFar(),
-                0.0f,
-                0.0f),
+            vk::ClearColorValue(1.0f, 0.0f, 0.0f, 0.0f),
             vk::ClearDepthStencilValue(1.0f, 0),
         };
         const vk::RenderPassBeginInfo renderPassBeginInfo =

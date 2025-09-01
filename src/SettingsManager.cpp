@@ -13,7 +13,6 @@ const std::array<uint32_t, 7> SettingsManager::RaysPerProbe{8, 16, 32, 64, 128, 
 
 SettingsManager::SettingsManager()
     : mSSAOControlData(),
-      mShadowTaps(16),
       mShadowMapResolution(ShadowMapResolutions[4]),
       mShadowFrustumWidth(50.0f),
       mShadowDistance(100.0f),
@@ -21,6 +20,8 @@ SettingsManager::SettingsManager()
       mShadowFar(500.0f),
       mLightDir(0.0f, -1.0f, 0.0f),
       mLightRadiance(1.0f),
+      mShadowESMControl(300.0f),
+      mShadowBlurRadius(0.15f),
       mProbeGridCount(24u, 12u, 24u),
       mProbeResolution(ProbeResolutions[2]),
       mProbeSpacing(3.0f, 2.5f, 3.0f),
@@ -30,7 +31,9 @@ SettingsManager::SettingsManager()
       mHysteresis(0.95),
       mProbeRadius(0.15f),
       mRaysPerProbe(RaysPerProbe[2]),
-      mRenderProbes(true) {}
+      mRenderProbes(true),
+      mDirectWeight(1.0f),
+      mIndirectWeight(1.0f) {}
 
 SettingsManager::~SettingsManager() {}
 

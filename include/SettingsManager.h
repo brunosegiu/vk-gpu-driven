@@ -19,7 +19,6 @@ public:
 
     SSAOControlData& GetSSAOControlData() { return mSSAOControlData; }
 
-    uint32_t& GetShadowTaps() { return mShadowTaps; }
     uint32_t GetShadowMapResolution() { return mShadowMapResolution; }
     float& GetShadowFrustumWidth() { return mShadowFrustumWidth; }
     float& GetShadowDistance() { return mShadowDistance; }
@@ -27,6 +26,8 @@ public:
     float& GetShadowFar() { return mShadowFar; }
     glm::vec3& GetLightDir() { return mLightDir; }
     glm::vec3& GetLightRadiance() { return mLightRadiance; }
+    float& GetESMControl() { return mShadowESMControl; }
+    float& GetShadowBlurRadius() { return mShadowBlurRadius; }
 
     void SetShadowMapResolution(const uint32_t shadowMapResolution) {
         mShadowMapResolution = shadowMapResolution;
@@ -45,6 +46,9 @@ public:
     uint32_t GetProbeRayCount() { return mRaysPerProbe; }
     bool& GetRenderProbes() { return mRenderProbes; }
 
+    float& GetDirectWeight() { return mDirectWeight; }
+    float& GetIndirectWeight() { return mIndirectWeight; }
+
     ~SettingsManager();
 
     static const std::array<uint32_t, 6> ShadowMapResolutions;
@@ -53,7 +57,6 @@ public:
 
 private:
     SSAOControlData mSSAOControlData;
-    uint32_t mShadowTaps;
     uint32_t mShadowMapResolution;
     float mShadowFrustumWidth;
     float mShadowDistance;
@@ -61,6 +64,8 @@ private:
     float mShadowFar;
     glm::vec3 mLightDir;
     glm::vec3 mLightRadiance;
+    float mShadowESMControl;
+    float mShadowBlurRadius;
 
     // DGGI
     glm::uvec3 mProbeGridCount;
@@ -73,5 +78,9 @@ private:
     float mProbeRadius;
     uint32_t mRaysPerProbe;
     bool mRenderProbes;
+
+    // Debug
+    float mDirectWeight;
+    float mIndirectWeight;
 };
 }  // namespace VKRT
