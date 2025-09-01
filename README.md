@@ -1,7 +1,15 @@
-# Vulkan GPU driven renderer (toy)
+# Vulkan GPU driven renderer:
+
+## Features:
+- GPU driven culling (meshlet AABB + normal cones)
+- Visibility Buffer shading with bindless descriptors
+- DDGI
+- Naive SSAO
+- ESM shadows
+- Forward transparent pass
 
 <p align="left">
-  <img src="https://github.com/user-attachments/assets/278899af-6788-46cf-93bb-6c8d9942ce4e" width="800"/>
+  <img src="https://github.com/user-attachments/assets/e5844bff-43a0-4e9c-ae86-beeac5eb46b1" width="800"/>
 </p>
 
 ## References:
