@@ -286,6 +286,22 @@ void UIRenderer::Update() {
             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                 ImGuiWindowFlags_NoDecoration);
         {
+            if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::SliderFloat2("Direction", &mLightPitchYaw.x, -1.0f, 1.0f)) {
+                    const float pitch = glm::pi<float>() * mLightPitchYaw.x;
+                    const float yaw = -glm::pi<float>() * mLightPitchYaw.y;
+                    mSettingsManager->GetLightDir() = glm::vec3(
+                        glm::cos(pitch) * glm::cos(yaw),
+                        glm::sin(pitch),
+                        glm::cos(pitch) * glm::sin(-yaw));
+                }
+                ImGui::SliderFloat3(
+                    "Radiance",
+                    &mSettingsManager->GetLightRadiance().x,
+                    0.1f,
+                    100.0f);
+            }
+
             if (ImGui::CollapsingHeader("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
                 const char* comboPreviewValue =
                     mShadowResolutionOptions[mSelectedShadowResolutionIndex].c_str();
@@ -306,22 +322,6 @@ void UIRenderer::Update() {
                     }
                     ImGui::EndCombo();
                 }
-
-                if (ImGui::SliderFloat2("Light direction", &mLightPitchYaw.x, -1.0f, 1.0f)) {
-                    const float pitch = glm::pi<float>() * mLightPitchYaw.x;
-                    const float yaw = -glm::pi<float>() * mLightPitchYaw.y;
-                    mSettingsManager->GetLightDir() = glm::vec3(
-                        glm::cos(pitch) * glm::cos(yaw),
-                        glm::sin(pitch),
-                        glm::cos(pitch) * glm::sin(-yaw));
-                }
-                ImGui::SliderFloat3(
-                    "Light radiance",
-                    &mSettingsManager->GetLightRadiance().x,
-                    0.1f,
-                    100.0f);
-
-                ImGui::Separator();
 
                 ImGui::SliderFloat(
                     "ESM exponent",
@@ -433,16 +433,6 @@ void UIRenderer::Update() {
                     "%.2f",
                     ImGuiSliderFlags_Logarithmic);
                 ImGui::SliderFloat("Hysteresis", &mSettingsManager->GetHysteresis(), 0.0f, 1.0f);
-                ImGui::SliderFloat(
-                    "Ray max length",
-                    &mSettingsManager->GetProbeMaxRayLength(),
-                    0.01f,
-                    2000.0f);
-                ImGui::SliderFloat(
-                    "Ray min length",
-                    &mSettingsManager->GetProbeMinRayLength(),
-                    0.01f,
-                    10.0f);
                 ImGui::Checkbox("Draw probes", &mSettingsManager->GetRenderProbes());
                 if (mSettingsManager->GetRenderProbes()) {
                     ImGui::SliderFloat(
@@ -450,6 +440,23 @@ void UIRenderer::Update() {
                         &mSettingsManager->GetProbeRadius(),
                         0.01f,
                         1.0f);
+                }
+                if (ImGui::CollapsingHeader("Advanced")) {
+                    ImGui::SliderFloat(
+                        "Energy preservation",
+                        &mSettingsManager->GetEnergyPreservation(),
+                        0.0f,
+                        1.0f);
+                    ImGui::SliderFloat(
+                        "Ray max length",
+                        &mSettingsManager->GetProbeMaxRayLength(),
+                        0.01f,
+                        2000.0f);
+                    ImGui::SliderFloat(
+                        "Ray min length",
+                        &mSettingsManager->GetProbeMinRayLength(),
+                        0.01f,
+                        10.0f);
                 }
             }
 

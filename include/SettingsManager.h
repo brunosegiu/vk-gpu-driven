@@ -45,6 +45,7 @@ public:
     float& GetProbeRadius() { return mProbeRadius; }
     uint32_t GetProbeRayCount() { return mRaysPerProbe; }
     bool& GetRenderProbes() { return mRenderProbes; }
+    float& GetEnergyPreservation() { return mEnergyPreservation; }
 
     float& GetDirectWeight() { return mDirectWeight; }
     float& GetIndirectWeight() { return mIndirectWeight; }
@@ -78,6 +79,7 @@ private:
     float mProbeRadius;
     uint32_t mRaysPerProbe;
     bool mRenderProbes;
+    float mEnergyPreservation;
 
     // Debug
     float mDirectWeight;

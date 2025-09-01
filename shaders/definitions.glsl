@@ -113,6 +113,7 @@ struct DDGIData {
     float hysteresis;
     uint frameIndex;
     float probeRadius;
+    float energyPreservation;
 };
 
 #endif

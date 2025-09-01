@@ -217,6 +217,7 @@ void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t
         mDDGIData.maxRayLength = mSettingsManager->GetProbeMaxRayLength();
         mDDGIData.hysteresis = mSettingsManager->GetHysteresis();
         mDDGIData.probeRadius = mSettingsManager->GetProbeRadius();
+        mDDGIData.energyPreservation = mSettingsManager->GetEnergyPreservation();
 
         mDDGIData.randomRotation = randomRotation();
         if (mDDGIData.probeGridOrigin != mSettingsManager->GetProbeGridOrigin() ||

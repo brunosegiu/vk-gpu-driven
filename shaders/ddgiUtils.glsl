@@ -71,8 +71,6 @@ vec2 sampleProbeMoments(uint probeIndex, vec3 direction, sampler nearSampler, te
     return texture(sampler2DArray(moments, nearSampler), vec3(uv, float(probeIndex))).rg;
 }
 
-const float EnergyPreservation = 0.95;
-
 vec3 ddgiIndirectDiffuse(
     vec3 worldSpacePosition,
     vec3 normal,
@@ -127,7 +125,7 @@ vec3 ddgiIndirectDiffuse(
         }
     }
     vec3 toalIrradiance = (accumulatedWeight > EPSILON) ? (accumulatedIrradiance / accumulatedWeight) : vec3(0.0f);
-    return toalIrradiance * PI * 0.5f * EnergyPreservation;
+    return toalIrradiance * PI * 0.5f * ddgi.energyPreservation;
 }
 
 #endif

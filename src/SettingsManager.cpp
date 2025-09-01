@@ -29,9 +29,10 @@ SettingsManager::SettingsManager()
       mProbeMaxRayLength(1000.0f),
       mProbeMinRayLength(0.50f),
       mHysteresis(0.95),
-      mProbeRadius(0.15f),
+      mProbeRadius(0.1f),
       mRaysPerProbe(RaysPerProbe[2]),
       mRenderProbes(true),
+      mEnergyPreservation(0.92f),
       mDirectWeight(1.0f),
       mIndirectWeight(1.0f) {}
 

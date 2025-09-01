@@ -23,6 +23,7 @@ struct DDGIData {
     float hysteresis;
     uint32_t frameIndex;
     float probeRadius;
+    float energyPreservation;
 };
 
 class DDGIRenderer : public RefCountPtr {

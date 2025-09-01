@@ -6,7 +6,14 @@
 #include "ddgiUtils.glsl"
 #include "updateProbesParameters.glsl"
 
-layout(local_size_x = 8, local_size_y = 8) in;
+#define LOCAL_SIZE_X 8
+#define LOCAL_SIZE_Y 8
+#define CACHE_SIZE 64
+
+layout(local_size_x = LOCAL_SIZE_X, local_size_y = LOCAL_SIZE_Y) in;
+
+shared vec4 RayDirectionDepthCache[CACHE_SIZE];
+shared vec3 RayRadianceCache[CACHE_SIZE];
 
 vec3 sampleProbeIrradiance(uvec3 coordinates) {
     return texelFetch(sampler2DArray(uPrevIrradianceTargets, uFramebufferSampler), ivec3(coordinates), 0).rgb;
@@ -14,6 +21,33 @@ vec3 sampleProbeIrradiance(uvec3 coordinates) {
 
 vec2 sampleProbeMoments(uvec3 coordinates) {
     return texelFetch(sampler2DArray(uPrevProbeMoments, uFramebufferSampler), ivec3(coordinates), 0).rg;
+}
+
+vec4 sampleDirectionDepth(ivec2 coodinates) {
+    return texelFetch(
+        sampler2D(uProbeDirectionDepth, uFramebufferSampler),
+        coodinates,
+        0);
+}
+
+vec3 sampleRadiance(ivec2 coordinate) {        
+    return texelFetch(
+            sampler2D(uProbeRadianceTargets, uFramebufferSampler),
+            coordinate,
+            0).xyz;
+}
+
+// Caching idea from: https://github.com/diharaw/hybrid-rendering/blob/master/src/shaders/gi/gi_probe_update.glsl
+void populateCache(uint probeId, uint offset, uint batchRays, uint totalRays) {
+    const uint localRayIndex = uint(gl_LocalInvocationIndex);
+    if (localRayIndex < batchRays) {
+        const uint rayIndex = localRayIndex + offset;
+        vec4 directionDepth = sampleDirectionDepth(ivec2(rayIndex, probeId));
+        const vec3 direction = normalize(directionDepth.xyz);
+        const float depth = directionDepth.w;
+        RayDirectionDepthCache[localRayIndex] = vec4(direction, depth);
+        RayRadianceCache[localRayIndex] = sampleRadiance(ivec2(rayIndex, probeId));
+    }
 }
 
 void main() {
@@ -27,49 +61,47 @@ void main() {
     ivec2 firstStageSize = textureSize(sampler2D(uProbeRadianceTargets, uFramebufferSampler), 0);
     const uint raysPerProbe = uint(firstStageSize.x);
 
-    const float energyConservation = 0.95f;
+    const uint raysPerBatch = CACHE_SIZE;
 
     float sumWeight = 0.0f;
     vec2 moments = vec2(0.0f);
     vec3 irradiance = vec3(0.0f);
-    for (uint rayIndex = 0; rayIndex < raysPerProbe; ++rayIndex) {
-        ivec2 sampleIndex = ivec2(int(rayIndex), int(probeIndex));
+    for (uint rayIndex = 0; rayIndex < raysPerProbe; rayIndex += raysPerBatch) {
+        populateCache(probeIndex, rayIndex, raysPerBatch, raysPerProbe);
 
-        const vec4 directionDepth = texelFetch(
-            sampler2D(uProbeDirectionDepth, uFramebufferSampler),
-            sampleIndex,
-            0);
-        const vec3 direction = normalize(directionDepth.xyz);
-        const float depth = directionDepth.w;
+        barrier();
 
-        const vec3 radiance = energyConservation * texelFetch(
-            sampler2D(uProbeRadianceTargets, uFramebufferSampler),
-            sampleIndex,
-            0).xyz;
-        
-        float weight = max(0.0, dot(texelDirection, direction));
+        for (uint cachedRayIndex = 0; cachedRayIndex < raysPerBatch; ++cachedRayIndex) {
+            vec4 rayDirectionDepth = RayDirectionDepthCache[cachedRayIndex];
+            const vec3 direction = rayDirectionDepth.xyz;
+            const float depth = rayDirectionDepth.w;
 
-        irradiance += weight * radiance;
-        moments.x += weight * depth;
-        moments.y += weight * depth * depth;
+            vec3 radiance = RayRadianceCache[cachedRayIndex];
 
-        sumWeight += weight;
-    }
+            float weight = max(0.0, dot(texelDirection, direction));
 
-    if (sumWeight < 1e-6) {
-        irradiance = vec3(0.0f);
-        moments = vec2(INF);
-    } else {
-        irradiance /= sumWeight;
-        moments /= sumWeight;
+            irradiance += weight * radiance * uDDGI.energyPreservation;
+            moments.x += weight * depth;
+            moments.y += weight * depth * depth;
+            sumWeight += weight;
+        }
+
+        barrier();
     }
 
     vec3 prevFrameIrradiance = uDDGI.frameIndex == 0 ? vec3(0.0f) : sampleProbeIrradiance(gl_GlobalInvocationID);
     vec2 prevFrameMoments = uDDGI.frameIndex == 0 ? vec2(0.0f) : sampleProbeMoments(gl_GlobalInvocationID);
     float hysteresis = uDDGI.frameIndex == 0 ? 0.0f : uDDGI.hysteresis;
 
-    irradiance = mix(irradiance, prevFrameIrradiance, hysteresis);
-    moments = mix(moments, prevFrameMoments, hysteresis);
+    if (sumWeight >= 1e-6) {
+        irradiance /= sumWeight;
+        moments /= sumWeight;
+        irradiance = mix(irradiance, prevFrameIrradiance, hysteresis);
+        moments = mix(moments, prevFrameMoments, hysteresis);
+    } else {
+        irradiance = prevFrameIrradiance;
+        moments = prevFrameMoments;
+    }
 
     imageStore(uConvolutedProbeIrradianceTargets, ivec3(gl_GlobalInvocationID), vec4(irradiance, 0.0));
     imageStore(uProbeMoments, ivec3(gl_GlobalInvocationID), vec4(moments, 0.0, 0.0));
