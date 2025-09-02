@@ -40,6 +40,7 @@ Renderer::Renderer(
     mDDGIRenderer = new DDGIRenderer(mContext, mScene, mSettingsManager);
     mShadowRenderer = new ShadowRenderer(mContext, mScene, mSettingsManager);
     mPostProcessingRenderer = new PostProcessingRenderer(mContext, mScene, mSettingsManager);
+    mReflectionsRenderer = new GlossyReflectionsRenderer(mContext, mScene, mSettingsManager);
 
     AddRenderTargets();
     AddPipelines();
@@ -114,6 +115,7 @@ void Renderer::AddRenderTargets() {
     mDDGIRenderer->AddRenderTargets(mMainRenderTarget, mDepthRenderTarget);
     mShadowRenderer->AddRenderTargets();
     mPostProcessingRenderer->AddRenderTargets();
+    mReflectionsRenderer->AddRenderTargets();
 }
 
 void Renderer::AddPipelines() {
@@ -192,6 +194,7 @@ void Renderer::AddPipelines() {
     mDDGIRenderer->AddPipelines();
     mShadowRenderer->AddPipelines();
     mPostProcessingRenderer->AddPipelines();
+    mReflectionsRenderer->AddPipelines();
 }
 
 void Renderer::AddResources() {
@@ -310,6 +313,8 @@ void Renderer::AddResources() {
     mShadowRenderer->AddResources();
 
     mPostProcessingRenderer->AddResources();
+
+    mReflectionsRenderer->AddResources();
 }
 
 void Renderer::RemoveRenderTargets() {
@@ -328,6 +333,8 @@ void Renderer::RemoveRenderTargets() {
     mShadowRenderer->RemoveRenderTargets();
 
     mPostProcessingRenderer->RemoveRenderTargets();
+
+    mReflectionsRenderer->RemoveRenderTargets();
 }
 
 void Renderer::RemovePipelines() {
@@ -343,6 +350,8 @@ void Renderer::RemovePipelines() {
     mShadowRenderer->RemovePipelines();
 
     mPostProcessingRenderer->RemovePipelines();
+
+    mReflectionsRenderer->RemovePipelines();
 }
 
 void Renderer::RemoveResources() {}
@@ -386,6 +395,7 @@ void Renderer::UpdatePersistentUniforms() {
     {
         DDGIRenderer::PersistentParameters parameters{
             .mScenePersistentDataParameter = mScenePersistentDataBuffer,
+            .mShadowMap = mShadowRenderer->GetShadowMap(),
             .mMaterialSampler = mMaterialSampler,
             .mFrameBufferSampler = mFrameBufferSampler,
             .mMaterialsUniform = mMaterialsUniform,
@@ -397,6 +407,24 @@ void Renderer::UpdatePersistentUniforms() {
             .mMaterialsTextures = mSceneTextures,
         };
         mDDGIRenderer->UpdatePersistentUniforms(parameters);
+    }
+
+    {
+        GlossyReflectionsRenderer::PersistentParameters parameters{
+            .mScenePersistentDataParameter = mScenePersistentDataBuffer,
+            .mVisibilityBuffer = mVisibilityBuffer,
+            .mShadowMap = mShadowRenderer->GetShadowMap(),
+            .mMaterialSampler = mMaterialSampler,
+            .mFrameBufferSampler = mFrameBufferSampler,
+            .mMaterialsUniform = mMaterialsUniform,
+            .mIndexBufferUniform = mScene->GetMeshSystem()->GetIndexBuffer(),
+            .mPositionBufferUniform = mScene->GetMeshSystem()->GetVertexBuffer(),
+            .mTexCoordBufferUniform = mScene->GetMeshSystem()->GetTexCoordBuffer(),
+            .mNormalBufferUniform = mScene->GetMeshSystem()->GetNormalBuffer(),
+            .mTangentBufferUniform = mScene->GetMeshSystem()->GetTangentBuffer(),
+            .mMaterialsTextures = mSceneTextures,
+        };
+        mReflectionsRenderer->UpdatePersistentUniforms(parameters);
     }
 
     // Shadow resources
@@ -443,12 +471,13 @@ void Renderer::UpdatePersistentUniforms() {
     mShadePassPipeline->Bind(5, mShadowRenderer->GetShadowMap());
     mShadePassPipeline->Bind(6, mVisibilityBuffer);
     mShadePassPipeline->Bind(7, mPostProcessingRenderer->GetSSAOBuffer());
-    mShadePassPipeline->Bind(8, mScene->GetMeshSystem()->GetIndexBuffer());
-    mShadePassPipeline->Bind(9, mScene->GetMeshSystem()->GetVertexBuffer());
-    mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetTexCoordBuffer());
-    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetNormalBuffer());
-    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetTangentBuffer());
-    mShadePassPipeline->Bind(13, mSceneTextures);
+    mShadePassPipeline->Bind(8, mReflectionsRenderer->GetReflectionsTexture());
+    mShadePassPipeline->Bind(9, mScene->GetMeshSystem()->GetIndexBuffer());
+    mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetVertexBuffer());
+    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetTexCoordBuffer());
+    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetNormalBuffer());
+    mShadePassPipeline->Bind(13, mScene->GetMeshSystem()->GetTangentBuffer());
+    mShadePassPipeline->Bind(14, mSceneTextures);
 }
 
 void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
@@ -528,15 +557,19 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
 
     // DDGI
     {
-        struct PerFrameParameters {
-            std::vector<ScopedRefPtr<VulkanBuffer>> mCameraUniform;
-            std::vector<ScopedRefPtr<VulkanBuffer>> mShadowCameraUniform;
-            std::vector<ScopedRefPtr<VulkanBuffer>> mPerMeshParameters;
-        };
         mDDGIRenderer->UpdateUniforms(
-            {.mCameraUniform = mCameraUniform,
-             .mShadowCameraUniform = mShadowRenderer->GetShadowUniform(),
-             .mPerMeshParameters = mPerMeshBuffers},
+            {.mCameraUniform = mCameraUniform[frameIndex],
+             .mShadowCameraUniform = mShadowRenderer->GetShadowUniform()[frameIndex],
+             .mPerMeshParameters = mPerMeshBuffers[frameIndex]},
+            frameIndex);
+    }
+
+    // Reflections
+    {
+        mReflectionsRenderer->UpdateUniforms(
+            {.mCameraUniform = mCameraUniform[frameIndex],
+             .mShadowCameraUniform = mShadowRenderer->GetShadowUniform()[frameIndex],
+             .mPerMeshParameters = mPerMeshBuffers[frameIndex]},
             frameIndex);
     }
 }
@@ -581,14 +614,14 @@ void Renderer::Render(Camera* camera) {
 
         const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
 
-        mDDGIRenderer->Render(command.buffer, mCurrentFrameIndex);
-
         mContext->BeginMarker(command.buffer, "Basepass culling");
         for (auto& visEntry : mVisibilityManagers) {
             visEntry.second->Dispatch(command.buffer, mCurrentFrameIndex);
         }
         mContext->EndMarker(command.buffer);
+
         mShadowRenderer->Render(command.buffer, mCurrentFrameIndex);
+
         // Base pass
         {
             mContext->BeginMarker(command.buffer, "Base pass");
@@ -688,6 +721,10 @@ void Renderer::Render(Camera* camera) {
         }
 
         mPostProcessingRenderer->Render(command.buffer, mCurrentFrameIndex, mDepthBuffer);
+
+        mDDGIRenderer->Render(command.buffer, mCurrentFrameIndex);
+
+        mReflectionsRenderer->Render(command.buffer, mCurrentFrameIndex);
 
         // Shade pass
         {

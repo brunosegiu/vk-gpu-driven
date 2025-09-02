@@ -40,6 +40,9 @@ struct Resource {
         ShadowMomentsBlurVerticalFragmentShader,
         ShadowMomentsBlurHorizontalVertexShader,
         ShadowMomentsBlurHorizontalFragmentShader,
+        GlossyReflectionsGenShader,
+        GlossyReflectionsHitShader,
+        GlossyReflectionsMissShader,
     };
 };
 

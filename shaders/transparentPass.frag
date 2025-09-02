@@ -66,9 +66,11 @@ void main() {
     params.roughness = roughness;
     params.emissive = emissive;
     params.visibility = 1.0f;
-    params.indirect = vec3(0.0f);
+    params.indirectDiffuse = vec3(0.0f);
+    params.indirectGlossy = vec3(0.0f);
     params.directWeight = uLightParameters.directWeight;
-    params.indirectWeight = uLightParameters.indirectWeight;
+    params.indirectDiffuseWeight = uLightParameters.indirectDiffuseWeight;
+    params.indirectGlossyWeight = uLightParameters.indirectGlossyWeight;
 
     vec3 color = evalLighting(params);
 

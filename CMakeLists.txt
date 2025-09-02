@@ -49,6 +49,7 @@ set(HEADERS
     include/PostProcessingRenderer.h
     include/SettingsManager.h
     include/Utils.h
+    include/GlossyReflectionsRenderer.h
 )
 
 set(SOURCE
@@ -88,6 +89,7 @@ set(SOURCE
     src/PostProcessingRenderer.cpp
     src/SettingsManager.cpp
     src/Utils.cpp
+    src/GlossyReflectionsRenderer.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
@@ -112,6 +114,7 @@ set(SHADER_HEADERS
     probeParameters.glsl
     shadowMomentsBlurVerticalParameters.glsl
     shadowMomentsBlurHorizontalParameters.glsl
+    glossyReflectionsParameters.glsl
 )
 
 set(SHADERS
@@ -142,7 +145,10 @@ set(SHADERS
     shadowMomentsBlurVertical.vert
     shadowMomentsBlurVertical.frag
     shadowMomentsBlurHorizontal.vert
-    shadowMomentsBlurHorizontal.frag
+    shadowMomentsBlurHorizontal.frag    
+    glossyReflections.rgen
+    glossyReflections.rchit
+    glossyReflections.rmiss
 )
 
 if(WIN32)

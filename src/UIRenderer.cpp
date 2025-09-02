@@ -462,7 +462,16 @@ void UIRenderer::Update() {
 
             if (ImGui::CollapsingHeader("Debug")) {
                 ImGui::SliderFloat("Direct", &mSettingsManager->GetDirectWeight(), 0.00f, 1.0f);
-                ImGui::SliderFloat("Indirect", &mSettingsManager->GetIndirectWeight(), 0.0f, 1.0f);
+                ImGui::SliderFloat(
+                    "Indirect diffuse",
+                    &mSettingsManager->GetIndirectDiffuseWeight(),
+                    0.0f,
+                    1.0f);
+                ImGui::SliderFloat(
+                    "Indirect glossy",
+                    &mSettingsManager->GetIndirectGlossyWeight(),
+                    0.0f,
+                    1.0f);
             }
         }
         ImGui::End();

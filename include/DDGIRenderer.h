@@ -47,6 +47,7 @@ public:
 
     struct PersistentParameters {
         ScopedRefPtr<VulkanBuffer> mScenePersistentDataParameter;
+        ScopedRefPtr<Texture> mShadowMap;
         vk::Sampler mMaterialSampler;
         vk::Sampler mFrameBufferSampler;
         ScopedRefPtr<VulkanBuffer> mMaterialsUniform;
@@ -60,11 +61,11 @@ public:
     void UpdatePersistentUniforms(const PersistentParameters& parameters);
 
     struct PerFrameParameters {
-        std::vector<ScopedRefPtr<VulkanBuffer>> mCameraUniform;
-        std::vector<ScopedRefPtr<VulkanBuffer>> mShadowCameraUniform;
-        std::vector<ScopedRefPtr<VulkanBuffer>> mPerMeshParameters;
+        ScopedRefPtr<VulkanBuffer> mCameraUniform;
+        ScopedRefPtr<VulkanBuffer> mShadowCameraUniform;
+        ScopedRefPtr<VulkanBuffer> mPerMeshParameters;
     };
-    void UpdateUniforms(const PerFrameParameters& parameters, uint32_t imageIndex);
+    void UpdateUniforms(const PerFrameParameters& parameters, uint32_t frameIndex);
 
     const std::vector<ScopedRefPtr<VulkanBuffer>>& GetProbeData() { return mDDGIProbeData; }
 

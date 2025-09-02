@@ -48,7 +48,8 @@ public:
     float& GetEnergyPreservation() { return mEnergyPreservation; }
 
     float& GetDirectWeight() { return mDirectWeight; }
-    float& GetIndirectWeight() { return mIndirectWeight; }
+    float& GetIndirectDiffuseWeight() { return mIndirectDiffuseWeight; }
+    float& GetIndirectGlossyWeight() { return mIndirectGlossyWeight; }
 
     ~SettingsManager();
 
@@ -83,6 +84,7 @@ private:
 
     // Debug
     float mDirectWeight;
-    float mIndirectWeight;
+    float mIndirectDiffuseWeight;
+    float mIndirectGlossyWeight;
 };
 }  // namespace VKRT

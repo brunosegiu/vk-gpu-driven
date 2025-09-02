@@ -80,7 +80,8 @@ struct LightData {
     float esmControl;
     float shadowMapBlurRadius;
     float directWeight;
-    float indirectWeight;
+    float indirectDiffuseWeight;
+    float indirectGlossyWeight;
 };
 
 const int ColorPayloadIndex = 0;

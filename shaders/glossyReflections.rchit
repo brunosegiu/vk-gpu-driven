@@ -5,11 +5,10 @@
 
 #include "definitions.glsl"
 #include "shading.glsl"
-#include "raytraceProbeParameters.glsl"
+#include "glossyReflectionsParameters.glsl"
 #include "ddgiUtils.glsl"
 
 layout(location = ColorPayloadIndex) rayPayloadInEXT RayPayload rayPayload;
-layout(location = ShadowPayloadIndex) rayPayloadEXT float shadowAttenuation;
 
 hitAttributeEXT vec2 hitAttributes;
 
@@ -32,24 +31,6 @@ vec3 interpolate(vec3 a, vec3 b, vec3 c, vec3 barycentricCoords) {
 vec4 interpolate(vec4 a, vec4 b, vec4 c, vec3 barycentricCoords) {
     return a * barycentricCoords.x + b * barycentricCoords.y +
                           c * barycentricCoords.z;
-}
-
-float traceShadowRay(const vec3 origin, const vec3 direction, float distance) {
-    shadowAttenuation = 0.0f;
-    traceRayEXT(
-        uTopLevelAS,
-        gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT |
-            gl_RayFlagsSkipClosestHitShaderEXT,
-        0xFF,
-        0,
-        0,
-        1,
-        origin,
-        TMin,
-        direction,
-        distance,
-        ShadowPayloadIndex);
-    return shadowAttenuation;
 }
 
 void main() {
@@ -125,8 +106,8 @@ void main() {
     float metallic = material.metallic;
     if (material.metallicRoughnessTextureIndex >= 0) {
         vec2 metallicRoughness = sampleTexture(material.metallicRoughnessTextureIndex, uv).rg;
-        roughness = metallicRoughness.r;
-        metallic = metallicRoughness.g;
+        roughness *= metallicRoughness.r;
+        metallic *= metallicRoughness.g;
     }
 
     vec4 shadowCoord = (ShadowBiasMat * uLightParameters.viewProjection) * vec4(worldSpacePosition, 1.0f);
@@ -134,7 +115,9 @@ void main() {
 
     vec3 viewVector = normalize(gl_WorldRayOriginEXT - worldSpacePosition);
 
-    vec3 indirect = ddgiIndirectDiffuse(worldSpacePosition, normal, viewVector, uDDGI, uFrameBufferTextureSampler, uPrevProbeIrradianceTargets, uFrameBufferTextureSampler, uPrevProbeMomentTargets); 
+    // Sampling indirect here is just way too much, instead pass a fraction of the radiance
+    // vec3 indirect = ddgiIndirectDiffuse(worldSpacePosition, normal, viewVector, uDDGI, uMaterialTextureSampler, uProbeIrradianceTargets, uFrameBufferTextureSampler, uProbeMomentTargets); 
+    vec3 indirect = uLightParameters.radiance * 0.05f;
 
     ShadingParams params;
     params.N = normal;

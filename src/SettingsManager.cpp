@@ -34,7 +34,8 @@ SettingsManager::SettingsManager()
       mRenderProbes(true),
       mEnergyPreservation(0.92f),
       mDirectWeight(1.0f),
-      mIndirectWeight(1.0f) {}
+      mIndirectDiffuseWeight(1.0f),
+      mIndirectGlossyWeight(1.0f) {}
 
 SettingsManager::~SettingsManager() {}
 

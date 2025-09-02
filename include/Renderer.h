@@ -5,6 +5,7 @@
 #include "ComputePipeline.h"
 #include "Context.h"
 #include "DDGIRenderer.h"
+#include "GlossyReflectionsRenderer.h"
 #include "GraphicsPipeline.h"
 #include "PostProcessingRenderer.h"
 #include "RefCountPtr.h"
@@ -87,5 +88,6 @@ private:
     ScopedRefPtr<DDGIRenderer> mDDGIRenderer;
     ScopedRefPtr<ShadowRenderer> mShadowRenderer;
     ScopedRefPtr<PostProcessingRenderer> mPostProcessingRenderer;
+    ScopedRefPtr<GlossyReflectionsRenderer> mReflectionsRenderer;
 };
 }  // namespace VKRT

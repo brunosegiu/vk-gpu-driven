@@ -1,17 +1,15 @@
 #version 460
-
+#extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_nonuniform_qualifier : enable
 
 #include "definitions.glsl"
-#include "utils.glsl"
-#include "shading.glsl"
-#include "visibilityBufferUtils.glsl"
 #include "ddgiUtils.glsl"
-#include "visibilityBufferShadeParameters.glsl"
+#include "glossyReflectionsParameters.glsl"
+#include "visibilityBufferUtils.glsl"
+#include "shading.glsl"
+#include "utils.glsl"
 
-layout(location = 0) in vec2 inTexCoord;
-
-layout(location = 0) out vec4 outColor;
+layout(location = ColorPayloadIndex) rayPayloadEXT RayPayload rayPayload;
 
 vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
     return textureGrad(
@@ -23,6 +21,7 @@ vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
 
 void main() {
     ivec2 vbSize = textureSize(usampler2D(uVisibilityBuffer, uFrameBufferTextureSampler), 0);
+    vec2 inTexCoord = (vec2(gl_LaunchIDEXT.xy) + vec2(0.5f)) / vec2(vbSize);
     uint encodedVbData = texelFetch(
             usampler2D(uVisibilityBuffer, uFrameBufferTextureSampler),
             ivec2(inTexCoord * vbSize),
@@ -34,7 +33,7 @@ void main() {
         ProceduralSkyShaderParameters params = initSkyShaderParameters(-uLightParameters.direction);
         params.lightColor = normalize(uLightParameters.radiance);
         vec3 viewDir = viewDirFromViewProjection(uCameraParameters.invViewProjection, ndc);
-        outColor = vec4(getProceduralSkyColor(params, viewDir, 0), 1.0);
+        imageStore(uReflectionTarget, ivec2(gl_LaunchIDEXT.xy), vec4(getProceduralSkyColor(params, viewDir, 0), 0.0));
         return;
     }
 
@@ -104,53 +103,41 @@ void main() {
         normal = normalize(TBN * normalTangentSpace);
     }
 
+    float roughness = material.roughness;
+    float metallic = material.metallic;
+    if (material.metallicRoughnessTextureIndex >= 0) {
+        vec2 metallicRoughness = sampleTexture(material.metallicRoughnessTextureIndex, uvWithDerivs).rg;
+        roughness = metallicRoughness.r;
+        metallic = metallicRoughness.g;
+    }
+
     vec4 albedo = vec4(material.albedo.rgb, 0.5f);
     if (material.albedoTextureIndex >= 0) {
         albedo = sampleTexture(material.albedoTextureIndex, uvWithDerivs);
     }
 
-    vec3 emissive = material.emissive.rgb;
-    if (material.emissiveTextureIndex >= 0) {
-        emissive = sampleTexture(material.emissiveTextureIndex, uvWithDerivs).rgb;
-    }
+    vec3 V = normalize(uCameraParameters.cameraPos.xyz - worldPos);
 
-    float roughness = material.roughness;
-    float metallic = material.metallic;
-    if (material.metallicRoughnessTextureIndex >= 0) {
-        vec2 metallicRoughness = sampleTexture(material.metallicRoughnessTextureIndex, uvWithDerivs).rg;
-        roughness *= metallicRoughness.r;
-        metallic *= metallicRoughness.g;
-    }
+    vec3 origin = worldPos + normal * 1e-3;
+    vec3 direction = reflect(-V, normal);
 
-    vec4 shadowCoord = (ShadowBiasMat * uLightParameters.viewProjection) * vec4(worldPos, 1.0f);
-    float shadowTerm = filterESM(shadowCoord / shadowCoord.w, uLightParameters.esmControl, uMaterialTextureSampler, uShadowMap);
+    rayPayload.color = vec3(0.0f);
+    rayPayload.depth = 0;
 
-    vec3 viewVector = normalize(uCameraParameters.cameraPos.xyz - worldPos);
+    traceRayEXT(
+        uTopLevelAS,
+        gl_RayFlagsOpaqueEXT,
+        AllMask,
+        DefaultSBTOffset,
+        DefaultSBTStride,
+        ColorMissIndex,
+        origin,
+        0.01,
+        direction,
+        1000.0f,
+        ColorPayloadIndex);
 
-    float visibility = texture(sampler2D(uSSAOBuffer, uFrameBufferTextureSampler), inTexCoord).r;
+    vec3 reflectionColor = rayPayload.color;
 
-    vec3 indirect = ddgiIndirectDiffuse(worldPos, normal, viewVector, uDDGI, uIrradianceSampler, uProbeIrradianceTargets, uFrameBufferTextureSampler, uProbeMomentTargets); 
-
-    vec3 glossyIndirect = texture(sampler2D(uReflectionsBuffer, uIrradianceSampler), inTexCoord).rgb;
-
-    ShadingParams params;
-    params.N = normal;
-    params.V = viewVector;
-    params.L = -uLightParameters.direction;
-    params.radiance = uLightParameters.radiance;
-    params.shadowTerm = shadowTerm;
-    params.albedo = albedo;
-    params.metallic = metallic;
-    params.roughness = roughness;
-    params.emissive = emissive;
-    params.visibility = visibility;
-    params.indirectDiffuse = indirect;
-    params.indirectGlossy = glossyIndirect;
-    params.directWeight = uLightParameters.directWeight;
-    params.indirectDiffuseWeight = uLightParameters.indirectDiffuseWeight;
-    params.indirectGlossyWeight = uLightParameters.indirectGlossyWeight;
-
-    vec3 color = evalLighting(params);
-
-    outColor = vec4(gammaCorrection(color), 1.0);
+    imageStore(uReflectionTarget, ivec2(gl_LaunchIDEXT.xy), vec4(reflectionColor, 0.0));
 }

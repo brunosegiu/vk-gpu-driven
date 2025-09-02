@@ -33,8 +33,7 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
     return ggx1 * ggx2;
 }
 
-vec3 FresnelSchlick(float cosTheta, vec3 F0)
-{
+vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
@@ -55,13 +54,6 @@ float filterESM(vec4 shadowCoord, float expScale, sampler shadowSampler, texture
     float visibility = moment * exp(-expScale * shadowCoord.z);
     const float bleedK = 0.2;
     return clamp((visibility - bleedK) / (1.0 - bleedK), 0.0, 1.0);
-}
-
-float encodeViewDepth(vec3 worldPosition, mat4 lightViewMatrix,
-                       float lightNear, float lightFar) {
-    vec4 lightViewPos = lightViewMatrix * vec4(worldPosition, 1.0);
-    float lightForward = -lightViewPos.z;
-    return clamp(lightForward, 0.0, lightFar);
 }
 
 // From: https://github.com/nvpro-samples/nvpro_core/blob/master/nvvkhl/shaders/dh_sky.h
@@ -149,9 +141,11 @@ struct ShadingParams {
     float roughness;
     vec3 emissive;
     float visibility; // AO
-    vec3 indirect;
+    vec3 indirectDiffuse;
+    vec3 indirectGlossy;
     float directWeight;
-    float indirectWeight;
+    float indirectDiffuseWeight;
+    float indirectGlossyWeight;
 };
 
 vec3 evalLighting(ShadingParams params) {
@@ -176,9 +170,9 @@ vec3 evalLighting(ShadingParams params) {
         
     Lo = (kD * params.albedo.rgb / PI + specular) * NdotL * params.radiance * params.shadowTerm;
 
-    vec3 ambient = params.indirect * params.albedo.rgb * params.visibility;
+    vec3 ambient = params.indirectDiffuse * params.albedo.rgb * params.visibility;
 
-    return ambient * params.indirectWeight + Lo * params.directWeight + params.emissive;
+    return Lo * params.directWeight + params.emissive + ambient * params.indirectDiffuseWeight + kS * params.indirectGlossy * params.indirectGlossyWeight;
 }
 
 vec3 gammaCorrection(vec3 color) {

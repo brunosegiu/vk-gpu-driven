@@ -158,17 +158,18 @@ void DDGIRenderer::UpdatePersistentUniforms(const PersistentParameters& paramete
         {
             mProbeRaytracingPipeline->Bind(0, parameters.mScenePersistentDataParameter);
             mProbeRaytracingPipeline->Bind(1, mScene->GetTLAS());
-            mProbeRaytracingPipeline->Bind(2, mProbeRayRadianceBuffer);
-            mProbeRaytracingPipeline->Bind(3, mProbeRayDirectionDepthBuffer);
-            mProbeRaytracingPipeline->Bind(4, parameters.mMaterialSampler);
-            mProbeRaytracingPipeline->Bind(5, parameters.mFrameBufferSampler);
-            mProbeRaytracingPipeline->Bind(6, parameters.mMaterialsUniform);
-            mProbeRaytracingPipeline->Bind(7, parameters.mIndexBufferUniform);
-            mProbeRaytracingPipeline->Bind(8, parameters.mPositionBufferUniform);
-            mProbeRaytracingPipeline->Bind(9, parameters.mTexCoordBufferUniform);
-            mProbeRaytracingPipeline->Bind(10, parameters.mNormalBufferUniform);
-            mProbeRaytracingPipeline->Bind(11, parameters.mTangentBufferUniform);
-            mProbeRaytracingPipeline->Bind(12, parameters.mMaterialsTextures);
+            mProbeRaytracingPipeline->Bind(2, parameters.mShadowMap);
+            mProbeRaytracingPipeline->Bind(3, mProbeRayRadianceBuffer);
+            mProbeRaytracingPipeline->Bind(4, mProbeRayDirectionDepthBuffer);
+            mProbeRaytracingPipeline->Bind(5, parameters.mMaterialSampler);
+            mProbeRaytracingPipeline->Bind(6, parameters.mFrameBufferSampler);
+            mProbeRaytracingPipeline->Bind(7, parameters.mMaterialsUniform);
+            mProbeRaytracingPipeline->Bind(8, parameters.mIndexBufferUniform);
+            mProbeRaytracingPipeline->Bind(9, parameters.mPositionBufferUniform);
+            mProbeRaytracingPipeline->Bind(10, parameters.mTexCoordBufferUniform);
+            mProbeRaytracingPipeline->Bind(11, parameters.mNormalBufferUniform);
+            mProbeRaytracingPipeline->Bind(12, parameters.mTangentBufferUniform);
+            mProbeRaytracingPipeline->Bind(13, parameters.mMaterialsTextures);
         }
 
         // Compute
@@ -188,9 +189,9 @@ void DDGIRenderer::UpdatePersistentUniforms(const PersistentParameters& paramete
 void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t frameIndex) {
     mCurrentFrame = (mCurrentFrame + 1) % mProbeMomentsBuffers.size();
 
-    mProbeRaytracingPipeline->Bind(frameIndex, 0, parameters.mCameraUniform[frameIndex]);
-    mProbeRaytracingPipeline->Bind(frameIndex, 1, parameters.mShadowCameraUniform[frameIndex]);
-    mProbeRaytracingPipeline->Bind(frameIndex, 2, parameters.mPerMeshParameters[frameIndex]);
+    mProbeRaytracingPipeline->Bind(frameIndex, 0, parameters.mCameraUniform);
+    mProbeRaytracingPipeline->Bind(frameIndex, 1, parameters.mShadowCameraUniform);
+    mProbeRaytracingPipeline->Bind(frameIndex, 2, parameters.mPerMeshParameters);
     mProbeRaytracingPipeline->Bind(frameIndex, 3, mDDGIProbeData[frameIndex]);
     mProbeRaytracingPipeline->Bind(frameIndex, 4, GetPreviousIrradianceBuffer());
     mProbeRaytracingPipeline->Bind(frameIndex, 5, GetPreviousMomentsBuffer());
@@ -230,7 +231,7 @@ void DDGIRenderer::UpdateUniforms(const PerFrameParameters& parameters, uint32_t
     }
 
     // Visualization
-    mVisualizeProbesPipeline->Bind(frameIndex, 0, parameters.mCameraUniform[frameIndex]);
+    mVisualizeProbesPipeline->Bind(frameIndex, 0, parameters.mCameraUniform);
     mVisualizeProbesPipeline->Bind(frameIndex, 1, mDDGIProbeData[frameIndex]);
     mVisualizeProbesPipeline->Bind(frameIndex, 2, GetIrradianceBuffer());
 }

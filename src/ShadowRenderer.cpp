@@ -15,7 +15,8 @@ struct LightData {
     float esmExp;
     float shadowMapBlurRadius;
     float directWeight;
-    float indirectWeight;
+    float indirectDiffuseWeight;
+    float indirectGlossyWeight;
 };
 
 struct ShadowControlData {
@@ -277,7 +278,8 @@ void ShadowRenderer::UpdateUniforms(
             .esmExp = mSettingsManager->GetESMControl(),
             .shadowMapBlurRadius = mSettingsManager->GetShadowBlurRadius(),
             .directWeight = mSettingsManager->GetDirectWeight(),
-            .indirectWeight = mSettingsManager->GetIndirectWeight(),
+            .indirectDiffuseWeight = mSettingsManager->GetIndirectDiffuseWeight(),
+            .indirectGlossyWeight = mSettingsManager->GetIndirectGlossyWeight(),
         };
         mShadowCameraUniform[frameIndex]->Write(cameraMatrices);
     }
