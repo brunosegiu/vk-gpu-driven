@@ -43,8 +43,7 @@ vec3 gridIndexToWorldPos(ivec3 gridIndex, const DDGIData ddgi) {
 }
 
 ivec3 nearestProbeGridIndex(vec3 position, const DDGIData ddgi) {
-    vec3 gridPos = (position - ddgi.probeGridOrigin) / ddgi.probeSpacing;
-    return ivec3(clamp(ivec3(floor(gridPos)), ivec3(0), ddgi.probeGridCount - 1));
+    return clamp(ivec3((position - ddgi.probeGridOrigin) / ddgi.probeSpacing), ivec3(0, 0, 0), ivec3(ddgi.probeGridCount) - ivec3(1, 1, 1));
 }
 
 float square(float a) {
@@ -57,7 +56,7 @@ float visibilityFromMoments(float distanceToSample, vec2 moments) {
     float mean2 = moments.y;
     float variance  = abs(square(mean) - mean2);
     float chebyshevWeight = variance / (variance + square(max(distanceToSample - mean, 0.0f)));
-    chebyshevWeight = max(chebyshevWeight * chebyshevWeight * chebyshevWeight, 0.0f);
+    chebyshevWeight = max(chebyshevWeight, 0.0f);
 	return (distanceToSample <= mean) ? 1.0 : chebyshevWeight;
 }
 
@@ -91,17 +90,16 @@ vec3 ddgiIndirectDiffuse(
     for (int oz = 0; oz <= 1; ++oz) {
 		for (int oy = 0; oy <= 1; ++oy) {
             for (int ox = 0; ox <= 1; ++ox) {
-                ivec3 sampleProbeGridIndex = clamp(ivec3(gridIndex) + ivec3(ox, oy, oz), ivec3(0), ivec3(ddgi.probeGridCount) - 1);
+                ivec3 sampleProbeGridIndex = clamp(ivec3(gridIndex) + ivec3(ox, oy, oz), ivec3(0), ivec3(ddgi.probeGridCount) - ivec3(1));
                 uint sampleProbeIndex = gridIndexToProbeIndex(sampleProbeGridIndex, ddgi);
                 vec3 sampleProbePosition = gridIndexToWorldPos(sampleProbeGridIndex, ddgi);
 
-                vec3 trueDir = worldSpacePosition - sampleProbePosition;
-                vec3 dir = trueDir + 0.15 * normal;
-                float r = max(length(dir), 1e-4);
-                dir /= r;
+                vec3 trueDir = normalize(worldSpacePosition - sampleProbePosition);
+                vec3 dir = normalize(trueDir + 0.15 * normal);
+                float distanceToPoint = length(trueDir);
 
                 vec2 moments = sampleProbeMoments(sampleProbeIndex, dir, nearSampler, moments);
-                float visibility = visibilityFromMoments(r, moments);
+                float visibility = visibilityFromMoments(distanceToPoint, moments);
 
                 float backfaceTest = square(max(1e-3, (dot(-trueDir, normal) + 1.0) * 0.5)) + 0.2;
 
@@ -125,7 +123,7 @@ vec3 ddgiIndirectDiffuse(
         }
     }
     vec3 toalIrradiance = (accumulatedWeight > EPSILON) ? (accumulatedIrradiance / accumulatedWeight) : vec3(0.0f);
-    return toalIrradiance * PI * 0.5f * ddgi.energyPreservation;
+    return toalIrradiance * PI * 0.5f;
 }
 
 #endif
