@@ -304,7 +304,7 @@ void ShadowRenderer::UpdateUniforms(
 }
 
 void ShadowRenderer::Render(vk::CommandBuffer commandBuffer, const uint32_t frameIndex) {
-    // Shadow pass
+    mContext->BeginMarker(commandBuffer, "Shadow pass");
     {
         mContext->BeginMarker(commandBuffer, "Shadow culling");
         for (auto& visEntry : mVisibilityManagers) {
@@ -478,6 +478,7 @@ void ShadowRenderer::Render(vk::CommandBuffer commandBuffer, const uint32_t fram
         }
         mContext->EndMarker(commandBuffer);
     }
+    mContext->EndMarker(commandBuffer);
 }
 
 ShadowRenderer::~ShadowRenderer() {
