@@ -43,6 +43,7 @@ struct Resource {
         GlossyReflectionsGenShader,
         GlossyReflectionsHitShader,
         GlossyReflectionsMissShader,
+        BlurReflectionsShader,
     };
 };
 

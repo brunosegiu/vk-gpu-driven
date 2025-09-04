@@ -31,8 +31,11 @@ public:
     // Persistent parameters
     void Bind(uint32_t binding, const ScopedRefPtr<VulkanBuffer>& buffer);
     void Bind(uint32_t binding, const std::vector<ScopedRefPtr<VulkanBuffer>>& buffers);
-    void Bind(uint32_t binding, const ScopedRefPtr<Texture>& texture);
-    void Bind(uint32_t binding, const std::vector<ScopedRefPtr<Texture>>& textures);
+    void Bind(uint32_t binding, const ScopedRefPtr<Texture>& texture, int32_t mipIndex = -1);
+    void Bind(
+        uint32_t binding,
+        const std::vector<ScopedRefPtr<Texture>>& textures,
+        int32_t mipIndex = -1);
     void Bind(uint32_t binding, const vk::Sampler& sampler);
     void Bind(uint32_t binding, const vk::AccelerationStructureKHR& accelerationStructure);
 
@@ -42,11 +45,16 @@ public:
         uint32_t frameIndex,
         uint32_t binding,
         const std::vector<ScopedRefPtr<VulkanBuffer>>& buffers);
-    void Bind(uint32_t frameIndex, uint32_t binding, const ScopedRefPtr<Texture>& texture);
     void Bind(
         uint32_t frameIndex,
         uint32_t binding,
-        const std::vector<ScopedRefPtr<Texture>>& textures);
+        const ScopedRefPtr<Texture>& texture,
+        int32_t mipIndex = -1);
+    void Bind(
+        uint32_t frameIndex,
+        uint32_t binding,
+        const std::vector<ScopedRefPtr<Texture>>& textures,
+        int32_t mipIndex = -1);
     void Bind(uint32_t frameIndex, uint32_t binding, const vk::Sampler& sampler);
     void Bind(
         uint32_t frameIndex,
@@ -80,12 +88,14 @@ protected:
         ParameterUpdateFrequency frequency,
         uint32_t frameIndex,
         uint32_t binding,
-        const ScopedRefPtr<Texture>& texture);
+        const ScopedRefPtr<Texture>& texture,
+        int32_t mipIndex);
     void Bind(
         ParameterUpdateFrequency frequency,
         uint32_t frameIndex,
         uint32_t binding,
-        const std::vector<ScopedRefPtr<Texture>>& textures);
+        const std::vector<ScopedRefPtr<Texture>>& textures,
+        int32_t mipIndex);
 
     void Bind(
         ParameterUpdateFrequency frequency,

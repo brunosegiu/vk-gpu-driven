@@ -14,6 +14,10 @@ struct CameraData {
     glm::mat4 invProjection;
     glm::mat4 invView;
     glm::vec4 cameraPos;
+    float _near;
+    float _far;
+    float glossyDepthBias;
+    float glossyHitDepthBias;
 };
 
 Renderer::Renderer(
@@ -289,14 +293,14 @@ void Renderer::AddResources() {
             vk::SamplerCreateInfo()
                 .setMagFilter(vk::Filter::eLinear)
                 .setMinFilter(vk::Filter::eLinear)
-                .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+                .setMipmapMode(vk::SamplerMipmapMode::eLinear)
                 .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
                 .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
                 .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
                 .setMipLodBias(0.0f)
                 .setCompareOp(vk::CompareOp::eNever)
                 .setMinLod(0.0f)
-                .setMaxLod(0.0f)
+                .setMaxLod(10.0f)
                 .setAnisotropyEnable(false);
         mIrradianceSampler = VKRT_ASSERT_VK(
             mContext->GetDevice()->GetLogicalDevice().createSampler(irradianceSamplerCreateInfo));
@@ -414,6 +418,7 @@ void Renderer::UpdatePersistentUniforms() {
             .mScenePersistentDataParameter = mScenePersistentDataBuffer,
             .mVisibilityBuffer = mVisibilityBuffer,
             .mShadowMap = mShadowRenderer->GetShadowMap(),
+            .mDepthBuffer = mDepthBuffer,
             .mMaterialSampler = mMaterialSampler,
             .mFrameBufferSampler = mFrameBufferSampler,
             .mMaterialsUniform = mMaterialsUniform,
@@ -472,12 +477,13 @@ void Renderer::UpdatePersistentUniforms() {
     mShadePassPipeline->Bind(6, mVisibilityBuffer);
     mShadePassPipeline->Bind(7, mPostProcessingRenderer->GetSSAOBuffer());
     mShadePassPipeline->Bind(8, mReflectionsRenderer->GetReflectionsTexture());
-    mShadePassPipeline->Bind(9, mScene->GetMeshSystem()->GetIndexBuffer());
-    mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetVertexBuffer());
-    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetTexCoordBuffer());
-    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetNormalBuffer());
-    mShadePassPipeline->Bind(13, mScene->GetMeshSystem()->GetTangentBuffer());
-    mShadePassPipeline->Bind(14, mSceneTextures);
+    mShadePassPipeline->Bind(9, mReflectionsRenderer->GetReflectionHitDepthTexture());
+    mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetIndexBuffer());
+    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetVertexBuffer());
+    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetTexCoordBuffer());
+    mShadePassPipeline->Bind(13, mScene->GetMeshSystem()->GetNormalBuffer());
+    mShadePassPipeline->Bind(14, mScene->GetMeshSystem()->GetTangentBuffer());
+    mShadePassPipeline->Bind(15, mSceneTextures);
 }
 
 void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
@@ -548,7 +554,11 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
                 glm::inverse(camera->GetProjectionTransform() * camera->GetViewTransform()),
             .invProjection = glm::inverse(camera->GetProjectionTransform()),
             .invView = glm::inverse(camera->GetViewTransform()),
-            .cameraPos = glm::vec4(camera->GetPosition(), 0.0f)};
+            .cameraPos = glm::vec4(camera->GetPosition(), 0.0f),
+            ._near = camera->GetNear(),
+            ._far = camera->GetFar(),
+            .glossyDepthBias = mSettingsManager->GetGlossyDepthBias(),
+            .glossyHitDepthBias = mSettingsManager->GetGlossyHitDepthBias()};
         mCameraUniform[frameIndex]->Write(cameraMatrices);
     }
 

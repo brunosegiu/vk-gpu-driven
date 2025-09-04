@@ -25,6 +25,9 @@ public:
 
     const ViewFrustum& GetViewFrustum() const { return mViewFrustum; }
 
+    float GetNear() { return mNear; }
+    float GetFar() { return mFar; }
+
     ~Camera();
 
 private:
@@ -63,6 +66,9 @@ private:
 
     bool mFreezeFrustumUpdates;
     ViewFrustum mViewFrustum;
+
+    double mNear = 0.1f;
+    double mFar = 1000.0f;
 };
 
 }  // namespace VKRT

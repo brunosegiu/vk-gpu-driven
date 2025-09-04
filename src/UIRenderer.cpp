@@ -302,7 +302,7 @@ void UIRenderer::Update() {
                     100.0f);
             }
 
-            if (ImGui::CollapsingHeader("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("Shadows")) {
                 const char* comboPreviewValue =
                     mShadowResolutionOptions[mSelectedShadowResolutionIndex].c_str();
                 if (ImGui::BeginCombo("Shadow map res", comboPreviewValue)) {
@@ -351,7 +351,7 @@ void UIRenderer::Update() {
                 ImGui::SliderFloat("Shadow near", &mSettingsManager->GetShadowNear(), 0.1f, 10.0f);
             }
 
-            if (ImGui::CollapsingHeader("SSAO", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("SSAO")) {
                 ImGui::SliderFloat(
                     "Radius",
                     &mSettingsManager->GetSSAOControlData().radius,
@@ -374,7 +374,7 @@ void UIRenderer::Update() {
                     10);
             }
 
-            if (ImGui::CollapsingHeader("DDGI", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("DDGI")) {
                 SliderUint3("Probe count", &mSettingsManager->GetProbeGridCount().x, 2, 32);
                 {
                     const char* comboPreviewValue =
@@ -460,7 +460,26 @@ void UIRenderer::Update() {
                 }
             }
 
-            if (ImGui::CollapsingHeader("Debug")) {
+            if (ImGui::CollapsingHeader("Reflections")) {
+                ImGui::SliderFloat("Depth sigma", &mSettingsManager->GetDepthSigma(), 0.0f, 10.0f);
+                ImGui::SliderFloat(
+                    "Spatial sigma",
+                    &mSettingsManager->GetSpatialSigma(),
+                    0.0f,
+                    10.0f);
+                ImGui::SliderFloat(
+                    "Depth bias",
+                    &mSettingsManager->GetGlossyDepthBias(),
+                    0.0f,
+                    10.0f);
+                ImGui::SliderFloat(
+                    "Hit depth bias",
+                    &mSettingsManager->GetGlossyHitDepthBias(),
+                    0.0f,
+                    10.0f);
+            }
+
+            if (ImGui::CollapsingHeader("Debug", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::SliderFloat("Direct", &mSettingsManager->GetDirectWeight(), 0.00f, 1.0f);
                 ImGui::SliderFloat(
                     "Indirect diffuse",

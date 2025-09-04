@@ -18,7 +18,8 @@ RenderTarget::RenderTarget(ScopedRefPtr<Context> context, const ScopedRefPtr<Tex
 const std::vector<vk::ImageView> RenderTarget::GetImageViews() const {
     std::vector<vk::ImageView> imageViews;
     for (const ScopedRefPtr<Texture>& texture : mTextures) {
-        imageViews.emplace_back(texture->GetImageView());
+        // TODO: Support binding individual mips for rendering
+        imageViews.emplace_back(texture->GetImageView(0));
     }
     return imageViews;
 }

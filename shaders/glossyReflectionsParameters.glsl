@@ -20,26 +20,27 @@ layout(binding = 1, set = UPDATE_ONCE) uniform accelerationStructureEXT uTopLeve
 layout(binding = 2, set = UPDATE_ONCE) uniform utexture2D uVisibilityBuffer;
 layout(binding = 3, set = UPDATE_ONCE) uniform texture2D uShadowMap;
 layout(binding = 4, set = UPDATE_ONCE, r11f_g11f_b10f) writeonly uniform image2D uReflectionTarget;
-layout(binding = 5, set = UPDATE_ONCE) uniform sampler uMaterialTextureSampler;
-layout(binding = 6, set = UPDATE_ONCE) uniform sampler uFrameBufferTextureSampler;
-layout(binding = 7, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
+layout(binding = 5, set = UPDATE_ONCE, r16f) uniform writeonly image2D uReflectionHitDepthTarget;
+layout(binding = 6, set = UPDATE_ONCE) uniform sampler uMaterialTextureSampler;
+layout(binding = 7, set = UPDATE_ONCE) uniform sampler uFrameBufferTextureSampler;
+layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer TMaterial {
     Material uMaterials[];
 };
-layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer Index {
+layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer Index {
     uint uIndices[];
 };
-layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
+layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
     vec3 uPositions[];
 };
-layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
+layout(binding = 11, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
     uint uPackedTexCoord[];
 };
-layout(binding = 11, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
+layout(binding = 12, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
     uint uPackedNormal[];
 };
-layout(binding = 12, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
+layout(binding = 13, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
     uint uPackedTangent[];
 };
-layout(binding = 13, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
+layout(binding = 14, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
 
 #endif

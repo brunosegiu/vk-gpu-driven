@@ -14,6 +14,7 @@ public:
         uint32_t width,
         uint32_t height,
         uint32_t layers,
+        uint32_t mipLevels,
         vk::Format format,
         vk::ImageUsageFlags usageFlags,
         vk::ImageLayout initialLayout = vk::ImageLayout::eUndefined,
@@ -36,18 +37,22 @@ public:
         const uint8_t* buffer,
         size_t bufferSize);
 
-    const vk::ImageView& GetImageView() const { return mImageView; }
+    const vk::ImageView& GetImageView(int32_t mipIndex) const {
+        return mipIndex < 0 ? mImageView : mPerMipImageViews[mipIndex];
+    }
     const vk::Image& GetImage() const { return mImage; }
     const vk::Format& GetFormat() const { return mFormat; }
     const vk::ImageAspectFlagBits& GetImageAspect() const { return mImageAspect; }
     const uint32_t& GetWidth() const { return mWidth; }
     const uint32_t& GetHeight() const { return mHeight; }
     vk::Extent2D GetExtent() { return vk::Extent2D{mWidth, mHeight}; }
+    const uint32_t& GetMipLevels() const { return mMipLevels; }
 
     struct ImageBarrierInfo {
         ScopedRefPtr<Texture> texture;
         vk::ImageLayout srcLayout;
         vk::ImageLayout dstLayout;
+        int32_t mipIndex = -1;
     };
     static std::vector<vk::ImageMemoryBarrier> GetBarriers(
         vk::PipelineStageFlags srcStage,
@@ -58,7 +63,8 @@ public:
         vk::ImageLayout srcLayout,
         vk::ImageLayout dstLayout,
         vk::PipelineStageFlags srcStage,
-        vk::PipelineStageFlags dstStage);
+        vk::PipelineStageFlags dstStage,
+        int32_t mipIndex);
 
     void SetImageLayout(
         vk::CommandBuffer& commandBuffer,
@@ -67,7 +73,7 @@ public:
         vk::PipelineStageFlags srcStage,
         vk::PipelineStageFlags dstStage);
 
-    vk::DescriptorImageInfo GetDescriptorInfo(bool isReadOnly);
+    vk::DescriptorImageInfo GetDescriptorInfo(bool isReadOnly, int32_t mipIndex);
 
     ~Texture();
 
@@ -77,8 +83,9 @@ private:
     vk::Image mImage;
     VmaAllocation mAllocation;
     vk::ImageView mImageView;
+    std::vector<vk::ImageView> mPerMipImageViews;
     bool mOwnsImage;
-    uint32_t mWidth, mHeight, mLayers;
+    uint32_t mWidth, mHeight, mLayers, mMipLevels;
     vk::Format mFormat;
     vk::ImageAspectFlagBits mImageAspect;
 };

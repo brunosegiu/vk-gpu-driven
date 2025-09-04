@@ -11,6 +11,7 @@ Texture::Texture(
     uint32_t width,
     uint32_t height,
     uint32_t layers,
+    uint32_t mipLevels,
     vk::Format format,
     vk::ImageUsageFlags usageFlags,
     vk::ImageLayout initialLayout,
@@ -21,6 +22,7 @@ Texture::Texture(
       mWidth(width),
       mHeight(height),
       mLayers(layers),
+      mMipLevels(mipLevels),
       mFormat(format) {
     mOwnsImage = !image;
 
@@ -31,7 +33,7 @@ Texture::Texture(
                                                   .setImageType(vk::ImageType::e2D)
                                                   .setFormat(format)
                                                   .setExtent(vk::Extent3D{width, height, 1})
-                                                  .setMipLevels(1)
+                                                  .setMipLevels(mipLevels)
                                                   .setArrayLayers(layers)
                                                   .setSamples(vk::SampleCountFlagBits::e1)
                                                   .setTiling(vk::ImageTiling::eOptimal)
@@ -64,12 +66,28 @@ Texture::Texture(
             .setSubresourceRange(vk::ImageSubresourceRange()
                                      .setAspectMask(mImageAspect)
                                      .setBaseMipLevel(0)
-                                     .setLevelCount(1)
+                                     .setLevelCount(mipLevels)
                                      .setBaseArrayLayer(0)
                                      .setLayerCount(layers))
             .setImage(mImage);
-
     mImageView = VKRT_ASSERT_VK(logicalDevice.createImageView(imageViewCreateInfo));
+
+    for (uint32_t mipIndex = 0; mipIndex < mipLevels; ++mipIndex) {
+        vk::ImageViewCreateInfo imageViewCreateInfo =
+            vk::ImageViewCreateInfo()
+                .setViewType(layers == 1 ? vk::ImageViewType::e2D : vk::ImageViewType::e2DArray)
+                .setFormat(format)
+                .setSubresourceRange(vk::ImageSubresourceRange()
+                                         .setAspectMask(mImageAspect)
+                                         .setBaseMipLevel(mipIndex)
+                                         .setLevelCount(1)
+                                         .setBaseArrayLayer(0)
+                                         .setLayerCount(layers))
+                .setImage(mImage);
+
+        mPerMipImageViews.push_back(
+            VKRT_ASSERT_VK(logicalDevice.createImageView(imageViewCreateInfo)));
+    }
 
     if (initialLayout != vk::ImageLayout::eUndefined) {
         vk::CommandBuffer commandBuffer = mContext->GetDevice()->CreateCommandBuffer();
@@ -99,7 +117,7 @@ Texture::Texture(
     vk::ImageUsageFlags usageFlags,
     vk::ImageLayout initialLayout,
     vk::Image image)
-    : Texture(context, width, height, 1, format, usageFlags, initialLayout, image) {}
+    : Texture(context, width, height, 1, 1, format, usageFlags, initialLayout, image) {}
 
 Texture::Texture(
     ScopedRefPtr<Context> context,
@@ -202,7 +220,7 @@ void Texture::SetImageLayout(
     vk::PipelineStageFlags srcStage,
     vk::PipelineStageFlags dstStage) {
     const vk::ImageSubresourceRange subresourceRange =
-        vk::ImageSubresourceRange(mImageAspect, 0, 1, 0, mLayers);
+        vk::ImageSubresourceRange(mImageAspect, 0, mMipLevels, 0, mLayers);
     vk::ImageMemoryBarrier imageBarrier = vk::ImageMemoryBarrier()
                                               .setOldLayout(oldLayout)
                                               .setNewLayout(newLayout)
@@ -226,7 +244,8 @@ std::vector<vk::ImageMemoryBarrier> Texture::GetBarriers(
             textureInfo.srcLayout,
             textureInfo.dstLayout,
             srcStage,
-            dstStage));
+            dstStage,
+            textureInfo.mipIndex));
     }
     return barriers;
 }
@@ -235,7 +254,10 @@ vk::ImageMemoryBarrier Texture::GetImageBarrierInfo(
     vk::ImageLayout srcLayout,
     vk::ImageLayout dstLayout,
     vk::PipelineStageFlags srcStage,
-    vk::PipelineStageFlags dstStage) {
+    vk::PipelineStageFlags dstStage,
+    int32_t mipIndex) {
+    const uint32_t levelCount = mipIndex < 0 ? mMipLevels : 1;
+    const uint32_t actualMipIndex = mipIndex < 0 ? 0 : mipIndex;
     return vk::ImageMemoryBarrier()
         .setImage(GetImage())
         .setOldLayout(srcLayout)
@@ -244,21 +266,25 @@ vk::ImageMemoryBarrier Texture::GetImageBarrierInfo(
         .setDstAccessMask(GetAccessForLayout(dstLayout, dstStage))
         .setSubresourceRange(vk::ImageSubresourceRange{}
                                  .setAspectMask(mImageAspect)
-                                 .setLevelCount(1)
+                                 .setLevelCount(levelCount)
+                                 .setBaseMipLevel(actualMipIndex)
                                  .setLayerCount(mLayers));
 }
 
-vk::DescriptorImageInfo Texture::GetDescriptorInfo(bool isReadOnly) {
+vk::DescriptorImageInfo Texture::GetDescriptorInfo(bool isReadOnly, int32_t mipIndex) {
     return vk::DescriptorImageInfo()
         .setImageLayout(
             isReadOnly ? vk::ImageLayout::eShaderReadOnlyOptimal : vk::ImageLayout::eGeneral)
-        .setImageView(GetImageView())
+        .setImageView(GetImageView(mipIndex))
         .setSampler(nullptr);
 }
 
 Texture::~Texture() {
     vk::Device& logicalDevice = mContext->GetDevice()->GetLogicalDevice();
     logicalDevice.destroyImageView(mImageView);
+    for (uint32_t mipIndex = 0; mipIndex < mMipLevels; ++mipIndex) {
+        logicalDevice.destroyImageView(mPerMipImageViews[mipIndex]);
+    }
     if (mOwnsImage) {
         VmaAllocator allocator = mContext->GetDevice()->GetAllocator();
         vmaDestroyImage(allocator, mImage, mAllocation);

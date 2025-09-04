@@ -39,6 +39,7 @@ void DDGIRenderer::AddRenderTargets(
             mSettingsManager->GetProbeRayCount(),
             probeCount,
             1,
+            1,
             vk::Format::eB10G11R11UfloatPack32,
             vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
             vk::ImageLayout::eShaderReadOnlyOptimal);
@@ -47,6 +48,7 @@ void DDGIRenderer::AddRenderTargets(
             mContext,
             mSettingsManager->GetProbeRayCount(),
             probeCount,
+            1,
             1,
             vk::Format::eR16G16B16A16Sfloat,
             vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
@@ -58,6 +60,7 @@ void DDGIRenderer::AddRenderTargets(
                 mSettingsManager->GetProbeResolution(),
                 mSettingsManager->GetProbeResolution(),
                 probeCount,
+                1,
                 vk::Format::eB10G11R11UfloatPack32,
                 vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
                 vk::ImageLayout::eShaderReadOnlyOptimal);
@@ -69,6 +72,7 @@ void DDGIRenderer::AddRenderTargets(
                 mSettingsManager->GetProbeResolution(),
                 mSettingsManager->GetProbeResolution(),
                 probeCount,
+                1,
                 vk::Format::eR16G16Sfloat,
                 vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
                 vk::ImageLayout::eShaderReadOnlyOptimal);

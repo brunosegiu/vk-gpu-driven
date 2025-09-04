@@ -1,0 +1,85 @@
+#version 460
+
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_EXT_samplerless_texture_functions : enable
+
+#include "definitions.glsl"
+#include "ddgiUtils.glsl"
+#include "blurReflectionsParameters.glsl"
+#include "utils.glsl"
+
+#define LOCAL_SIZE_X 8
+#define LOCAL_SIZE_Y 8
+layout(local_size_x = LOCAL_SIZE_X, local_size_y = LOCAL_SIZE_Y) in;
+
+vec4 sampleRadianceHitDepth(ivec2 coords, ivec2 size) {
+    coords = clamp(coords, ivec2(0), size - ivec2(1));
+    return texelFetch(sampler2D(uInReflections, uFramebufferSampler), coords, 0);
+}
+
+float sampleDepth(ivec2 srcCoords, ivec2 srcSize) {
+    ivec2 depthSize = textureSize(uInDepthBuffer, 0);
+    vec2 scale = vec2(depthSize) / vec2(srcSize);
+    ivec2 coords = ivec2(round((vec2(srcCoords) + 0.5) * scale));
+    coords = clamp(coords, ivec2(0), depthSize - ivec2(1));
+    float deviceDepth = texelFetch(sampler2D(uInDepthBuffer, uFramebufferSampler), coords, 0).r;
+    return linearizeDepth(deviceDepth, uCameraParameters.far, uCameraParameters.near);
+}
+
+// From: https://github.com/diharaw/hybrid-rendering/blob/master/src/shaders/edge_stopping.glsl
+float depthEdgeStoppingWeight(float centerDepth, float sampleDepth, float phi) {
+    float referenceDepth = max(centerDepth, sampleDepth);
+    float sigmaDepthAbs = max(1e-6, phi * referenceDepth);
+
+    float depthDifference  = abs(centerDepth - sampleDepth);
+    float normalizedDifference = depthDifference / sigmaDepthAbs;
+    float exponentArgument = normalizedDifference * normalizedDifference;
+    return 2.0f * exponentArgument;
+}
+
+void main() {
+    ivec2 dstSize = imageSize(uOutBlurredReflections);
+    ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    ivec2 srcSize = textureSize(uInReflections, 0);
+
+    if (any(greaterThanEqual(dstCoord, dstSize))) {
+        return;
+    }
+
+    ivec2 centerCoords = dstCoord * 2 + 1;
+    vec4 radianceHitDistanceCenter = sampleRadianceHitDepth(centerCoords, srcSize);
+    vec3 radianceCenter = radianceHitDistanceCenter.rgb;
+    float hitDepthCenter = radianceHitDistanceCenter.a;
+
+    float centerDepth = sampleDepth(centerCoords, srcSize);
+
+    const int r = 2;
+    float twoSigma2 = 2.0 * uControl.sigmaSpatial * uControl.sigmaSpatial;
+
+    vec3 sumRadiance = vec3(0.0);
+    float sumWeight = 0.0;
+
+    for (int dy = -r; dy <= r; ++dy) {
+        for (int dx = -r; dx <= r; ++dx) {
+            ivec2 sampleCoords = centerCoords + ivec2(dx,dy);
+            vec4 sampleRadianceHitDepth = sampleRadianceHitDepth(sampleCoords, srcSize);
+
+            float sampleDepth = sampleDepth(sampleCoords, srcSize);
+
+            float weightSpatial = exp(-(dx * dx + dy * dy) / twoSigma2);
+
+            float depthStop = depthEdgeStoppingWeight(centerDepth, sampleDepth, uControl.sigmaDepth);
+            float weightDepth = exp(-max(0.0f, depthStop));
+
+            float weight = weightSpatial * weightDepth;
+
+            sumRadiance += weight * sampleRadianceHitDepth.rgb;
+            sumWeight += weight;
+        }
+    }
+
+    vec3 totalRadiance = (sumWeight > 0.0) ? sumRadiance / sumWeight : radianceCenter;
+
+    imageStore(uOutBlurredReflections, dstCoord, vec4(totalRadiance, 0.0f));
+}

@@ -51,6 +51,11 @@ public:
     float& GetIndirectDiffuseWeight() { return mIndirectDiffuseWeight; }
     float& GetIndirectGlossyWeight() { return mIndirectGlossyWeight; }
 
+    float& GetDepthSigma() { return mDepthSigma; }
+    float& GetSpatialSigma() { return mSpatialSigma; }
+    float& GetGlossyDepthBias() { return mGlossyDepthBias; }
+    float& GetGlossyHitDepthBias() { return mGlossyHitDepthBias; }
+
     ~SettingsManager();
 
     static const std::array<uint32_t, 6> ShadowMapResolutions;
@@ -86,5 +91,11 @@ private:
     float mDirectWeight;
     float mIndirectDiffuseWeight;
     float mIndirectGlossyWeight;
+
+    // Glossy reflections
+    float mDepthSigma;
+    float mSpatialSigma;
+    float mGlossyDepthBias;
+    float mGlossyHitDepthBias;
 };
 }  // namespace VKRT

@@ -11,4 +11,8 @@ vec3 viewDirFromViewProjection(mat4 viewProj, vec2 ndc) {
     return normalize(farWS.xyz - nearWS.xyz);
 }
 
+float linearizeDepth(float deviceDepth, float far, float near) {
+    return (near * far) / max(1e-6, far - deviceDepth * (far - near));
+}
+
 #endif

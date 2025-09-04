@@ -61,6 +61,10 @@ struct CameraData {
 	mat4 invProjection;
     mat4 invView;
     vec4 cameraPos;
+    float near;
+    float far;
+    float glossyDepthBias;
+    float glossyHitDepthBias;
 };
 
 struct SSAOControlData {
@@ -115,6 +119,11 @@ struct DDGIData {
     uint frameIndex;
     float probeRadius;
     float energyPreservation;
+};
+
+struct BlurControlData {
+    float sigmaSpatial;
+    float sigmaDepth;
 };
 
 #endif

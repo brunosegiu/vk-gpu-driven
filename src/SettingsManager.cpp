@@ -35,7 +35,11 @@ SettingsManager::SettingsManager()
       mEnergyPreservation(0.92f),
       mDirectWeight(1.0f),
       mIndirectDiffuseWeight(1.0f),
-      mIndirectGlossyWeight(1.0f) {}
+      mIndirectGlossyWeight(1.0f),
+      mDepthSigma(0.5f),
+      mSpatialSigma(0.8f),
+      mGlossyDepthBias(1.0),
+      mGlossyHitDepthBias(0.0) {}
 
 SettingsManager::~SettingsManager() {}
 

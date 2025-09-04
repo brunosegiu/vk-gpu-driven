@@ -34,6 +34,7 @@ void main() {
         params.lightColor = normalize(uLightParameters.radiance);
         vec3 viewDir = viewDirFromViewProjection(uCameraParameters.invViewProjection, ndc);
         imageStore(uReflectionTarget, ivec2(gl_LaunchIDEXT.xy), vec4(getProceduralSkyColor(params, viewDir, 0), 0.0));
+        imageStore(uReflectionHitDepthTarget, ivec2(gl_LaunchIDEXT.xy), vec4(TMax));
         return;
     }
 
@@ -122,6 +123,7 @@ void main() {
     vec3 direction = reflect(-V, normal);
 
     rayPayload.color = vec3(0.0f);
+    rayPayload.hitDepth = TMax;
     rayPayload.depth = 0;
 
     traceRayEXT(
@@ -132,12 +134,11 @@ void main() {
         DefaultSBTStride,
         ColorMissIndex,
         origin,
-        0.01,
+        TMin,
         direction,
-        1000.0f,
+        TMax,
         ColorPayloadIndex);
 
-    vec3 reflectionColor = rayPayload.color;
-
-    imageStore(uReflectionTarget, ivec2(gl_LaunchIDEXT.xy), vec4(reflectionColor, 0.0));
+    imageStore(uReflectionTarget, ivec2(gl_LaunchIDEXT.xy), vec4(rayPayload.color, 0.0f));
+    imageStore(uReflectionHitDepthTarget, ivec2(gl_LaunchIDEXT.xy), vec4(rayPayload.hitDepth));
 }

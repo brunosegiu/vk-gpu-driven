@@ -115,6 +115,7 @@ set(SHADER_HEADERS
     shadowMomentsBlurVerticalParameters.glsl
     shadowMomentsBlurHorizontalParameters.glsl
     glossyReflectionsParameters.glsl
+    blurReflectionsParameters.glsl
 )
 
 set(SHADERS
@@ -149,6 +150,7 @@ set(SHADERS
     glossyReflections.rgen
     glossyReflections.rchit
     glossyReflections.rmiss
+    blurReflections.comp
 )
 
 if(WIN32)

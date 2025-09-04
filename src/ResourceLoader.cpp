@@ -71,6 +71,7 @@ Resource ResourceLoader::Load(const Resource::Id& resourceId) {
         {Resource::Id::GlossyReflectionsGenShader, VKRT_RESOURCE_GLOSSY_REFLECTIONS_GEN_SHADER},
         {Resource::Id::GlossyReflectionsHitShader, VKRT_RESOURCE_GLOSSY_REFLECTIONS_HIT_SHADER},
         {Resource::Id::GlossyReflectionsMissShader, VKRT_RESOURCE_GLOSSY_REFLECTIONS_MISS_SHADER},
+        {Resource::Id::BlurReflectionsShader, VKRT_RESOURCE_BLUR_REFLECTIONS_SHADER},
     };
 
     HMODULE module = nullptr;

@@ -34,6 +34,7 @@ public:
         ScopedRefPtr<VulkanBuffer> mScenePersistentDataParameter;
         ScopedRefPtr<Texture> mVisibilityBuffer;
         ScopedRefPtr<Texture> mShadowMap;
+        ScopedRefPtr<Texture> mDepthBuffer;
         vk::Sampler mMaterialSampler;
         vk::Sampler mFrameBufferSampler;
         ScopedRefPtr<VulkanBuffer> mMaterialsUniform;
@@ -54,6 +55,9 @@ public:
     void UpdateUniforms(const PerFrameParameters& parameters, uint32_t imageIndex);
 
     const ScopedRefPtr<Texture>& GetReflectionsTexture() { return mReflectionsBuffer; }
+    const ScopedRefPtr<Texture>& GetReflectionHitDepthTexture() {
+        return mReflectionHitDepthBuffer;
+    }
 
     ~GlossyReflectionsRenderer();
 
@@ -66,5 +70,10 @@ private:
     // Probe rendering
     ScopedRefPtr<RaytracingPipeline> mTraceReflectionsPipeline;
     ScopedRefPtr<Texture> mReflectionsBuffer;
+    ScopedRefPtr<Texture> mReflectionHitDepthBuffer;
+
+    // Blurring
+    std::vector<ScopedRefPtr<ComputePipeline>> mBlurReflectionsPipeline;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mBlurControlParameters;
 };
 }  // namespace VKRT

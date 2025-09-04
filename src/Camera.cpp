@@ -26,8 +26,8 @@ Camera::Camera(ScopedRefPtr<Window> window)
     mProjectionTransform = glm::perspective(
         glm::radians(60.0),
         static_cast<double>(windowSize.width) / static_cast<double>(windowSize.height),
-        0.1,
-        1000.0);
+        mNear,
+        mFar);
     mProjectionTransform[1][1] *= -1.0f;
 }
 

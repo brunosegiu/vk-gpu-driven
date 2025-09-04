@@ -1,6 +1,7 @@
 #version 460
 
 #extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_samplerless_texture_functions : enable
 
 #include "definitions.glsl"
 #include "utils.glsl"
@@ -12,6 +13,23 @@
 layout(location = 0) in vec2 inTexCoord;
 
 layout(location = 0) out vec4 outColor;
+
+vec3 sampleGlossyReflection(vec2 uv, float roughness, float worldSpaceDepth, float far) {
+    float hitDepth = texture(sampler2D(uReflectionsHitDepthBuffer, uIrradianceSampler), uv).r;
+
+    float normalizedDepth = clamp(worldSpaceDepth / far, 0.0f, 1.0f);
+    float depthWeight = smoothstep(0.0f, 1.0f, normalizedDepth * uCameraParameters.glossyDepthBias);
+
+    float normalizeHitDepth = clamp(hitDepth / far, 0.0f, 1.0f);
+    float hitDepthWeight = 1.0 - pow(1.0 - normalizeHitDepth, uCameraParameters.glossyHitDepthBias);
+
+    float alpha = roughness * roughness;
+
+    float maxMip = float(textureQueryLevels(sampler2D(uReflectionsBuffer, uIrradianceSampler)) - 1);
+    float lod = (alpha + max(hitDepthWeight, depthWeight)) * maxMip;
+
+    return textureLod(sampler2D(uReflectionsBuffer, uIrradianceSampler), uv, lod).rgb;
+}
 
 vec4 sampleTexture(int index, InterpolatedWithDerivsVec2 uv) {
     return textureGrad(
@@ -129,9 +147,24 @@ void main() {
 
     float visibility = texture(sampler2D(uSSAOBuffer, uFrameBufferTextureSampler), inTexCoord).r;
 
-    vec3 indirect = ddgiIndirectDiffuse(worldPos, normal, viewVector, uDDGI, uIrradianceSampler, uProbeIrradianceTargets, uFrameBufferTextureSampler, uProbeMomentTargets); 
+    vec3 indirect = ddgiIndirectDiffuse(
+        worldPos,
+        normal,
+        viewVector,
+        uDDGI,
+        uIrradianceSampler,
+        uProbeIrradianceTargets,
+        uFrameBufferTextureSampler,
+        uProbeMomentTargets
+     ); 
 
-    vec3 glossyIndirect = texture(sampler2D(uReflectionsBuffer, uIrradianceSampler), inTexCoord).rgb;
+   float worldSpaceDepth = length(uCameraParameters.cameraPos.xyz - worldPos);
+   vec3 glossyIndirect = sampleGlossyReflection(
+        inTexCoord,
+        roughness,
+        worldSpaceDepth,
+        uCameraParameters.far
+    );
 
     ShadingParams params;
     params.N = normal;
