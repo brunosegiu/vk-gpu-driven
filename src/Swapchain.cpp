@@ -92,12 +92,13 @@ Swapchain::Swapchain(ScopedRefPtr<Context> context) : mContext(context), mCurren
             vk::ImageLayout::eUndefined,
             image);
         mImages.emplace_back(texture);
+
+        mRenderSemaphores.emplace_back(
+            VKRT_ASSERT_VK(logicalDevice.createSemaphore(vk::SemaphoreCreateInfo{})));
     }
 
     for (uint32_t frameIndex = 0; frameIndex < mContext->GetMaxInFlightFrameCount(); ++frameIndex) {
         mPresentSemaphores.emplace_back(
-            VKRT_ASSERT_VK(logicalDevice.createSemaphore(vk::SemaphoreCreateInfo{})));
-        mRenderSemaphores.emplace_back(
             VKRT_ASSERT_VK(logicalDevice.createSemaphore(vk::SemaphoreCreateInfo{})));
     }
 }
@@ -122,14 +123,14 @@ void Swapchain::Present(
         vk::SubmitInfo()
             .setCommandBuffers(commandBuffer)
             .setWaitSemaphores(mPresentSemaphores[frameIndex])
-            .setSignalSemaphores(mRenderSemaphores[frameIndex])
+            .setSignalSemaphores(mRenderSemaphores[mCurrentImageIndex])
             .setWaitDstStageMask(waitStages),
         signalFence));
 
     vk::PresentInfoKHR presentInfo = vk::PresentInfoKHR()
                                          .setSwapchains(mSwapchainHandle)
                                          .setImageIndices(mCurrentImageIndex)
-                                         .setWaitSemaphores(mRenderSemaphores[frameIndex]);
+                                         .setWaitSemaphores(mRenderSemaphores[mCurrentImageIndex]);
 
     VKRT_ASSERT_VK(queue.presentKHR(presentInfo));
 }
