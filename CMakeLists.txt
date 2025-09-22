@@ -46,10 +46,11 @@ set(HEADERS
     include/DDGIRenderer.h
     include/VisibilityManager.h
     include/ShadowRenderer.h
-    include/PostProcessingRenderer.h
+    include/SSAORenderer.h
     include/SettingsManager.h
     include/Utils.h
     include/GlossyReflectionsRenderer.h
+    include/PostProcessingRenderer.h
 )
 
 set(SOURCE
@@ -86,10 +87,11 @@ set(SOURCE
     src/DDGIRenderer.cpp
     src/VisibilityManager.cpp
     src/ShadowRenderer.cpp
-    src/PostProcessingRenderer.cpp
+    src/SSAORenderer.cpp
     src/SettingsManager.cpp
     src/Utils.cpp
     src/GlossyReflectionsRenderer.cpp
+    src/PostProcessingRenderer.cpp
 )
 
 set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
@@ -116,6 +118,7 @@ set(SHADER_HEADERS
     shadowMomentsBlurHorizontalParameters.glsl
     glossyReflectionsParameters.glsl
     blurReflectionsParameters.glsl
+    postProcessingParameters.glsl
 )
 
 set(SHADERS
@@ -151,6 +154,8 @@ set(SHADERS
     glossyReflections.rchit
     glossyReflections.rmiss
     blurReflections.comp
+    postProcessing.vert
+    postProcessing.frag
 )
 
 if(WIN32)

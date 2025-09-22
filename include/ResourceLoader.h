@@ -44,6 +44,8 @@ struct Resource {
         GlossyReflectionsHitShader,
         GlossyReflectionsMissShader,
         BlurReflectionsShader,
+        PostProcessingVertexShader,
+        PostProcessingFragmentShader,
     };
 };
 

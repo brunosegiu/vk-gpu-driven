@@ -185,5 +185,5 @@ void main() {
 
     vec3 color = evalLighting(params);
 
-    outColor = vec4(gammaCorrection(color), 1.0);
+    outColor = vec4(color, 1.0);
 }

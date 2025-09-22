@@ -20,12 +20,9 @@ public:
         ScopedRefPtr<Scene> scene,
         ScopedRefPtr<SettingsManager> settingsManager);
 
-    void Render(
-        vk::CommandBuffer commandBuffer,
-        const uint32_t frameIndex,
-        const ScopedRefPtr<Texture>& depthBuffer);
+    void Render(vk::CommandBuffer commandBuffer, const uint32_t frameIndex);
 
-    void AddRenderTargets();
+    void AddRenderTargets(ScopedRefPtr<RenderTarget> dstTarget);
     void AddPipelines();
     void AddResources();
 
@@ -35,16 +32,10 @@ public:
 
     struct PersistentParameters {
         vk::Sampler mFrameBufferSampler;
-        ScopedRefPtr<Texture> mDepthBuffer;
+        ScopedRefPtr<Texture> mScreenTexture;
     };
     void UpdatePersistentUniforms(const PersistentParameters& parameters);
-
-    struct PerFrameParameters {
-        std::vector<ScopedRefPtr<VulkanBuffer>> mCameraUniform;
-    };
-    void UpdateUniforms(const PerFrameParameters& parameters, uint32_t frameIndex);
-
-    const ScopedRefPtr<Texture>& GetSSAOBuffer() { return mSSAOBlurredBuffer; }
+    void UpdateUniforms(uint32_t frameIndex);
 
     ~PostProcessingRenderer();
 
@@ -54,16 +45,8 @@ private:
     ScopedRefPtr<SettingsManager> mSettingsManager;
 
     // SSAO resources
-    ScopedRefPtr<RenderPass> mSSAOPass;
-    std::vector<ScopedRefPtr<VulkanBuffer>> mSSAOControlBuffer;
-    ScopedRefPtr<GraphicsPipeline> mSSAOPipeline;
-    ScopedRefPtr<Texture> mSSAOBuffer;
-    ScopedRefPtr<RenderTarget> mSSAORenderTarget;
-
-    // SSAO blur resources
-    ScopedRefPtr<RenderPass> mSSAOBlurPass;
-    ScopedRefPtr<GraphicsPipeline> mSSAOBlurPipeline;
-    ScopedRefPtr<Texture> mSSAOBlurredBuffer;
-    ScopedRefPtr<RenderTarget> mSSAOBlurredRenderTarget;
+    ScopedRefPtr<RenderPass> mPostProcessingPass;
+    ScopedRefPtr<GraphicsPipeline> mPostProcessingPipeline;
+    std::vector<ScopedRefPtr<VulkanBuffer>> mPostProcessingControlBuffer;
 };
 }  // namespace VKRT

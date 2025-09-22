@@ -126,4 +126,8 @@ struct BlurControlData {
     float sigmaDepth;
 };
 
+struct PostProcessingControlData {
+    float data;
+};
+
 #endif

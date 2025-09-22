@@ -43,8 +43,9 @@ Renderer::Renderer(
     mUIRenderer = new UIRenderer(mContext, mSettingsManager);
     mDDGIRenderer = new DDGIRenderer(mContext, mScene, mSettingsManager);
     mShadowRenderer = new ShadowRenderer(mContext, mScene, mSettingsManager);
-    mPostProcessingRenderer = new PostProcessingRenderer(mContext, mScene, mSettingsManager);
+    mSSAORenderer = new SSAORenderer(mContext, mScene, mSettingsManager);
     mReflectionsRenderer = new GlossyReflectionsRenderer(mContext, mScene, mSettingsManager);
+    mPostProcessingRenderer = new PostProcessingRenderer(mContext, mScene, mSettingsManager);
 
     AddRenderTargets();
     AddPipelines();
@@ -91,9 +92,18 @@ void Renderer::AddRenderTargets() {
 
     // Shading + transparent render targets
     {
+        mHDRTarget = new Texture(
+            mContext,
+            imageSize.width,
+            imageSize.height,
+            vk::Format::eR16G16B16A16Sfloat,
+            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+            vk::ImageLayout::eShaderReadOnlyOptimal);
+        mHDRTargetRT = new RenderTarget(mContext, mHDRTarget);
+
         mShadePass = new RenderPass(
             mContext,
-            {{.renderTarget = mMainRenderTarget,
+            {{.renderTarget = mHDRTargetRT,
               .loadOp = vk::AttachmentLoadOp::eClear,
               .initialLayout = vk::ImageLayout::eUndefined,
               .storeOp = vk::AttachmentStoreOp::eStore,
@@ -102,7 +112,7 @@ void Renderer::AddRenderTargets() {
         mTransparentPass = new RenderPass(
             mContext,
             {
-                {.renderTarget = mMainRenderTarget,
+                {.renderTarget = mHDRTargetRT,
                  .loadOp = vk::AttachmentLoadOp::eLoad,
                  .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
                  .storeOp = vk::AttachmentStoreOp::eStore,
@@ -116,10 +126,11 @@ void Renderer::AddRenderTargets() {
     }
 
     mUIRenderer->AddRenderTargets(mMainRenderTarget);
-    mDDGIRenderer->AddRenderTargets(mMainRenderTarget, mDepthRenderTarget);
+    mDDGIRenderer->AddRenderTargets(mHDRTargetRT, mDepthRenderTarget);
     mShadowRenderer->AddRenderTargets();
-    mPostProcessingRenderer->AddRenderTargets();
+    mSSAORenderer->AddRenderTargets();
     mReflectionsRenderer->AddRenderTargets();
+    mPostProcessingRenderer->AddRenderTargets(mMainRenderTarget);
 }
 
 void Renderer::AddPipelines() {
@@ -197,8 +208,9 @@ void Renderer::AddPipelines() {
 
     mDDGIRenderer->AddPipelines();
     mShadowRenderer->AddPipelines();
-    mPostProcessingRenderer->AddPipelines();
+    mSSAORenderer->AddPipelines();
     mReflectionsRenderer->AddPipelines();
+    mPostProcessingRenderer->AddPipelines();
 }
 
 void Renderer::AddResources() {
@@ -316,9 +328,11 @@ void Renderer::AddResources() {
 
     mShadowRenderer->AddResources();
 
-    mPostProcessingRenderer->AddResources();
+    mSSAORenderer->AddResources();
 
     mReflectionsRenderer->AddResources();
+
+    mPostProcessingRenderer->AddResources();
 }
 
 void Renderer::RemoveRenderTargets() {
@@ -336,9 +350,11 @@ void Renderer::RemoveRenderTargets() {
 
     mShadowRenderer->RemoveRenderTargets();
 
-    mPostProcessingRenderer->RemoveRenderTargets();
+    mSSAORenderer->RemoveRenderTargets();
 
     mReflectionsRenderer->RemoveRenderTargets();
+
+    mPostProcessingRenderer->RemoveRenderTargets();
 }
 
 void Renderer::RemovePipelines() {
@@ -353,9 +369,11 @@ void Renderer::RemovePipelines() {
 
     mShadowRenderer->RemovePipelines();
 
-    mPostProcessingRenderer->RemovePipelines();
+    mSSAORenderer->RemovePipelines();
 
     mReflectionsRenderer->RemovePipelines();
+
+    mPostProcessingRenderer->RemovePipelines();
 }
 
 void Renderer::RemoveResources() {}
@@ -443,13 +461,13 @@ void Renderer::UpdatePersistentUniforms() {
         mShadowRenderer->UpdatePersistentUniforms(parameters);
     }
 
-    // Post processing
+    // SSAO processing
     {
-        PostProcessingRenderer::PersistentParameters parameters{
+        SSAORenderer::PersistentParameters parameters{
             mFrameBufferSampler = mFrameBufferSampler,
             mDepthBuffer = mDepthBuffer,
         };
-        mPostProcessingRenderer->UpdatePersistentUniforms(parameters);
+        mSSAORenderer->UpdatePersistentUniforms(parameters);
     }
 
     // Visibility buffer geometry + shading
@@ -475,7 +493,7 @@ void Renderer::UpdatePersistentUniforms() {
     mShadePassPipeline->Bind(4, mMaterialsUniform);
     mShadePassPipeline->Bind(5, mShadowRenderer->GetShadowMap());
     mShadePassPipeline->Bind(6, mVisibilityBuffer);
-    mShadePassPipeline->Bind(7, mPostProcessingRenderer->GetSSAOBuffer());
+    mShadePassPipeline->Bind(7, mSSAORenderer->GetSSAOBuffer());
     mShadePassPipeline->Bind(8, mReflectionsRenderer->GetReflectionsTexture());
     mShadePassPipeline->Bind(9, mReflectionsRenderer->GetReflectionHitDepthTexture());
     mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetIndexBuffer());
@@ -484,6 +502,14 @@ void Renderer::UpdatePersistentUniforms() {
     mShadePassPipeline->Bind(13, mScene->GetMeshSystem()->GetNormalBuffer());
     mShadePassPipeline->Bind(14, mScene->GetMeshSystem()->GetTangentBuffer());
     mShadePassPipeline->Bind(15, mSceneTextures);
+
+    {
+        PostProcessingRenderer::PersistentParameters parameters{
+            .mFrameBufferSampler = mFrameBufferSampler,
+            .mScreenTexture = mHDRTarget,
+        };
+        mPostProcessingRenderer->UpdatePersistentUniforms(parameters);
+    }
 }
 
 void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
@@ -563,7 +589,7 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
     }
 
     mShadowRenderer->UpdateUniforms(frameIndex, camera, {.meshDataBuffer = mPerMeshBuffers});
-    mPostProcessingRenderer->UpdateUniforms({.mCameraUniform = mCameraUniform}, frameIndex);
+    mSSAORenderer->UpdateUniforms({.mCameraUniform = mCameraUniform}, frameIndex);
 
     // DDGI
     {
@@ -581,6 +607,10 @@ void Renderer::UpdateUniforms(Camera* camera, uint32_t frameIndex) {
              .mShadowCameraUniform = mShadowRenderer->GetShadowUniform()[frameIndex],
              .mPerMeshParameters = mPerMeshBuffers[frameIndex]},
             frameIndex);
+    }
+
+    {
+        mPostProcessingRenderer->UpdateUniforms(frameIndex);
     }
 }
 
@@ -730,7 +760,7 @@ void Renderer::Render(Camera* camera) {
             mContext->EndMarker(command.buffer);
         }
 
-        mPostProcessingRenderer->Render(command.buffer, mCurrentFrameIndex, mDepthBuffer);
+        mSSAORenderer->Render(command.buffer, mCurrentFrameIndex, mDepthBuffer);
 
         mDDGIRenderer->Render(command.buffer, mCurrentFrameIndex);
 
@@ -762,8 +792,7 @@ void Renderer::Render(Camera* camera) {
             const vk::RenderPassBeginInfo renderPassBeginInfo =
                 vk::RenderPassBeginInfo()
                     .setRenderPass(mShadePass->GetRenderPassHandle())
-                    .setFramebuffer(mShadePass->GetFramebufferHandle(
-                        mContext->GetSwapchain()->GetCurrentIndex()))
+                    .setFramebuffer(mShadePass->GetFramebufferHandle())
                     .setRenderArea({vk::Offset2D{0, 0}, imageSize})
                     .setClearValues(clearValues);
             command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
@@ -831,8 +860,7 @@ void Renderer::Render(Camera* camera) {
             const vk::RenderPassBeginInfo renderPassBeginInfo =
                 vk::RenderPassBeginInfo()
                     .setRenderPass(mTransparentPass->GetRenderPassHandle())
-                    .setFramebuffer(mTransparentPass->GetFramebufferHandle(
-                        mContext->GetSwapchain()->GetCurrentIndex()))
+                    .setFramebuffer(mTransparentPass->GetFramebufferHandle())
                     .setRenderArea({vk::Offset2D{0, 0}, imageSize})
                     .setClearValues(clearValues);
             command.buffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
@@ -901,6 +929,24 @@ void Renderer::Render(Camera* camera) {
         if (mSettingsManager->GetRenderProbes()) {
             mDDGIRenderer->RenderProbes(command.buffer, mCurrentFrameIndex);
         }
+
+        {
+            std::vector<vk::ImageMemoryBarrier> imageBarriers = Texture::GetBarriers(
+                vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                vk::PipelineStageFlagBits::eFragmentShader,
+                {{mHDRTarget,
+                  vk::ImageLayout::eColorAttachmentOptimal,
+                  vk::ImageLayout::eShaderReadOnlyOptimal}});
+
+            command.buffer.pipelineBarrier(
+                vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                vk::PipelineStageFlagBits::eFragmentShader,
+                vk::DependencyFlags{},
+                {},
+                {},
+                imageBarriers);
+        }
+        mPostProcessingRenderer->Render(command.buffer, mCurrentFrameIndex);
 
         {
             mContext->BeginMarker(command.buffer, "Render UI");

@@ -74,5 +74,5 @@ void main() {
 
     vec3 color = evalLighting(params);
 
-    outColor = vec4(gammaCorrection(color), albedo.a);
+    outColor = vec4(color, albedo.a);
 }

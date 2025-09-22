@@ -7,7 +7,7 @@
 #include "DDGIRenderer.h"
 #include "GlossyReflectionsRenderer.h"
 #include "GraphicsPipeline.h"
-#include "PostProcessingRenderer.h"
+#include "SSAORenderer.h"
 #include "RefCountPtr.h"
 #include "RenderPass.h"
 #include "Scene.h"
@@ -15,6 +15,7 @@
 #include "ShadowRenderer.h"
 #include "UIRenderer.h"
 #include "VisibilityManager.h"
+#include "PostProcessingRenderer.h"
 
 namespace VKRT {
 class Renderer : public RefCountPtr, public InputEventListener {
@@ -83,11 +84,14 @@ private:
     ScopedRefPtr<RenderPass> mShadePass;
     ScopedRefPtr<GraphicsPipeline> mShadePassPipeline;
     ScopedRefPtr<RenderPass> mTransparentPass;
+    ScopedRefPtr<GlossyReflectionsRenderer> mReflectionsRenderer;
+    ScopedRefPtr<Texture> mHDRTarget;
+    ScopedRefPtr<RenderTarget> mHDRTargetRT;
 
     ScopedRefPtr<UIRenderer> mUIRenderer;
     ScopedRefPtr<DDGIRenderer> mDDGIRenderer;
     ScopedRefPtr<ShadowRenderer> mShadowRenderer;
+    ScopedRefPtr<SSAORenderer> mSSAORenderer;
     ScopedRefPtr<PostProcessingRenderer> mPostProcessingRenderer;
-    ScopedRefPtr<GlossyReflectionsRenderer> mReflectionsRenderer;
 };
 }  // namespace VKRT

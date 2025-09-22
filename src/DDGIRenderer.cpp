@@ -412,8 +412,7 @@ void DDGIRenderer::RenderProbes(vk::CommandBuffer commandBuffer, const uint32_t 
     const vk::RenderPassBeginInfo renderPassBeginInfo =
         vk::RenderPassBeginInfo()
             .setRenderPass(mVisualizeProbesPass->GetRenderPassHandle())
-            .setFramebuffer(mVisualizeProbesPass->GetFramebufferHandle(
-                mContext->GetSwapchain()->GetCurrentIndex()))
+            .setFramebuffer(mVisualizeProbesPass->GetFramebufferHandle())
             .setRenderArea({vk::Offset2D{0, 0}, imageSize})
             .setClearValues(clearValues);
     commandBuffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
