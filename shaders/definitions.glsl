@@ -126,8 +126,15 @@ struct BlurControlData {
     float sigmaDepth;
 };
 
+const uint ToneMapACES = 0;
+const uint ToneMapReinhard = 1;
+const uint ToneMapUncharted2 = 2;
+
 struct PostProcessingControlData {
-    float data;
+    uint tonemapper;
+    uint fxaa;
+    float fxaaMaxSpan;
+    float fxaaReduceMin;
 };
 
 #endif

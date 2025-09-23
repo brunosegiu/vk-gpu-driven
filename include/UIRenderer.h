@@ -38,6 +38,9 @@ private:
     std::vector<std::string> mRaysPerProbeOptions;
     int32_t mSelectedRaysPerProbeIndex;
 
+    std::vector<std::string> mTonemapperOptions;
+    int32_t mSelectedTonemapperIndex;
+
     glm::vec2 mLightPitchYaw;
 };
 }  // namespace VKRT

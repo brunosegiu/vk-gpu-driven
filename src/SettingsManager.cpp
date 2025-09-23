@@ -11,6 +11,11 @@ const std::array<uint32_t, 5> SettingsManager::ProbeResolutions{16, 32, 64, 128,
 
 const std::array<uint32_t, 7> SettingsManager::RaysPerProbe{8, 16, 32, 64, 128, 256, 512};
 
+const std::array<ToneMapper, 3> SettingsManager::ToneMapOptions{
+    ToneMapper::ACES,
+    ToneMapper::Reinhard,
+    ToneMapper::Uncharted2};
+
 SettingsManager::SettingsManager()
     : mSSAOControlData(),
       mShadowMapResolution(ShadowMapResolutions[4]),
@@ -39,7 +44,11 @@ SettingsManager::SettingsManager()
       mDepthSigma(0.5f),
       mSpatialSigma(0.8f),
       mGlossyDepthBias(1.0),
-      mGlossyHitDepthBias(0.0) {}
+      mGlossyHitDepthBias(0.0),
+      mEnableFXAA(true),
+      mTonemapper(ToneMapper::ACES),
+      mFXAAMaxSpan(8.0),
+      mFXAAReduceMin(128.0f) {}
 
 SettingsManager::~SettingsManager() {}
 

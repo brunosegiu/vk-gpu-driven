@@ -13,6 +13,12 @@ struct SSAOControlData {
     int32_t blurRadius = 2;
 };
 
+enum class ToneMapper : uint32_t {
+    ACES = 0,
+    Reinhard = 1,
+    Uncharted2 = 2,
+};
+
 class SettingsManager : public RefCountPtr {
 public:
     SettingsManager();
@@ -56,11 +62,18 @@ public:
     float& GetGlossyDepthBias() { return mGlossyDepthBias; }
     float& GetGlossyHitDepthBias() { return mGlossyHitDepthBias; }
 
+    bool& GetEnableFXAA() { return mEnableFXAA; }
+    ToneMapper& GetTonemapper() { return mTonemapper; }
+    void SetTonemapper(ToneMapper tonemapper) { mTonemapper = tonemapper; }
+    float& GetFXAAMaxSpan() { return mFXAAMaxSpan; }
+    float& GetFXAAReduceMin() { return mFXAAReduceMin; }
+
     ~SettingsManager();
 
     static const std::array<uint32_t, 6> ShadowMapResolutions;
     static const std::array<uint32_t, 5> ProbeResolutions;
     static const std::array<uint32_t, 7> RaysPerProbe;
+    static const std::array<ToneMapper, 3> ToneMapOptions;
 
 private:
     SSAOControlData mSSAOControlData;
@@ -97,5 +110,11 @@ private:
     float mSpatialSigma;
     float mGlossyDepthBias;
     float mGlossyHitDepthBias;
+
+    // Post-processing
+    bool mEnableFXAA;
+    ToneMapper mTonemapper;
+    float mFXAAMaxSpan;
+    float mFXAAReduceMin;
 };
 }  // namespace VKRT

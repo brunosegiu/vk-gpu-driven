@@ -132,13 +132,26 @@ void ApplyFlatStyle() {
     colors[ImGuiCol_SeparatorActive] = accentActive;
 }
 
+static std::string ToneMapToStr(const ToneMapper& tonemap) {
+    switch (tonemap) {
+        case ToneMapper::ACES:
+            return "ACES";
+        case ToneMapper::Reinhard:
+            return "Reinhard";
+        case ToneMapper::Uncharted2:
+            return "Uncharted2";
+    }
+    return "";
+}
+
 UIRenderer::UIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<SettingsManager> settingsManager)
     : mContext(context),
       mSettingsManager(settingsManager),
       mSelectedShadowResolutionIndex(0),
       mSelectedProbeResolutionIndex(0),
       mSelectedRaysPerProbeIndex(0),
-      mLightPitchYaw(-0.3f, 0.0f) {
+      mLightPitchYaw(-0.3f, 0.0f),
+      mSelectedTonemapperIndex(0) {
     ApplyFlatStyle();
 
     for (uint32_t resolution : SettingsManager::ShadowMapResolutions) {
@@ -169,6 +182,16 @@ UIRenderer::UIRenderer(ScopedRefPtr<Context> context, ScopedRefPtr<SettingsManag
             break;
         }
         ++mSelectedRaysPerProbeIndex;
+    }
+
+    for (ToneMapper tonemapper : SettingsManager::ToneMapOptions) {
+        mTonemapperOptions.push_back(ToneMapToStr(tonemapper));
+    }
+    for (ToneMapper tonemapper : SettingsManager::ToneMapOptions) {
+        if (tonemapper == mSettingsManager->GetTonemapper()) {
+            break;
+        }
+        ++mSelectedTonemapperIndex;
     }
 
     const float pitch = glm::pi<float>() * mLightPitchYaw.x;
@@ -477,6 +500,42 @@ void UIRenderer::Update() {
                     &mSettingsManager->GetGlossyHitDepthBias(),
                     0.0f,
                     10.0f);
+            }
+
+            if (ImGui::CollapsingHeader("Post-processing")) {
+                {
+                    const char* comboPreviewValue =
+                        mTonemapperOptions[mSelectedTonemapperIndex].c_str();
+                    if (ImGui::BeginCombo("Tonemapper", comboPreviewValue)) {
+                        for (uint32_t index = 0; index < mTonemapperOptions.size(); index++) {
+                            const bool isSelected = (mSelectedTonemapperIndex == index);
+                            if (ImGui::Selectable(mTonemapperOptions[index].c_str(), isSelected)) {
+                                mSelectedTonemapperIndex = index;
+                                mSettingsManager->SetTonemapper(
+                                    SettingsManager::ToneMapOptions[mSelectedTonemapperIndex]);
+                            }
+                            if (isSelected) {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
+                ImGui::Checkbox("FXAA", &mSettingsManager->GetEnableFXAA());
+                ImGui::SliderFloat(
+                    "FXAA Span",
+                    &mSettingsManager->GetFXAAMaxSpan(),
+                    1.0f,
+                    32.0f,
+                    "%.2f",
+                    ImGuiSliderFlags_Logarithmic);
+                ImGui::SliderFloat(
+                    "FXAA reduce min",
+                    &mSettingsManager->GetFXAAReduceMin(),
+                    0.00f,
+                    1024.0f,
+                    "%.2f",
+                    ImGuiSliderFlags_Logarithmic);
             }
 
             if (ImGui::CollapsingHeader("Debug", ImGuiTreeNodeFlags_DefaultOpen)) {

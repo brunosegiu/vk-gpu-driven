@@ -12,7 +12,10 @@ PostProcessingRenderer::PostProcessingRenderer(
 }
 
 struct PostProcessingControlData {
-    float data;
+    ToneMapper tonemapper;
+    uint32_t fxaa;
+    float fxaaMaxSpan;
+    float fxaaReduceMin;
 };
 
 void PostProcessingRenderer::AddRenderTargets(ScopedRefPtr<RenderTarget> dstTarget) {
@@ -70,8 +73,13 @@ void PostProcessingRenderer::UpdatePersistentUniforms(const PersistentParameters
 void PostProcessingRenderer::UpdateUniforms(uint32_t frameIndex) {
     mPostProcessingPipeline->Bind(frameIndex, 0, mPostProcessingControlBuffer[frameIndex]);
     {
-        // const SSAOControlData& ssaoControl = mSettingsManager->GetSSAOControlData();
-        // mPostProcessingControlBuffer[frameIndex]->Write(ssaoControl);
+        const PostProcessingControlData postProcessingControl {
+            .tonemapper = mSettingsManager->GetTonemapper(),
+            .fxaa = mSettingsManager->GetEnableFXAA() ? 1u : 0u,
+            .fxaaMaxSpan = mSettingsManager->GetFXAAMaxSpan(),
+            .fxaaReduceMin = 1.0f / mSettingsManager->GetFXAAReduceMin(),
+        };
+        mPostProcessingControlBuffer[frameIndex]->Write(postProcessingControl);
     }
 }
 

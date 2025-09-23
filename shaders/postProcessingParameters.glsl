@@ -8,6 +8,6 @@ layout(binding = 0, set = UPDATE_PER_FRAME, scalar) uniform TPostProcessingContr
 };
 
 layout(binding = 0, set = UPDATE_ONCE) uniform sampler uFrameBufferTextureSampler;
-layout(binding = 1, set = UPDATE_ONCE) uniform texture2D uScreenTexture;
+layout(binding = 1, set = UPDATE_ONCE) uniform texture2D uSceneTexture;
 
 #endif
