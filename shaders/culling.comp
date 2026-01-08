@@ -43,7 +43,7 @@ bool TestCone(mat3 normal, mat4 model, vec3 coneDir, vec3 coneApex, float coneCu
     vec3 axis = normalize(normal * coneDir);
     vec3 apex = vec3(model * vec4(coneApex, 1.0)).xyz;
     vec3 view = uCullingData.ortho == 0 ? normalize(apex - uCullingData.viewDirectionOrCameraPos) : uCullingData.viewDirectionOrCameraPos;
-    return dot(view, axis) < coneCutoff;
+    return coneCutoff == 1.0f || dot(view, axis) < coneCutoff;
 }
 
 void main() {
