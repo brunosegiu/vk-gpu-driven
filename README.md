@@ -4,12 +4,13 @@
 - GPU driven culling (meshlet AABB + normal cones)
 - Visibility Buffer shading with bindless descriptors
 - DDGI
+- Glossy reflections
 - Naive SSAO
 - ESM shadows
 - Forward transparent pass
 
 <p align="left">
-  <img src="https://github.com/user-attachments/assets/e5844bff-43a0-4e9c-ae86-beeac5eb46b1" width="800"/>
+  <img src="[https://github.com/user-attachments/assets/e5844bff-43a0-4e9c-ae86-beeac5eb46b1](https://github.com/user-attachments/assets/e589129e-ff58-4a0f-8f4e-64c7647eaa8a)" width="800"/>
 </p>
 
 ## References:
