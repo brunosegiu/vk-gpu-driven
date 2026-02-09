@@ -18,7 +18,7 @@ GlossyReflectionsRenderer::GlossyReflectionsRenderer(
     ScopedRefPtr<SettingsManager> settingsManager)
     : mContext(context), mScene(scene), mSettingsManager(settingsManager) {}
 
-constexpr uint32_t MaxReflectionMips = 6u;
+constexpr uint32_t MaxReflectionMips = 4u;
 
 void GlossyReflectionsRenderer::AddRenderTargets() {
     const vk::Extent2D& imageSize = mContext->GetSwapchain()->GetExtent();
