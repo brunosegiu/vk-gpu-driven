@@ -23,9 +23,7 @@ MeshData loadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& 
     const bool hasTexCoords = attributes.find(texCoordName) != attributes.end();
     const bool hasTangents = attributes.find(tangentName) != attributes.end();
 
-    if (!hasPositionAndNormals || !hasTexCoords) {
-        exit(-1);
-    }
+    assert(hasPositionAndNormals && hasTexCoords);
 
     MeshData ret;
 
@@ -122,6 +120,8 @@ MeshData loadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& 
         const tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
         const tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
         const size_t indexOffset = indexBufferView.byteOffset + indexAccessor.byteOffset;
+        const uint8_t* pIndexData8Bit =
+            reinterpret_cast<const uint8_t*>(&indexBuffer.data[indexOffset]);
         const uint16_t* pIndexData16Bit =
             reinterpret_cast<const uint16_t*>(&indexBuffer.data[indexOffset]);
         const uint32_t* pIndexData32Bit =
@@ -130,8 +130,11 @@ MeshData loadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& 
         for (uint32_t i = 0; i < indexCount; ++i) {
             if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
                 ret.indices.push_back(static_cast<uint32_t>(pIndexData32Bit[i]));
+            } else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+                ret.indices.push_back(static_cast<uint32_t>(pIndexData16Bit[i]));
             } else {
-                ret.indices.push_back(pIndexData16Bit[i]);
+                assert(indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE);
+                ret.indices.push_back(static_cast<uint32_t>(pIndexData8Bit[i]));
             }
         }
     }
@@ -415,11 +418,11 @@ bool loadGLTF(std::string path, tinygltf::Model& model) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc <= 2) {
+    if (argc <= 1) {
         return -1;
     }
     std::string sourceFileName(argv[1]);
-    std::string dstFileName(argv[2]);
+    std::string dstFileName = sourceFileName.substr(0, sourceFileName.find_last_of('.')) + ".vkrt";
 
     tinygltf::Model model;
     bool isProperlyLoaded = loadGLTF(sourceFileName, model);
