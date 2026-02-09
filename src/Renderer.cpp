@@ -495,13 +495,12 @@ void Renderer::UpdatePersistentUniforms() {
     mShadePassPipeline->Bind(6, mVisibilityBuffer);
     mShadePassPipeline->Bind(7, mSSAORenderer->GetSSAOBuffer());
     mShadePassPipeline->Bind(8, mReflectionsRenderer->GetReflectionsTexture());
-    mShadePassPipeline->Bind(9, mReflectionsRenderer->GetReflectionHitDepthTexture());
-    mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetIndexBuffer());
-    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetVertexBuffer());
-    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetTexCoordBuffer());
-    mShadePassPipeline->Bind(13, mScene->GetMeshSystem()->GetNormalBuffer());
-    mShadePassPipeline->Bind(14, mScene->GetMeshSystem()->GetTangentBuffer());
-    mShadePassPipeline->Bind(15, mSceneTextures);
+    mShadePassPipeline->Bind(9, mScene->GetMeshSystem()->GetIndexBuffer());
+    mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetVertexBuffer());
+    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetTexCoordBuffer());
+    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetNormalBuffer());
+    mShadePassPipeline->Bind(13, mScene->GetMeshSystem()->GetTangentBuffer());
+    mShadePassPipeline->Bind(14, mSceneTextures);
 
     {
         PostProcessingRenderer::PersistentParameters parameters{

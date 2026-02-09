@@ -117,7 +117,7 @@ void main() {
 
     // Sampling indirect here is just way too much, instead pass a fraction of the radiance
     // vec3 indirect = ddgiIndirectDiffuse(worldSpacePosition, normal, viewVector, uDDGI, uMaterialTextureSampler, uProbeIrradianceTargets, uFrameBufferTextureSampler, uProbeMomentTargets); 
-    vec3 indirect = uLightParameters.radiance * 0.05f;
+    vec3 indirect = uLightParameters.radiance * 0.15f;
 
     ShadingParams params;
     params.N = normal;

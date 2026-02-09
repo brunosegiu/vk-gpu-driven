@@ -149,30 +149,38 @@ struct ShadingParams {
 };
 
 vec3 evalLighting(ShadingParams params) {
-    vec3 F0 = vec3(0.04); 
-    F0 = mix(F0, params.albedo.rgb, params.metallic);
-
-    vec3 Lo = vec3(0.0);
+    float NdotV = max(dot(params.N, params.V), 0.0);
+    float NdotL = max(dot(params.N, params.L), 0.0);
     vec3 H = normalize(params.V + params.L);
+    float HdotV = max(dot(H, params.V), 0.0);
+
+    vec3 F0 = mix(vec3(0.04), params.albedo.rgb, params.metallic);
 
     float NDF = DistributionGGX(params.N, H, params.roughness);
     float G = GeometrySmith(params.N, params.V, params.L, params.roughness);
-    vec3 F = FresnelSchlick(max(dot(H, params.V), 0.0), F0);
+    vec3 FDirect = FresnelSchlick(HdotV, F0);
         
-    vec3 kS = F;
-    vec3 kD = (vec3(1.0) - kS) * (1.0 - params.metallic);
+    vec3 kSDirect = FDirect;
+    vec3 kDDirect = (vec3(1.0) - kSDirect) * (1.0 - params.metallic);
         
-    vec3 numerator    = NDF * G * F;
-    float denominator = 4.0 * max(dot(params.N, params.V), 0.0) * max(dot(params.N, params.L), 0.0) + 0.0001;
-    vec3 specular     = numerator / denominator;  
+    vec3 numerator = NDF * G * FDirect;
+    float denominator = 4.0 * NdotV * NdotL + 0.0001;
+    vec3 specular = numerator / denominator;  
             
-    float NdotL = max(dot(params.N, params.L), 0.0);
-        
-    Lo = (kD * params.albedo.rgb / PI + specular) * NdotL * params.radiance * params.shadowTerm;
+    vec3 directLighting = (kDDirect * params.albedo.rgb / PI + specular) * NdotL * params.radiance * params.shadowTerm;
+    
+    vec3 FIndirect = F0 + (max(vec3(1.0 - params.roughness), F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
+    
+    vec3 kSIndirect = FIndirect;
+    vec3 kDIndirect = (vec3(1.0) - kSIndirect) * (1.0 - params.metallic);
 
-    vec3 ambient = params.indirectDiffuse * params.albedo.rgb * params.visibility;
+    vec3 ambientDiffuse = kDIndirect * params.indirectDiffuse * params.albedo.rgb * params.visibility;
+    vec3 ambientGlossy  = kSIndirect * params.indirectGlossy;
 
-    return Lo * params.directWeight + params.emissive + ambient * params.indirectDiffuseWeight + kS * params.indirectGlossy * params.indirectGlossyWeight;
+    return (directLighting * params.directWeight) + 
+           params.emissive + 
+           (ambientDiffuse * params.indirectDiffuseWeight) + 
+           (ambientGlossy * params.indirectGlossyWeight);
 }
 
 vec3 gammaCorrection(vec3 color) {

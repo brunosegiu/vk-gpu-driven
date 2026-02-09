@@ -10,7 +10,13 @@
 
 #define LOCAL_SIZE_X 8
 #define LOCAL_SIZE_Y 8
+#define MAX_RADIUS 8
+#define TILE_SIZE 32 
+
 layout(local_size_x = LOCAL_SIZE_X, local_size_y = LOCAL_SIZE_Y) in;
+
+shared vec3 TileRadiance[TILE_SIZE][TILE_SIZE];
+shared float Tiledepth[TILE_SIZE][TILE_SIZE];
 
 vec4 sampleRadianceHitDepth(ivec2 coords, ivec2 size) {
     coords = clamp(coords, ivec2(0), size - ivec2(1));
@@ -26,35 +32,45 @@ float sampleDepth(ivec2 srcCoords, ivec2 srcSize) {
     return linearizeDepth(deviceDepth, uCameraParameters.far, uCameraParameters.near);
 }
 
-// From: https://github.com/diharaw/hybrid-rendering/blob/master/src/shaders/edge_stopping.glsl
 float depthEdgeStoppingWeight(float centerDepth, float sampleDepth, float phi) {
     float referenceDepth = max(centerDepth, sampleDepth);
     float sigmaDepthAbs = max(1e-6, phi * referenceDepth);
-
-    float depthDifference  = abs(centerDepth - sampleDepth);
+    float depthDifference = abs(centerDepth - sampleDepth);
     float normalizedDifference = depthDifference / sigmaDepthAbs;
-    float exponentArgument = normalizedDifference * normalizedDifference;
-    return 2.0f * exponentArgument;
+    return 2.0f * (normalizedDifference * normalizedDifference);
 }
 
 void main() {
     ivec2 dstSize = imageSize(uOutBlurredReflections);
     ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
-
     ivec2 srcSize = textureSize(uInReflections, 0);
 
-    if (any(greaterThanEqual(dstCoord, dstSize))) {
-        return;
+    ivec2 groupBaseCoord = ivec2(gl_WorkGroupID.xy * ivec2(LOCAL_SIZE_X, LOCAL_SIZE_Y)) * 2 + 1;
+    ivec2 tileStart = groupBaseCoord - MAX_RADIUS;
+
+    uint listSize = TILE_SIZE * TILE_SIZE;
+    for (uint i = gl_LocalInvocationIndex; i < listSize; i += (LOCAL_SIZE_X * LOCAL_SIZE_Y)) {
+        ivec2 localPos = ivec2(i % TILE_SIZE, i / TILE_SIZE);
+        ivec2 globalPos = tileStart + localPos;
+        
+        vec4 rad = sampleRadianceHitDepth(globalPos, srcSize);
+        TileRadiance[localPos.y][localPos.x] = rad.rgb;
+        Tiledepth[localPos.y][localPos.x] = sampleDepth(globalPos, srcSize);
     }
 
+    barrier();
+
     ivec2 centerCoords = dstCoord * 2 + 1;
-    vec4 radianceHitDistanceCenter = sampleRadianceHitDepth(centerCoords, srcSize);
-    vec3 radianceCenter = radianceHitDistanceCenter.rgb;
-    float hitDepthCenter = radianceHitDistanceCenter.a;
+    ivec2 localCenter = centerCoords - tileStart;
+    
+    vec3 radianceCenter = TileRadiance[localCenter.y][localCenter.x];
+    float centerDepth = Tiledepth[localCenter.y][localCenter.x];
+    
+    float hitDistance = sampleRadianceHitDepth(centerCoords, srcSize).a;
 
-    float centerDepth = sampleDepth(centerCoords, srcSize);
+    // Scale the radius based on how far the ray traveled. 
+    int r = clamp(int(hitDistance * uControl.sigmaSpatial), 1, MAX_RADIUS);
 
-    const int r = 2;
     float twoSigma2 = 2.0 * uControl.sigmaSpatial * uControl.sigmaSpatial;
 
     vec3 sumRadiance = vec3(0.0);
@@ -62,24 +78,22 @@ void main() {
 
     for (int dy = -r; dy <= r; ++dy) {
         for (int dx = -r; dx <= r; ++dx) {
-            ivec2 sampleCoords = centerCoords + ivec2(dx,dy);
-            vec4 sampleRadianceHitDepth = sampleRadianceHitDepth(sampleCoords, srcSize);
-
-            float sampleDepth = sampleDepth(sampleCoords, srcSize);
+            ivec2 sampleLocalPos = localCenter + ivec2(dx, dy);
+            
+            vec3 sampleRadiance = TileRadiance[sampleLocalPos.y][sampleLocalPos.x];
+            float sampleDepthVal = Tiledepth[sampleLocalPos.y][sampleLocalPos.x];
 
             float weightSpatial = exp(-(dx * dx + dy * dy) / twoSigma2);
-
-            float depthStop = depthEdgeStoppingWeight(centerDepth, sampleDepth, uControl.sigmaDepth);
+            float depthStop = depthEdgeStoppingWeight(centerDepth, sampleDepthVal, uControl.sigmaDepth);
             float weightDepth = exp(-max(0.0f, depthStop));
 
             float weight = weightSpatial * weightDepth;
 
-            sumRadiance += weight * sampleRadianceHitDepth.rgb;
+            sumRadiance += weight * sampleRadiance;
             sumWeight += weight;
         }
     }
 
-    vec3 totalRadiance = (sumWeight > 0.0) ? sumRadiance / sumWeight : radianceCenter;
-
-    imageStore(uOutBlurredReflections, dstCoord, vec4(totalRadiance, 0.0f));
+    vec3 totalRadiance = (sumWeight > 1e-3) ? sumRadiance / sumWeight : radianceCenter;
+    imageStore(uOutBlurredReflections, dstCoord, vec4(totalRadiance, 1.0f));
 }
