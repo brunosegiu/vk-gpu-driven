@@ -158,7 +158,7 @@ void VisibilityManager::Dispatch(vk::CommandBuffer commandBuffer, uint32_t frame
             std::vector<vk::BufferMemoryBarrier> bufferBarriers = VulkanBuffer::GetBarriers(
                 {indirectDrawBuffer, additionalDrawDataBuffer, drawCallCountBuffer},
                 vk::PipelineStageFlagBits::eComputeShader,
-                vk::PipelineStageFlagBits::eComputeShader);
+                vk::PipelineStageFlagBits::eDrawIndirect);
 
             commandBuffer.pipelineBarrier(
                 vk::PipelineStageFlagBits::eComputeShader,
