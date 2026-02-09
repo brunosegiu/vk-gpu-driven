@@ -56,7 +56,7 @@ float visibilityFromMoments(float distanceToSample, vec2 moments) {
     float mean2 = moments.y;
     float variance  = abs(square(mean) - mean2);
     float chebyshevWeight = variance / (variance + square(max(distanceToSample - mean, 0.0f)));
-    chebyshevWeight = max(chebyshevWeight, 0.0f);
+    chebyshevWeight = max(chebyshevWeight * chebyshevWeight * chebyshevWeight, 0.0f);
 	return (distanceToSample <= mean) ? 1.0 : chebyshevWeight;
 }
 
@@ -80,9 +80,9 @@ vec3 ddgiIndirectDiffuse(
     sampler nearSampler,
     texture2DArray moments
 ) {
-    ivec3 gridIndex = nearestProbeGridIndex(worldSpacePosition, ddgi);
     vec3 gridPos = (worldSpacePosition - ddgi.probeGridOrigin) / ddgi.probeSpacing;
-    vec3 interpolators = clamp(gridPos - vec3(gridIndex), 0.0f, 1.0f);
+    ivec3 gridIndex = ivec3(floor(gridPos)); 
+    vec3 interpolators = gridPos - vec3(gridIndex);
 
     vec3 accumulatedIrradiance = vec3(0.0f);
     float accumulatedWeight = 0.0;
@@ -122,8 +122,9 @@ vec3 ddgiIndirectDiffuse(
             }
         }
     }
-    vec3 toalIrradiance = (accumulatedWeight > EPSILON) ? (accumulatedIrradiance / accumulatedWeight) : vec3(0.0f);
-    return toalIrradiance * PI * 0.5f;
+
+    vec3 totalIrradiance = (accumulatedWeight > EPSILON) ? accumulatedIrradiance / accumulatedWeight : vec3(0.0f);
+    return totalIrradiance * PI * 0.5f;
 }
 
 #endif
