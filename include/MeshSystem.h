@@ -10,6 +10,7 @@
 
 namespace VKRTBaker {
 struct Vec3;
+struct UVec3;
 }
 
 namespace VKRT {
@@ -18,10 +19,8 @@ class Device;
 enum VertexAttributeFlag : uint32_t {
     Index = 0,
     Position = 0x1,
-    TexCoord = 0x2,
-    Normal = 0x4,
-    Tangent = 0x8,
-    All = Position | TexCoord | Normal | Tangent
+    NormalTexCoordTangent = 0x2,
+    All = Position | NormalTexCoordTangent
 };
 
 class MeshSystem : public RefCountPtr {
@@ -32,18 +31,16 @@ public:
 
     const ScopedRefPtr<VulkanBuffer>& GetVertexBuffer() const { return mUnifiedVertexBuffer; }
     const ScopedRefPtr<VulkanBuffer>& GetIndexBuffer() const { return mUnifiedIndexBuffer; }
-    const ScopedRefPtr<VulkanBuffer>& GetTexCoordBuffer() const { return mUnifiedTexCoordBuffer; }
-    const ScopedRefPtr<VulkanBuffer>& GetNormalBuffer() const { return mUnifiedNormalBuffer; }
-    const ScopedRefPtr<VulkanBuffer>& GetTangentBuffer() const { return mUnifiedTangentBuffer; }
+    const ScopedRefPtr<VulkanBuffer>& GetNormalTexCoordTangentBuffer() const {
+        return mUnifiedNormalTexCoordTangentBuffer;
+    };
 
     uint32_t GetVertexCount() { return mVertexCount; }
     uint32_t GetPrimitiveCount() { return mPrimitiveCount; }
 
     void Upload(
         const std::vector<VKRTBaker::Vec3>& vertices,
-        const std::vector<uint32_t>& texCoord,
-        const std::vector<uint32_t>& normals,
-        const std::vector<uint32_t>& tangents,
+        const std::vector<VKRTBaker::UVec3>& normalsTexturesTangents,
         const std::vector<uint32_t>& indices);
 
     void BindBuffers(vk::CommandBuffer& commandBuffer, VertexAttributeFlag attributeFlags);
@@ -52,9 +49,7 @@ private:
     ScopedRefPtr<Context> mContext;
     ScopedRefPtr<VulkanBuffer> mUnifiedVertexBuffer;
     ScopedRefPtr<VulkanBuffer> mUnifiedIndexBuffer;
-    ScopedRefPtr<VulkanBuffer> mUnifiedTexCoordBuffer;
-    ScopedRefPtr<VulkanBuffer> mUnifiedNormalBuffer;
-    ScopedRefPtr<VulkanBuffer> mUnifiedTangentBuffer;
+    ScopedRefPtr<VulkanBuffer> mUnifiedNormalTexCoordTangentBuffer;
     uint32_t mVertexCount;
     uint32_t mPrimitiveCount;
 };

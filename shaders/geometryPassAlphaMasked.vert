@@ -6,7 +6,7 @@
 #include "geometryPassAlphaMaskedParameters.glsl"
 
 layout(location = 0) in vec3 inPosition;
-layout(location = 1) in uint inPackedTexCoord;
+layout(location = 1) in uvec3 inPackedNormalTexCoordTangent;
 
 layout(location = 0) out vec2 outTexCoord;
 layout(location = 1) out flat uint outDrawID;
@@ -17,8 +17,8 @@ void main() {
     const MeshData meshData = uMeshData[drawData.meshIndex];
 
     gl_Position = uCameraParameters.viewProjection * meshData.modelMatrix * vec4(inPosition, 1.0);
-
-    outTexCoord = unpackHalf2x16(inPackedTexCoord);
+    
+    outTexCoord = unpackHalf2x16(inPackedNormalTexCoordTangent.y);
 
     outDrawID = globalDrawIndex;
 }

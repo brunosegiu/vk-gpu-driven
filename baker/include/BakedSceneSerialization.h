@@ -76,6 +76,12 @@ struct Vec3 {
     void deserialize(std::istream& is) { readBinary(is, *this); }
 };
 
+struct UVec3 {
+    uint32_t x, y, z;
+    void serialize(std::ostream& os) const { writeBinary(os, *this); }
+    void deserialize(std::istream& is) { readBinary(is, *this); }
+};
+
 struct Vec4 {
     float x, y, z, w;
     void serialize(std::ostream& os) const { writeBinary(os, *this); }
@@ -217,23 +223,17 @@ struct Texture {
 
 struct MeshData {
     std::vector<Vec3> positions;
-    std::vector<uint32_t> normals;
-    std::vector<uint32_t> textureCoords;
-    std::vector<uint32_t> tangents;
+    std::vector<UVec3> normalsTexturesTangents;
     std::vector<uint32_t> indices;
 
     void serialize(std::ostream& os) const {
         writeVector(os, positions);
-        writeVector(os, normals);
-        writeVector(os, textureCoords);
-        writeVector(os, tangents);
+        writeVector(os, normalsTexturesTangents);
         writeVector(os, indices);
     }
     void deserialize(std::istream& is) {
         readVector(is, positions);
-        readVector(is, normals);
-        readVector(is, textureCoords);
-        readVector(is, tangents);
+        readVector(is, normalsTexturesTangents);
         readVector(is, indices);
     }
 };

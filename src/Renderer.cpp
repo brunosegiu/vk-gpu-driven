@@ -176,7 +176,8 @@ void Renderer::AddPipelines() {
                 isTransparentPass ? VertexAttributeFlag::All
                 : isAlphaMaskedPass
                     ? VertexAttributeFlag(
-                          VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord)
+                                          VertexAttributeFlag::Position |
+                                          VertexAttributeFlag::NormalTexCoordTangent)
                     : VertexAttributeFlag::Position;
             const std::vector<GeometryLayout> geometryLayout =
                 MeshSystem::GetGeometryLayout(geometryFlags);
@@ -423,9 +424,7 @@ void Renderer::UpdatePersistentUniforms() {
             .mMaterialsUniform = mMaterialsUniform,
             .mIndexBufferUniform = mScene->GetMeshSystem()->GetIndexBuffer(),
             .mPositionBufferUniform = mScene->GetMeshSystem()->GetVertexBuffer(),
-            .mTexCoordBufferUniform = mScene->GetMeshSystem()->GetTexCoordBuffer(),
-            .mNormalBufferUniform = mScene->GetMeshSystem()->GetNormalBuffer(),
-            .mTangentBufferUniform = mScene->GetMeshSystem()->GetTangentBuffer(),
+            .mNormalTexCoordTangentBufferUniform = mScene->GetMeshSystem()->GetNormalTexCoordTangentBuffer(),
             .mMaterialsTextures = mSceneTextures,
         };
         mDDGIRenderer->UpdatePersistentUniforms(parameters);
@@ -442,9 +441,8 @@ void Renderer::UpdatePersistentUniforms() {
             .mMaterialsUniform = mMaterialsUniform,
             .mIndexBufferUniform = mScene->GetMeshSystem()->GetIndexBuffer(),
             .mPositionBufferUniform = mScene->GetMeshSystem()->GetVertexBuffer(),
-            .mTexCoordBufferUniform = mScene->GetMeshSystem()->GetTexCoordBuffer(),
-            .mNormalBufferUniform = mScene->GetMeshSystem()->GetNormalBuffer(),
-            .mTangentBufferUniform = mScene->GetMeshSystem()->GetTangentBuffer(),
+            .mNormalTexCoordTangentBufferUniform =
+                mScene->GetMeshSystem()->GetNormalTexCoordTangentBuffer(),
             .mMaterialsTextures = mSceneTextures,
         };
         mReflectionsRenderer->UpdatePersistentUniforms(parameters);
@@ -497,10 +495,8 @@ void Renderer::UpdatePersistentUniforms() {
     mShadePassPipeline->Bind(8, mReflectionsRenderer->GetReflectionsTexture());
     mShadePassPipeline->Bind(9, mScene->GetMeshSystem()->GetIndexBuffer());
     mShadePassPipeline->Bind(10, mScene->GetMeshSystem()->GetVertexBuffer());
-    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetTexCoordBuffer());
-    mShadePassPipeline->Bind(12, mScene->GetMeshSystem()->GetNormalBuffer());
-    mShadePassPipeline->Bind(13, mScene->GetMeshSystem()->GetTangentBuffer());
-    mShadePassPipeline->Bind(14, mSceneTextures);
+    mShadePassPipeline->Bind(11, mScene->GetMeshSystem()->GetNormalTexCoordTangentBuffer());
+    mShadePassPipeline->Bind(12, mSceneTextures);
 
     {
         PostProcessingRenderer::PersistentParameters parameters{
@@ -735,7 +731,7 @@ void Renderer::Render(Camera* camera) {
                         alphaMode == Material::AlphaMode::Opaque
                             ? VertexAttributeFlag::Position
                             : VertexAttributeFlag(
-                                  VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord));
+                                  VertexAttributeFlag::Position | VertexAttributeFlag::NormalTexCoordTangent));
 
                     uint32_t maxDrawIndirectCount =
                         mContext->GetDevice()->GetDeviceProperties().limits.maxDrawIndirectCount;

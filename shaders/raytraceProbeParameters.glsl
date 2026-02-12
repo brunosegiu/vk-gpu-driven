@@ -36,15 +36,9 @@ layout(binding = 8, set = UPDATE_ONCE, scalar) readonly buffer Index {
 layout(binding = 9, set = UPDATE_ONCE, scalar) readonly buffer VertexPosition {
     vec3 uPositions[];
 };
-layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedTexCoord {
-    uint uPackedTexCoord[];
+layout(binding = 10, set = UPDATE_ONCE, scalar) readonly buffer PackedNormalTexCoordTangent {
+    uvec3 uPackedNormalTexCoordTangent[];
 };
-layout(binding = 11, set = UPDATE_ONCE, scalar) readonly buffer PackedNormal {
-    uint uPackedNormal[];
-};
-layout(binding = 12, set = UPDATE_ONCE, scalar) readonly buffer PackedTangent {
-    uint uPackedTangent[];
-};
-layout(binding = 13, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
+layout(binding = 11, set = UPDATE_ONCE) uniform texture2D uSceneTextures[];
 
 #endif

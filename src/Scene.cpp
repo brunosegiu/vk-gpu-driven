@@ -156,11 +156,10 @@ void Scene::Load(std::string path) {
 
     // Upload geometry buffer to GPU
     const std::vector<VKRTBaker::Vec3>& vertices = fileIn.unifiedGeometryBuffer.positions;
-    const std::vector<uint32_t>& texCoord = fileIn.unifiedGeometryBuffer.textureCoords;
-    const std::vector<uint32_t>& normals = fileIn.unifiedGeometryBuffer.normals;
-    const std::vector<uint32_t>& tangents = fileIn.unifiedGeometryBuffer.tangents;
+    const std::vector<VKRTBaker::UVec3>& normalsTexturesTangents =
+        fileIn.unifiedGeometryBuffer.normalsTexturesTangents;
     const std::vector<uint32_t>& indices = fileIn.unifiedGeometryBuffer.indices;
-    GetMeshSystem()->Upload(vertices, texCoord, normals, tangents, indices);
+    GetMeshSystem()->Upload(vertices, normalsTexturesTangents, indices);
 }
 
 void Scene::Update() {

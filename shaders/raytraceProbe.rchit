@@ -76,9 +76,13 @@ void main() {
     const vec3 position = interpolate(posA, posB, posC, barycentricCoords);
     const vec3 worldSpacePosition = vec3(gl_ObjectToWorldEXT * vec4(position, 1.0));
 
-    vec2 texCoordA = unpackHalf2x16(uPackedTexCoord[vertexIndexA]);
-    vec2 texCoordB = unpackHalf2x16(uPackedTexCoord[vertexIndexB]);
-    vec2 texCoordC = unpackHalf2x16(uPackedTexCoord[vertexIndexC]);
+    const uvec3 packedDataA = uPackedNormalTexCoordTangent[vertexIndexA];
+    const uvec3 packedDataB = uPackedNormalTexCoordTangent[vertexIndexB];
+    const uvec3 packedDataC = uPackedNormalTexCoordTangent[vertexIndexC];
+
+    vec2 texCoordA = unpackHalf2x16(packedDataA.y);
+    vec2 texCoordB = unpackHalf2x16(packedDataB.y);
+    vec2 texCoordC = unpackHalf2x16(packedDataC.y);
     vec2 uv = interpolate(
         texCoordA,
         texCoordB,
@@ -86,15 +90,15 @@ void main() {
         barycentricCoords
     );
 
-    vec3 unpackedNormalA = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexA]).xyz);
-    vec3 unpackedNormalB = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexB]).xyz);
-    vec3 unpackedNormalC = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexC]).xyz);
+    vec3 unpackedNormalA = normalize(unpackSnorm4x8(packedDataA.x).xyz);
+    vec3 unpackedNormalB = normalize(unpackSnorm4x8(packedDataB.x).xyz);
+    vec3 unpackedNormalC = normalize(unpackSnorm4x8(packedDataC.x).xyz);
 
     vec3 normal = normalize(meshData.normalTransform * interpolate(unpackedNormalA, unpackedNormalB, unpackedNormalC, barycentricCoords));
     
-    vec4 unpackedTangentA = unpackSnorm4x8(uPackedTangent[vertexIndexA]);
-    vec4 unpackedTangentB = unpackSnorm4x8(uPackedTangent[vertexIndexB]);
-    vec4 unpackedTangentC = unpackSnorm4x8(uPackedTangent[vertexIndexC]);
+    vec4 unpackedTangentA = unpackSnorm4x8(packedDataA.z);
+    vec4 unpackedTangentB = unpackSnorm4x8(packedDataB.z);
+    vec4 unpackedTangentC = unpackSnorm4x8(packedDataC.z);
 
     vec4 tangent = interpolate(unpackedTangentA, unpackedTangentB, unpackedTangentC, barycentricCoords);
     vec3 normalizedTangent = normalize(meshData.normalTransform * tangent.xyz);

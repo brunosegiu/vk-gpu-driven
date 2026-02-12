@@ -96,10 +96,8 @@ void GlossyReflectionsRenderer::UpdatePersistentUniforms(const PersistentParamet
     mTraceReflectionsPipeline->Bind(8, parameters.mMaterialsUniform);
     mTraceReflectionsPipeline->Bind(9, parameters.mIndexBufferUniform);
     mTraceReflectionsPipeline->Bind(10, parameters.mPositionBufferUniform);
-    mTraceReflectionsPipeline->Bind(11, parameters.mTexCoordBufferUniform);
-    mTraceReflectionsPipeline->Bind(12, parameters.mNormalBufferUniform);
-    mTraceReflectionsPipeline->Bind(13, parameters.mTangentBufferUniform);
-    mTraceReflectionsPipeline->Bind(14, parameters.mMaterialsTextures);
+    mTraceReflectionsPipeline->Bind(11, parameters.mNormalTexCoordTangentBufferUniform);
+    mTraceReflectionsPipeline->Bind(12, parameters.mMaterialsTextures);
 
     for (uint32_t mipIndex = 1; mipIndex < mReflectionsBuffer->GetMipLevels(); ++mipIndex) {
         ScopedRefPtr<ComputePipeline>& blurPipeline = mBlurReflectionsPipeline[mipIndex];

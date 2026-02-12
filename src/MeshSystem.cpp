@@ -16,16 +16,8 @@ const std::vector<GeometryLayout> MeshSystem::GetGeometryLayout(
             {.format = vk::Format::eR32G32B32A32Sfloat, .stride = sizeof(glm::vec3)});
     }
 
-    if (attributeFlags & VertexAttributeFlag::TexCoord) {
-        geometryLayout.push_back({.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)});
-    }
-
-    if (attributeFlags & VertexAttributeFlag::Normal) {
-        geometryLayout.push_back({.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)});
-    }
-
-    if (attributeFlags & VertexAttributeFlag::Tangent) {
-        geometryLayout.push_back({.format = vk::Format::eR32Uint, .stride = sizeof(uint32_t)});
+    if (attributeFlags & VertexAttributeFlag::NormalTexCoordTangent) {
+        geometryLayout.push_back({.format = vk::Format::eR32G32B32Uint, .stride = sizeof(glm::uvec3)});
     }
 
     return geometryLayout;
@@ -64,9 +56,7 @@ void UploadBuffer(
                 usageFlags |= vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR;
                 usageFlags |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
             } break;
-            case VertexAttributeFlag::TexCoord:
-            case VertexAttributeFlag::Normal:
-            case VertexAttributeFlag::Tangent: {
+            case VertexAttributeFlag::NormalTexCoordTangent: {
                 usageFlags |= vk::BufferUsageFlagBits::eVertexBuffer;
             } break;
         }
@@ -95,14 +85,14 @@ void UploadBuffer(
 
 void MeshSystem::Upload(
     const std::vector<VKRTBaker::Vec3>& vertices,
-    const std::vector<uint32_t>& texCoord,
-    const std::vector<uint32_t>& normals,
-    const std::vector<uint32_t>& tangents,
+    const std::vector<VKRTBaker::UVec3>& normalsTexturesTangents,
     const std::vector<uint32_t>& indices) {
     UploadBuffer(mContext, mUnifiedVertexBuffer, vertices, VertexAttributeFlag::Position);
-    UploadBuffer(mContext, mUnifiedTexCoordBuffer, texCoord, VertexAttributeFlag::TexCoord);
-    UploadBuffer(mContext, mUnifiedNormalBuffer, normals, VertexAttributeFlag::Normal);
-    UploadBuffer(mContext, mUnifiedTangentBuffer, tangents, VertexAttributeFlag::Tangent);
+    UploadBuffer(
+        mContext,
+        mUnifiedNormalTexCoordTangentBuffer,
+        normalsTexturesTangents,
+        VertexAttributeFlag::NormalTexCoordTangent);
     UploadBuffer(mContext, mUnifiedIndexBuffer, indices, VertexAttributeFlag::Index);
 
     mVertexCount = vertices.size();
@@ -115,16 +105,8 @@ void MeshSystem::BindBuffers(vk::CommandBuffer& commandBuffer, VertexAttributeFl
         commandBuffer.bindVertexBuffers(currentIndex, GetVertexBuffer()->GetBufferHandle(), {0});
         ++currentIndex;
     }
-    if (attributeFlags & VertexAttributeFlag::TexCoord) {
-        commandBuffer.bindVertexBuffers(currentIndex, GetTexCoordBuffer()->GetBufferHandle(), {0});
-        ++currentIndex;
-    }
-    if (attributeFlags & VertexAttributeFlag::Normal) {
-        commandBuffer.bindVertexBuffers(currentIndex, GetNormalBuffer()->GetBufferHandle(), {0});
-        ++currentIndex;
-    }
-    if (attributeFlags & VertexAttributeFlag::Tangent) {
-        commandBuffer.bindVertexBuffers(currentIndex, GetTangentBuffer()->GetBufferHandle(), {0});
+    if (attributeFlags & VertexAttributeFlag::NormalTexCoordTangent) {
+        commandBuffer.bindVertexBuffers(currentIndex, GetNormalTexCoordTangentBuffer()->GetBufferHandle(), {0});
         ++currentIndex;
     }
     commandBuffer.bindIndexBuffer(GetIndexBuffer()->GetBufferHandle(), {0}, vk::IndexType::eUint32);

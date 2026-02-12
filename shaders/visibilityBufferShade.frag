@@ -75,9 +75,13 @@ void main() {
 
     vec3 worldPos = interpolate(bary, posA, posB, posC);
 
-    vec2 texCoordA = unpackHalf2x16(uPackedTexCoord[vertexIndexA]);
-    vec2 texCoordB = unpackHalf2x16(uPackedTexCoord[vertexIndexB]);
-    vec2 texCoordC = unpackHalf2x16(uPackedTexCoord[vertexIndexC]);
+    const uvec3 packedDataA = uPackedNormalTexCoordTangent[vertexIndexA];
+    const uvec3 packedDataB = uPackedNormalTexCoordTangent[vertexIndexB];
+    const uvec3 packedDataC = uPackedNormalTexCoordTangent[vertexIndexC];
+
+    vec2 texCoordA = unpackHalf2x16(packedDataA.y);
+    vec2 texCoordB = unpackHalf2x16(packedDataB.y);
+    vec2 texCoordC = unpackHalf2x16(packedDataC.y);
     InterpolatedWithDerivsVec2 uvWithDerivs = interpolateWithDerivs(
         bary,
         texCoordA,
@@ -86,15 +90,15 @@ void main() {
     );
     vec2 uv = uvWithDerivs.value;
 
-    vec3 unpackedNormalA = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexA]).xyz);
-    vec3 unpackedNormalB = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexB]).xyz);
-    vec3 unpackedNormalC = normalize(unpackSnorm4x8(uPackedNormal[vertexIndexC]).xyz);
+    vec3 unpackedNormalA = normalize(unpackSnorm4x8(packedDataA.x).xyz);
+    vec3 unpackedNormalB = normalize(unpackSnorm4x8(packedDataB.x).xyz);
+    vec3 unpackedNormalC = normalize(unpackSnorm4x8(packedDataC.x).xyz);
 
     vec3 normal = normalize(meshData.normalTransform * interpolate(bary, unpackedNormalA, unpackedNormalB, unpackedNormalC));
     
-    vec4 unpackedTangentA = unpackSnorm4x8(uPackedTangent[vertexIndexA]);
-    vec4 unpackedTangentB = unpackSnorm4x8(uPackedTangent[vertexIndexB]);
-    vec4 unpackedTangentC = unpackSnorm4x8(uPackedTangent[vertexIndexC]);
+    vec4 unpackedTangentA = unpackSnorm4x8(packedDataA.z);
+    vec4 unpackedTangentB = unpackSnorm4x8(packedDataB.z);
+    vec4 unpackedTangentC = unpackSnorm4x8(packedDataC.z);
 
     vec4 tangent = interpolate(bary, unpackedTangentA, unpackedTangentB, unpackedTangentC);
     vec3 normalizedTangent = normalize(meshData.normalTransform * tangent.xyz);

@@ -53,9 +53,7 @@ public:
         ScopedRefPtr<VulkanBuffer> mMaterialsUniform;
         ScopedRefPtr<VulkanBuffer> mIndexBufferUniform;
         ScopedRefPtr<VulkanBuffer> mPositionBufferUniform;
-        ScopedRefPtr<VulkanBuffer> mTexCoordBufferUniform;
-        ScopedRefPtr<VulkanBuffer> mNormalBufferUniform;
-        ScopedRefPtr<VulkanBuffer> mTangentBufferUniform;
+        ScopedRefPtr<VulkanBuffer> mNormalTexCoordTangentBufferUniform;
         std::vector<ScopedRefPtr<Texture>> mMaterialsTextures;
     };
     void UpdatePersistentUniforms(const PersistentParameters& parameters);

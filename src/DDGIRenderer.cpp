@@ -170,10 +170,8 @@ void DDGIRenderer::UpdatePersistentUniforms(const PersistentParameters& paramete
             mProbeRaytracingPipeline->Bind(7, parameters.mMaterialsUniform);
             mProbeRaytracingPipeline->Bind(8, parameters.mIndexBufferUniform);
             mProbeRaytracingPipeline->Bind(9, parameters.mPositionBufferUniform);
-            mProbeRaytracingPipeline->Bind(10, parameters.mTexCoordBufferUniform);
-            mProbeRaytracingPipeline->Bind(11, parameters.mNormalBufferUniform);
-            mProbeRaytracingPipeline->Bind(12, parameters.mTangentBufferUniform);
-            mProbeRaytracingPipeline->Bind(13, parameters.mMaterialsTextures);
+            mProbeRaytracingPipeline->Bind(10, parameters.mNormalTexCoordTangentBufferUniform);
+            mProbeRaytracingPipeline->Bind(11, parameters.mMaterialsTextures);
         }
 
         // Compute

@@ -48,7 +48,7 @@ MeshData loadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& 
     }
 
     const tinygltf::Accessor& normalAccessor = model.accessors[attributes.at(normalName)];
-    ret.normals = std::vector<uint32_t>(normalAccessor.count);
+    std::vector<uint32_t> normals = std::vector<uint32_t>(normalAccessor.count);
     {
         const tinygltf::BufferView& normalBufferView = model.bufferViews[normalAccessor.bufferView];
         const tinygltf::Buffer& normalBuffer = model.buffers[normalBufferView.buffer];
@@ -62,12 +62,12 @@ MeshData loadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& 
                 reinterpret_cast<const float*>(&normalData[vetexStride * normalIndex]);
             glm::vec3 normal =
                 glm::vec3(normalDataFloat[0], normalDataFloat[1], normalDataFloat[2]);
-            ret.normals[normalIndex] = glm::packSnorm4x8(glm::vec4(normal, 0.0f));
+            normals[normalIndex] = glm::packSnorm4x8(glm::vec4(normal, 0.0f));
         }
     }
 
     const tinygltf::Accessor& texCoordAccessor = model.accessors[attributes.at(texCoordName)];
-    ret.textureCoords = std::vector<uint32_t>(texCoordAccessor.count);
+    std::vector<uint32_t> textureCoords = std::vector<uint32_t>(texCoordAccessor.count);
     {
         const tinygltf::BufferView& texCoordBufferView =
             model.bufferViews[texCoordAccessor.bufferView];
@@ -81,16 +81,16 @@ MeshData loadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& 
             const float* texCoordDataFloat =
                 reinterpret_cast<const float*>(&texCoordData[vetexStride * texCoordIndex]);
             const glm::vec2 texCoord = glm::vec2((texCoordDataFloat[0]), (texCoordDataFloat[1]));
-            ret.textureCoords[texCoordIndex] = glm::packHalf2x16(texCoord);
+            textureCoords[texCoordIndex] = glm::packHalf2x16(texCoord);
         }
     }
 
-    ret.tangents = std::vector<uint32_t>(
+    std::vector<uint32_t> tangents = std::vector<uint32_t>(
         normalAccessor.count,
         0);  // Assume meshes without tangents will not use normal maps (lazy).
     if (hasTangents) {
         const tinygltf::Accessor& tangentAccessor = model.accessors[attributes.at(tangentName)];
-        ret.tangents = std::vector<uint32_t>(tangentAccessor.count);
+        tangents = std::vector<uint32_t>(tangentAccessor.count);
         {
             const tinygltf::BufferView& tangentBufferView =
                 model.bufferViews[tangentAccessor.bufferView];
@@ -109,9 +109,14 @@ MeshData loadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& 
                     tangentDataFloat[1],
                     tangentDataFloat[2],
                     tangentDataFloat[3]);
-                ret.tangents[tangentIndex] = glm::packSnorm4x8(tangent);
+                tangents[tangentIndex] = glm::packSnorm4x8(tangent);
             }
         }
+    }
+
+    ret.normalsTexturesTangents = std::vector<UVec3>(normalAccessor.count);
+    for (size_t i = 0; i < normalAccessor.count; ++i) {
+        ret.normalsTexturesTangents[i] = UVec3(normals[i], textureCoords[i], tangents[i]);
     }
 
     const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
@@ -185,12 +190,10 @@ std::vector<uint32_t> generateMeshlets(
     const uint32_t vertexOffset = gBakedFile.unifiedGeometryBuffer.positions.size();
     {
         ugb.positions.insert(ugb.positions.end(), mesh.positions.begin(), mesh.positions.end());
-        ugb.normals.insert(ugb.normals.end(), mesh.normals.begin(), mesh.normals.end());
-        ugb.textureCoords.insert(
-            ugb.textureCoords.end(),
-            mesh.textureCoords.begin(),
-            mesh.textureCoords.end());
-        ugb.tangents.insert(ugb.tangents.end(), mesh.tangents.begin(), mesh.tangents.end());
+        ugb.normalsTexturesTangents.insert(
+            ugb.normalsTexturesTangents.end(),
+            mesh.normalsTexturesTangents.begin(),
+            mesh.normalsTexturesTangents.end());
     }
 
     for (size_t mi = 0; mi < meshletCount; ++mi) {

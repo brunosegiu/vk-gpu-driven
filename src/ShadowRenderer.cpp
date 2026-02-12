@@ -112,7 +112,7 @@ void ShadowRenderer::AddPipelines() {
                 alphaMode == Material::AlphaMode::Opaque
                     ? VertexAttributeFlag::Position
                     : VertexAttributeFlag(
-                          VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord);
+                          VertexAttributeFlag::Position | VertexAttributeFlag::NormalTexCoordTangent);
             const std::vector<GeometryLayout> geometryLayout =
                 MeshSystem::GetGeometryLayout(geometryFlags);
 
@@ -386,7 +386,8 @@ void ShadowRenderer::Render(vk::CommandBuffer commandBuffer, const uint32_t fram
                     alphaMode == Material::AlphaMode::Opaque
                         ? VertexAttributeFlag::Position
                         : VertexAttributeFlag(
-                              VertexAttributeFlag::Position | VertexAttributeFlag::TexCoord));
+                              VertexAttributeFlag::Position |
+                              VertexAttributeFlag::NormalTexCoordTangent));
 
                 uint32_t maxDrawIndirectCount =
                     mContext->GetDevice()->GetDeviceProperties().limits.maxDrawIndirectCount;

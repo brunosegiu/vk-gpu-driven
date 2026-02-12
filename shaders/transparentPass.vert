@@ -7,9 +7,7 @@
 #include "transparentPassParameters.glsl"
 
 layout(location = 0) in vec3 inPosition;
-layout(location = 1) in uint inPackedTexCoord;
-layout(location = 2) in uint inPackedNormal;
-layout(location = 3) in uint inPackedTangent;
+layout(location = 1) in uvec3 inPackedNormalTexCoordTangent;
 
 layout(location = 0) out vec3 outWorldSpacePos;
 layout(location = 1) out vec2 outTexCoord;
@@ -25,9 +23,9 @@ void main() {
 
     gl_Position = uCameraParameters.viewProjection * meshData.modelMatrix * vec4(inPosition, 1.0);
 
-    outTexCoord = unpackHalf2x16(inPackedTexCoord);
+    outTexCoord = unpackHalf2x16(inPackedNormalTexCoordTangent.y);
 
-    vec3 unpackedNormal = unpackSnorm4x8(inPackedNormal).xyz;
+    vec3 unpackedNormal = unpackSnorm4x8(inPackedNormalTexCoordTangent.x).xyz;
     outNormal = normalize(meshData.normalTransform * unpackedNormal);
 
     outWorldSpacePos = (meshData.modelMatrix * vec4(inPosition, 1.0)).xyz;
@@ -36,7 +34,7 @@ void main() {
 
     outMaterial = uMaterials[meshData.materialId];
 
-    vec4 unpackedTangent = unpackSnorm4x8(inPackedTangent);
+    vec4 unpackedTangent = unpackSnorm4x8(inPackedNormalTexCoordTangent.z);
     vec3 tangent = normalize(meshData.normalTransform * unpackedTangent.xyz);
     vec3 bitangent = normalize(cross(outNormal, tangent) * unpackedTangent.w);
 
